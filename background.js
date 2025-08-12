@@ -74,7 +74,7 @@ function generatePingIcon(webLatency, tcpLatency, size) {
   const center = size / 2;
   const startAngle = -0.5 * Math.PI; // 12 o'clock
 
-  // --- Outer Circle (TCP Ping) ---
+  // --- Outer Circle (Web Latency) ---
   const outerRadius = size * 0.4;
   const outerLineWidth = size * 0.18;
   // Background
@@ -84,16 +84,16 @@ function generatePingIcon(webLatency, tcpLatency, size) {
   ctx.arc(center, center, outerRadius, 0, 2 * Math.PI);
   ctx.stroke();
   // Foreground
-  if (tcpParams.percentage > 0) {
-    ctx.strokeStyle = tcpParams.color;
+  if (webParams.percentage > 0) {
+    ctx.strokeStyle = webParams.color;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    const tcpEndAngle = startAngle + (tcpParams.percentage * 2 * Math.PI);
-    ctx.arc(center, center, outerRadius, startAngle, tcpEndAngle);
+    const webEndAngle = startAngle + (webParams.percentage * 2 * Math.PI);
+    ctx.arc(center, center, outerRadius, startAngle, webEndAngle);
     ctx.stroke();
   }
 
-  // --- Inner Circle (Web Latency) ---
+  // --- Inner Circle (TCP Ping) ---
   const innerRadius = size * 0.20;
   const innerLineWidth = size * 0.15;
   // Background
@@ -103,12 +103,12 @@ function generatePingIcon(webLatency, tcpLatency, size) {
   ctx.arc(center, center, innerRadius, 0, 2 * Math.PI);
   ctx.stroke();
   // Foreground
-  if (webParams.percentage > 0) {
-    ctx.strokeStyle = webParams.color;
+  if (tcpParams.percentage > 0) {
+    ctx.strokeStyle = tcpParams.color;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    const webEndAngle = startAngle + (webParams.percentage * 2 * Math.PI);
-    ctx.arc(center, center, innerRadius, startAngle, webEndAngle);
+    const tcpEndAngle = startAngle + (tcpParams.percentage * 2 * Math.PI);
+    ctx.arc(center, center, innerRadius, startAngle, tcpEndAngle);
     ctx.stroke();
   }
 
