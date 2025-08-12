@@ -1113,3 +1113,13 @@
 2025-08-12 17:02:36,778 - DEBUG - Web check for https://gemini.google.com/app successful with status 302. Latency: 522ms.
 2025-08-12 17:02:37,032 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 127ms.
 2025-08-12 17:02:37,032 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'web_check_latency_ms': 522, 'web_check_status': 'OK', 'web_check_error': None, 'tcp_ping_ms': 127, 'tcp_ping_error': None}
+2025-08-12 17:33:08,023 - INFO - --- Native host script started ---
+2025-08-12 17:33:08,023 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 17:33:08,023 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 17:33:08,036 - INFO - Found matching SSH process with PID: 5295
+2025-08-12 17:33:08,036 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 17:33:08,041 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 17:33:08,424 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 17:33:08,431 - DEBUG - Web check for https://gemini.google.com/app successful with status 302. Latency: 394ms.
+2025-08-12 17:33:08,543 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 110ms.
+2025-08-12 17:33:08,543 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'web_check_latency_ms': 394, 'web_check_status': 'OK', 'web_check_error': None, 'tcp_ping_ms': 110, 'tcp_ping_error': None}

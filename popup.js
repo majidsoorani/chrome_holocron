@@ -104,18 +104,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Show proxy controls only if the tunnel is connected and provides a SOCKS port.
     if (status.socks_port) {
-      proxyContainer.style.display = 'block';
-      chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED, ({ [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron }) => {
-        if (isProxyManagedByHolocron) {
-            proxyMessage.textContent = 'Browser proxy is managed by Holocron.';
-            applyProxyButton.style.display = 'none';
-            revertProxyButton.style.display = 'inline-block';
-          } else {
-            proxyMessage.textContent = 'A proxy is available for your browser.';
-            applyProxyButton.style.display = 'inline-block';
-            revertProxyButton.style.display = 'none';
-          }
-       });
+        proxyContainer.style.display = 'block';
+        // Use an async IIFE to handle the storage get call cleanly
+        (async () => {
+            const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
+            if (isProxyManaged) {
+                proxyMessage.textContent = 'Browser proxy is managed by Holocron.';
+                applyProxyButton.style.display = 'none';
+                revertProxyButton.style.display = 'inline-block';
+            } else {
+                proxyMessage.textContent = 'A proxy is available for your browser.';
+                applyProxyButton.style.display = 'inline-block';
+                revertProxyButton.style.display = 'none';
+            }
+        })();
     } else {
       proxyContainer.style.display = 'none';
     }

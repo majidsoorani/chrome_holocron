@@ -285,20 +285,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       try {
         // Store original settings before changing them.
         const originalSettings = await chrome.proxy.settings.get({ incognito: false });
+
+        // --- Create a PAC script for advanced routing ---
+        // This allows for conditional proxying, such as bypassing specific domains.
+        const pacScript = `
+function FindProxyForURL(url, host) {
+  // 1. Bypass requests to Iranian top-level domains (.ir)
+  if (shExpMatch(host, "*.ir")) {
+    return "DIRECT";
+  }
+
+  // 2. Bypass localhost and other local addresses (replaces '<local>')
+  if (isPlainHostName(host) || shExpMatch(host, "localhost") || shExpMatch(host, "127.0.0.1")) {
+    return "DIRECT";
+  }
+
+  // 3. For all other traffic, use the SOCKS proxy.
+  return "SOCKS5 127.0.0.1:${socksPort}";
+}`;
+
         const config = {
-          mode: "fixed_servers",
-          rules: {
-            singleProxy: { scheme: "socks5", host: "127.0.0.1", port: socksPort },
-            bypassList: ["<local>"]
+          mode: "pac_script",
+          pacScript: {
+            data: pacScript
           }
         };
+
         await chrome.proxy.settings.set({ value: config, scope: 'regular' });
         // Set flag and store original settings AFTER successfully setting the new proxy.
         await chrome.storage.local.set({
           [STORAGE_KEYS.IS_PROXY_MANAGED]: true,
           [STORAGE_KEYS.ORIGINAL_PROXY]: originalSettings.value
         });
-        sendResponse({ success: true, message: "Browser proxy set." });
+        sendResponse({ success: true, message: "Browser proxy set with .ir bypass rule." });
       } catch (e) {
         sendResponse({ success: false, message: `Failed to set proxy: ${e.message}` });
       }

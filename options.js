@@ -42,11 +42,12 @@ document.addEventListener('DOMContentLoaded', () => {
       [STORAGE_KEYS.PING_HOST]: pingHost,
       [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl
     }, () => {
-      statusMessage.style.color = 'green';
       statusMessage.textContent = 'Settings saved!';
+      statusMessage.className = 'success';
       setTimeout(() => {
         statusMessage.textContent = '';
-      }, 2000);
+        statusMessage.className = '';
+      }, 1000);
     });
   });
 
@@ -55,8 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sshIdentifier = commandInput.value;
     const pingHost = pingHostInput.value;
     const webCheckUrl = webCheckUrlInput.value;
-    statusMessage.style.color = '#555';
     statusMessage.textContent = 'Testing...';
+    statusMessage.className = 'info';
 
     const request = {
       command: COMMANDS.TEST_CONNECTION,
@@ -67,13 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chrome.runtime.sendMessage(request, (response) => {
       if (chrome.runtime.lastError) {
-        statusMessage.style.color = 'red';
         statusMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
+        statusMessage.className = 'error';
         return;
       }
 
-      statusMessage.style.color = response.success ? 'green' : 'red';
       statusMessage.textContent = response.message;
+      statusMessage.className = response.success ? 'success' : 'error';
     });
   });
 });
