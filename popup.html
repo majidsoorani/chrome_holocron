@@ -1,23 +1,41 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Holocron Status</title>
+    <title>Holocron Tunnel Status</title>
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <h3>Holocron Tunnel Status</h3>
-    <p>Status: <span id="connection_status" class="status">Loading...</span></p>
-    <p class="detail">IP: <span id="ip_address">N/A</span></p>
-    <p class="detail">Country: <span id="country">N/A</span></p>
-    <p class="detail">Ping: <span id="ping">N/A</span></p>
-    <p class="detail">Web Check: <span id="web_check_status">N/A</span></p>
-    <div id="proxy-container" class="proxy-info" style="display: none;">
-      <p id="proxy-message"></p>
-      <button id="apply-proxy-button">Apply System Proxy</button>
-      <button id="revert-proxy-button">Revert System Proxy</button>
+    <div class="container">
+      <div class="header">
+        <h3>Holocron Tunnel</h3>
+        <div id="status_indicator" class="status-indicator"></div>
+        <span id="connection_status">Loading...</span>
+      </div>
+
+      <div class="details-grid" id="details_grid" style="display: none;">
+        <div class="detail-item">
+          <span class="label">Web Latency</span>
+          <span class="value" id="web_latency">--</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">TCP Ping</span>
+          <span class="value" id="tcp_ping">--</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">Site Status</span>
+          <span class="value" id="web_check_status">--</span>
+        </div>
+      </div>
+
+      <div id="proxy-container" class="proxy-info" style="display: none;">
+        <p id="proxy-message"></p>
+        <div class="buttons"><button id="apply-proxy-button" class="button-primary">Apply Browser Proxy</button>
+        <button id="revert-proxy-button" class="button-secondary">Revert Proxy</button></div>
+      </div>
+
+      <button id="refresh_button" class="button-secondary">Refresh Status</button>
     </div>
-    <hr>
-    <button id="refresh_button" style="width: 100%;">Refresh Status</button>
+    <div id="spinner" class="spinner-overlay"></div>
     <script src="popup.js"></script>
   </body>
 </html>

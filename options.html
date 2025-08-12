@@ -12,14 +12,14 @@
     <p style="font-size: 12px; color: #555;">Enter a unique and stable part of your SSH command. <strong>Using the full command is not reliable.</strong> Good examples: a unique port ('1031') or a specific hostname.</p>
   </div>
   <div>
-    <label for="ping-host">Host for Latency Check:</label>
+    <label for="ping-host">Host for TCP Ping Check:</label>
     <input type="text" id="ping-host" style="width: 95%;">
-    <p style="font-size: 12px; color: #555;">Enter a hostname to check latency against (e.g., youtube.com, 8.8.8.8). This determines the icon color.</p>
+    <p style="font-size: 12px; color: #555;">Host for the raw TCP connection test (e.g., youtube.com). This determines the color of the <strong>outer</strong> icon circle.</p>
   </div>
   <div>
     <label for="web-check-url">Web Connectivity Check URL:</label>
     <input type="text" id="web-check-url" style="width: 95%;">
-    <p style="font-size: 12px; color: #555;">Optional. If the tunnel is active, the extension will check this URL. If it returns a 403 status, the icon will turn red.</p>
+    <p style="font-size: 12px; color: #555;">URL for the full web request test. This determines the color of the <strong>inner</strong> icon circle and the site status.</p>
   </div>
   <div>
     <button id="save-button">Save</button>

@@ -84,103 +84,42 @@ def perform_tcp_ping(host, port=443, timeout=2, socks_port=None):
         if sock:
             sock.close()
 
-def perform_web_check(url, socks_port, timeout=5):
+def perform_web_check(url, socks_port, timeout=10):
     """
-    Performs an HTTP HEAD request through a SOCKS5 proxy.
+    Performs an HTTP HEAD request, optionally through a SOCKS5 proxy, and measures latency.
 
     Returns:
-        str: A status string, e.g., "OK", "Failed (403 Forbidden)".
+        tuple[int, str, str|None]: A tuple of (latency_ms, status_string, error_name).
     """
     if not url or not url.startswith(('http://', 'https://')):
-        return None
+        return -1, "Invalid URL", "ConfigurationError"
 
-    proxies = {
-        'http': f'socks5h://127.0.0.1:{socks_port}',
-        'https': f'socks5h://127.0.0.1:{socks_port}'
-    }
+    proxies = None
+    if socks_port:
+        proxies = {
+            'http': f'socks5h://127.0.0.1:{socks_port}',
+            'https': f'socks5h://127.0.0.1:{socks_port}'
+        }
     headers = {'User-Agent': 'HolocronStatusCheck/1.0'}
 
     try:
+        start_time = time.perf_counter()
         response = requests.head(url, proxies=proxies, timeout=timeout, headers=headers)
+        end_time = time.perf_counter()
+        latency_ms = int((end_time - start_time) * 1000)
+
         if 200 <= response.status_code < 400:
-            logging.debug(f"Web check for {url} successful with status {response.status_code}.")
-            return "OK"
+            logging.debug(f"Web check for {url} successful with status {response.status_code}. Latency: {latency_ms}ms.")
+            return latency_ms, "OK", None
         else:
-            logging.warning(f"Web check for {url} failed with status {response.status_code}.")
-            return f"Failed (Status {response.status_code})"
+            logging.warning(f"Web check for {url} failed with status {response.status_code}. Latency: {latency_ms}ms.")
+            return latency_ms, f"Failed (Status {response.status_code})", None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Web check for {url} failed with exception: {e}")
+        error_name = e.__class__.__name__
+        logging.error(f"Web check for {url} failed with exception: {error_name}")
         if "SOCKSHTTPSConnectionPool" in str(e):
-            return "Failed (Proxy Error)"
-        return "Failed (Connection Error)"
-
-def _get_ip_details(proxies=None, timeout=5):
-    """
-    Fetches public IP details, optionally through a proxy, with fallbacks.
-
-    Args:
-        proxies (dict, optional): Dictionary of proxies for requests. Defaults to None.
-        timeout (int): Request timeout in seconds.
-
-    Returns:
-        tuple[str, str]: A tuple of (ip_address, country). Defaults to ("N/A", "N/A") on failure.
-    """
-    api_endpoints = [
-        ("https://ip-api.com/json", "query", "country"),
-        ("https://ipinfo.io/json", "ip", "country"),
-        ("https://ifconfig.me/json", "ip_addr", "country")
-    ]
-
-    for url, ip_key, country_key in api_endpoints:
-        try:
-            logging.debug(f"Attempting to fetch IP details from {url}" + (" with proxy" if proxies else " (direct)"))
-            response = requests.get(url, proxies=proxies, timeout=timeout)
-            response.raise_for_status()
-            data = response.json()
-            ip, country = data.get(ip_key, "N/A"), data.get(country_key, "N/A")
-            logging.info(f"Successfully fetched IP details from {url}: {ip} ({country})")
-            return ip, country
-        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            logging.warning(f"Failed to fetch IP info from {url}: {e}")
-            continue  # Try the next endpoint
-
-    logging.error("All IP lookup services failed.")
-    return "N/A", "N/A"
-
-def get_proxied_ip_details(socks_port, timeout=5):
-    """
-    Fetches public IP details through the specified SOCKS proxy, with fallbacks.
-    This ensures that the IP address reported is that of the tunnel's exit node.
-
-    Args:
-        socks_port (int): The local SOCKS5 proxy port.
-        timeout (int): Request timeout in seconds.
-
-    Returns:
-        tuple[str, str]: A tuple of (ip_address, country). Defaults to ("N/A", "N/A") on failure.
-    """
-    if not socks_port:
-        logging.warning("Cannot get proxied IP details without a SOCKS port.")
-        return "N/A", "N/A"
-
-    proxies = {
-        'http': f'socks5h://127.0.0.1:{socks_port}',
-        'https': f'socks5h://127.0.0.1:{socks_port}'
-    }
-    return _get_ip_details(proxies=proxies, timeout=timeout)
-
-def get_direct_ip_details(timeout=5):
-    """
-    Fetches public IP details using a direct connection, with fallbacks.
-    Used for diagnostics when the SSH tunnel is not active.
-
-    Args:
-        timeout (int): Request timeout in seconds.
-
-    Returns:
-        tuple[str, str]: A tuple of (ip_address, country). Defaults to ("N/A", "N/A") on failure.
-    """
-    return _get_ip_details(proxies=None, timeout=timeout)
+            return -1, "Failed (Proxy Error)", "ProxyError"
+        return -1, "Failed (Connection Error)", "ConnectionError"
 
 def get_tunnel_status(ssh_command_identifier):
     """
@@ -234,38 +173,37 @@ def main():
             if status["connected"] and status.get("socks_port"):
                 socks_port = status["socks_port"]
 
-                # 1. Get IP details through the proxy.
-                ip, country = get_proxied_ip_details(socks_port)
-                response["ip"] = ip
-                response["country"] = country
+                # 1. Perform a full web check through the proxy for application-level latency.
+                web_latency, web_status, web_error = perform_web_check(
+                    url=message.get("webCheckUrl"),
+                    socks_port=socks_port
+                )
+                response["web_check_latency_ms"] = web_latency
+                response["web_check_status"] = web_status
+                response["web_check_error"] = web_error
 
-                # 2. Perform TCP ping through the proxy.
-                latency, ping_error = perform_tcp_ping(
+                # 2. Also perform a TCP ping through the proxy for network-level latency.
+                tcp_latency, tcp_ping_error = perform_tcp_ping(
                     host=message.get("pingHost", "youtube.com"),
                     socks_port=socks_port
                 )
-                response["ping_ms"] = latency
-                response["ping_error"] = ping_error
-
-                # 3. Perform web check through the proxy.
-                response["web_check_status"] = perform_web_check(message.get("webCheckUrl"), socks_port)
+                response["tcp_ping_ms"] = tcp_latency
+                response["tcp_ping_error"] = tcp_ping_error
             else:
-                # Tunnel is down. Perform direct checks for diagnostics.
-                logging.info("SSH tunnel not found. Performing direct connection checks for diagnostics.")
+                # Tunnel is down. Perform a direct TCP ping for basic connectivity diagnostics.
+                logging.info("SSH tunnel not found. Performing direct TCP ping for diagnostics.")
                 
-                # 1. Get direct IP details.
-                ip, country = get_direct_ip_details()
-                response["ip"] = ip
-                response["country"] = country
-
-                # 2. Perform direct TCP ping.
-                latency, ping_error = perform_tcp_ping(
+                tcp_latency, tcp_ping_error = perform_tcp_ping(
                     host=message.get("pingHost", "youtube.com"),
                     socks_port=None  # Explicitly None for a direct check
                 )
-                response["ping_ms"] = latency
-                response["ping_error"] = ping_error
+                response["tcp_ping_ms"] = tcp_latency
+                response["tcp_ping_error"] = tcp_ping_error
+
+                # Set web check fields to default values for consistency in the UI
+                response["web_check_latency_ms"] = -1
                 response["web_check_status"] = "N/A (Tunnel Down)"
+                response["web_check_error"] = None
             
             logging.debug(f"Sending response: {response}")
             send_message(response)

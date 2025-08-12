@@ -41,50 +41,76 @@ function broadcastStatus() {
  * Generates a dynamic circular icon based on ping latency.
  * The icon is a progress-style circle that goes from green (low ping) to red (high ping).
  * @param {number} ping - The latency in milliseconds.
+ * @param {number} webLatency - The latency from the full web check (for the inner circle).
+ * @param {number} tcpLatency - The latency from the TCP ping (for the outer circle).
  * @param {number} size - The desired icon size (e.g., 16, 32, 48).
  * @returns {ImageData} The generated icon data for the specified size.
  */
-function generatePingIcon(ping, size) {
+function generatePingIcon(webLatency, tcpLatency, size) {
   const canvas = new OffscreenCanvas(size, size);
   const ctx = canvas.getContext('2d');
 
   const MIN_PING = 100; // ms, at or below this is 100% green
   const MAX_PING = 1000; // ms, at or above this is 10% red
 
-  // Calculate the progress for color and percentage. Progress is 0 for MIN_PING and 1 for MAX_PING.
-  let progress = 0;
-  if (ping > MIN_PING) {
-    progress = (Math.min(ping, MAX_PING) - MIN_PING) / (MAX_PING - MIN_PING);
-  }
+  const calculateParams = (ping) => {
+    if (ping === -1 || typeof ping === 'undefined') {
+      return { percentage: 0, color: 'hsl(0, 0%, 50%)' }; // Grey for failure
+    }
+    let progress = 0;
+    if (ping > MIN_PING) {
+      progress = (Math.min(ping, MAX_PING) - MIN_PING) / (MAX_PING - MIN_PING);
+    }
+    const percentage = 1.0 - (progress * 0.9);
+    const hue = 120 - (progress * 120);
+    const color = `hsl(${hue}, 100%, 50%)`;
+    return { percentage, color };
+  };
 
-  // The percentage of the circle to draw, from 100% (1.0) down to 10% (0.1).
-  const percentage = 1.0 - (progress * 0.9);
-
-  // The color hue, from green (120) down to red (0).
-  const hue = 120 - (progress * 120);
-  const color = `hsl(${hue}, 100%, 50%)`;
+  const webParams = calculateParams(webLatency);
+  const tcpParams = calculateParams(tcpLatency);
 
   // --- Drawing ---
   const center = size / 2;
-  const radius = size * 0.4; // Use 40% of the canvas size for the radius
-  const lineWidth = size * 0.18; // Use 18% for line width
+  const startAngle = -0.5 * Math.PI; // 12 o'clock
 
-  // Draw a faint background circle for context
+  // --- Outer Circle (TCP Ping) ---
+  const outerRadius = size * 0.4;
+  const outerLineWidth = size * 0.18;
+  // Background
   ctx.strokeStyle = 'rgba(128, 128, 128, 0.3)';
-  ctx.lineWidth = lineWidth;
+  ctx.lineWidth = outerLineWidth;
   ctx.beginPath();
-  ctx.arc(center, center, radius, 0, 2 * Math.PI);
+  ctx.arc(center, center, outerRadius, 0, 2 * Math.PI);
   ctx.stroke();
+  // Foreground
+  if (tcpParams.percentage > 0) {
+    ctx.strokeStyle = tcpParams.color;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const tcpEndAngle = startAngle + (tcpParams.percentage * 2 * Math.PI);
+    ctx.arc(center, center, outerRadius, startAngle, tcpEndAngle);
+    ctx.stroke();
+  }
 
-  // Draw the colored foreground arc
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = 'round';
+  // --- Inner Circle (Web Latency) ---
+  const innerRadius = size * 0.20;
+  const innerLineWidth = size * 0.15;
+  // Background
+  ctx.strokeStyle = 'rgba(128, 128, 128, 0.3)';
+  ctx.lineWidth = innerLineWidth;
   ctx.beginPath();
-  const startAngle = -0.5 * Math.PI; // Start at the 12 o'clock position
-  const endAngle = startAngle + (percentage * 2 * Math.PI);
-  ctx.arc(center, center, radius, startAngle, endAngle);
+  ctx.arc(center, center, innerRadius, 0, 2 * Math.PI);
   ctx.stroke();
+  // Foreground
+  if (webParams.percentage > 0) {
+    ctx.strokeStyle = webParams.color;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const webEndAngle = startAngle + (webParams.percentage * 2 * Math.PI);
+    ctx.arc(center, center, innerRadius, startAngle, webEndAngle);
+    ctx.stroke();
+  }
 
   return ctx.getImageData(0, 0, size, size);
 }
@@ -93,23 +119,23 @@ function setActionIcon(status) {
   const badIcon = { "16": "images/icon16-bad.png", "32": "images/icon32-bad.png", "48": "images/icon48-bad.png" };
   const warnIcon = { "16": "images/icon16-warn.png", "32": "images/icon32-warn.png", "48": "images/icon48-warn.png" };
 
-  // 1. Disconnected or critical failure (e.g., web check failed)
+  // 1. Disconnected or critical failure (e.g., web check status reports failure)
   if (!status || !status.connected || (status.web_check_status && status.web_check_status.includes('Failed'))) {
     chrome.action.setIcon({ path: badIcon });
     return;
   }
 
-  // 2. Connected but ping failed (unreliable connection)
-  if (status.ping_ms === -1) {
+  // 2. Connected but one of the latency checks failed (unreliable connection)
+  if (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1) {
     chrome.action.setIcon({ path: warnIcon });
     return;
   }
 
-  // 3. Connected with a valid ping: generate dynamic icon
+  // 3. Connected with valid latencies: generate dynamic icon
   const imageData = {
-    16: generatePingIcon(status.ping_ms, 16),
-    32: generatePingIcon(status.ping_ms, 32),
-    48: generatePingIcon(status.ping_ms, 48)
+    16: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 16),
+    32: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 32),
+    48: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 48)
   };
   chrome.action.setIcon({ imageData: imageData });
 }
@@ -308,7 +334,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       try {
         const response = await checkNativeHostConnection(sshCommand, pingHost, webCheckUrl);
-        const message = (response && response.connected) ? `Success! IP: ${response.ip}, Country: ${response.country}` : "Host connected, but reports tunnel is down.";
+        let message;
+        if (response && response.connected) {
+          message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
+        } else if (response) {
+          message = `Host connected, but tunnel is down. Direct TCP Ping: ${response.tcp_ping_ms}ms.`;
+        } else {
+          message = "Host connected, but reports tunnel is down.";
+        }
         sendResponse({ success: true, message: message });
       } catch (error) {
         sendResponse({ success: false, message: error.message });

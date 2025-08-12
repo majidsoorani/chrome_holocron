@@ -16,9 +16,11 @@ const COMMANDS = {
 
 document.addEventListener('DOMContentLoaded', () => {
   const statusEl = document.getElementById('connection_status');
-  const ipEl = document.getElementById('ip_address');
-  const countryEl = document.getElementById('country');
-  const pingEl = document.getElementById('ping');
+  const statusIndicator = document.getElementById('status_indicator');
+  const detailsGrid = document.getElementById('details_grid');
+  const spinner = document.getElementById('spinner');
+  const webLatencyEl = document.getElementById('web_latency');
+  const tcpPingEl = document.getElementById('tcp_ping');
   const webCheckEl = document.getElementById('web_check_status');
   const refreshButton = document.getElementById('refresh_button');
   const proxyContainer = document.getElementById('proxy-container');
@@ -29,48 +31,83 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentStatus = {}; // Cache the latest status object
 
   function updateUI(status) {
-    if (status && status.connected) {
-      statusEl.textContent = 'Connected'; 
-      statusEl.className = 'status good';
-      ipEl.textContent = status.ip || 'N/A';
-      countryEl.textContent = status.country || 'N/A';
+    // Hide spinner once we have a status to show
+    spinner.style.display = 'none';
 
-      if (status.ping_ms === -1) {
-        pingEl.textContent = 'Fail';
-        pingEl.className = 'detail bad';
-      } else {
-        pingEl.textContent = `${status.ping_ms}ms`;
-        pingEl.className = 'detail good';
-      }
+    // Handle disconnected state first
+    if (!status || !status.connected) {
+      statusEl.textContent = 'Disconnected';
+      statusIndicator.className = 'status-indicator bad';
+      detailsGrid.style.display = 'grid'; // Show grid for diagnostics
 
-      // Update Web Check status
-      if (status.web_check_status) {
-        if (status.web_check_status === 'OK') {
-          webCheckEl.textContent = 'OK';
-          webCheckEl.className = 'detail good';
+      webLatencyEl.textContent = '--';
+      webLatencyEl.className = 'value';
+      webCheckEl.textContent = 'N/A';
+      webCheckEl.className = 'value';
+
+      // When disconnected, show the direct TCP ping latency for basic diagnostics
+      if (status && typeof status.tcp_ping_ms !== 'undefined') {
+        if (status.tcp_ping_ms === -1) {
+          tcpPingEl.textContent = 'Fail';
+          tcpPingEl.className = 'value bad';
         } else {
-          webCheckEl.textContent = status.web_check_status;
-          webCheckEl.className = 'detail bad';
+          tcpPingEl.textContent = `${status.tcp_ping_ms}ms`;
+          tcpPingEl.className = 'value'; // Neutral color for direct ping
         }
+      } else {
+        tcpPingEl.textContent = '--';
+        tcpPingEl.className = 'value';
+      }
+      proxyContainer.style.display = 'none';
+      return;
+    }
+
+    // Handle connected state
+    statusEl.textContent = 'Connected';
+    statusIndicator.className = 'status-indicator good';
+    detailsGrid.style.display = 'grid';
+
+    // Display Web Check Latency (from the full HTTP check)
+    const webLatency = status.web_check_latency_ms;
+    if (webLatency === -1 || typeof webLatency === 'undefined') {
+      webLatencyEl.textContent = 'Fail';
+      webLatencyEl.className = 'value bad';
+    } else {
+      webLatencyEl.textContent = `${webLatency}ms`;
+      webLatencyEl.className = 'value good';
+    }
+
+    // Display TCP Ping Latency
+    const tcpLatency = status.tcp_ping_ms;
+    if (tcpLatency === -1 || typeof tcpLatency === 'undefined') {
+      tcpPingEl.textContent = 'Fail';
+      tcpPingEl.className = 'value bad';
+    } else {
+      tcpPingEl.textContent = `${tcpLatency}ms`;
+      tcpPingEl.className = 'value good';
+    }
+
+    // Display Web Check Status
+    const webStatus = status.web_check_status;
+    if (webStatus) {
+      if (webStatus === 'OK') {
+        webCheckEl.textContent = 'OK';
+        webCheckEl.className = 'value good';
+      } else {
+        webCheckEl.textContent = webStatus;
+        webCheckEl.className = 'value bad';
       }
     } else {
-      statusEl.textContent = 'Disconnected';
-      statusEl.className = 'status bad';
-      ipEl.textContent = 'N/A';
-      countryEl.textContent = 'N/A';
-      pingEl.textContent = 'N/A';
-      pingEl.className = 'detail';
-      webCheckEl.textContent = 'N/A';
-      proxyContainer.style.display = 'none';
-      return; // Exit early if disconnected
+      webCheckEl.textContent = '--';
+      webCheckEl.className = 'value';
     }
 
     // Show proxy controls only if the tunnel is connected and provides a SOCKS port.
     if (status.socks_port) {
       proxyContainer.style.display = 'block';
       chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED, ({ [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron }) => {
-          if (isProxyManagedByHolocron) {
-            proxyMessage.textContent = 'Browser proxy is active.';
+        if (isProxyManagedByHolocron) {
+            proxyMessage.textContent = 'Browser proxy is managed by Holocron.';
             applyProxyButton.style.display = 'none';
             revertProxyButton.style.display = 'inline-block';
           } else {
@@ -78,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyProxyButton.style.display = 'inline-block';
             revertProxyButton.style.display = 'none';
           }
-      });
+       });
     } else {
       proxyContainer.style.display = 'none';
     }
@@ -94,9 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function requestStatusUpdate() {
-    // Visually reset the status to give feedback that a refresh is happening
-    statusEl.textContent = 'Loading...';
-    statusEl.className = 'status';
+    // Show spinner to give feedback that a refresh is happening
+    spinner.style.display = 'flex';
     
     // Ask the background script for the latest status and to trigger a refresh.
     // The initial response will be the cached status. A "statusUpdated"
