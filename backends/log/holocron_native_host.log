@@ -1,0 +1,688 @@
+2025-08-12 16:19:02,520 - INFO - --- Native host script started ---
+2025-08-12 16:19:02,520 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:19:02,520 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:19:02,534 - INFO - SSH tunnel not found. Performing direct connection checks for diagnostics.
+2025-08-12 16:19:02,534 - DEBUG - Attempting to fetch direct IP details from https://ip-api.com/json
+2025-08-12 16:19:02,539 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:19:07,017 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:19:07,018 - WARNING - Failed to fetch direct IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:19:07,018 - DEBUG - Attempting to fetch direct IP details from https://ipinfo.io/json
+2025-08-12 16:19:07,020 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:19:07,535 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:19:07,536 - WARNING - Failed to fetch direct IP info from https://ipinfo.io/json: 403 Client Error: Forbidden for url: https://ipinfo.io/json
+2025-08-12 16:19:07,536 - DEBUG - Attempting to fetch direct IP details from https://ifconfig.me/json
+2025-08-12 16:19:07,538 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:19:08,434 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:19:08,435 - WARNING - Failed to fetch direct IP info from https://ifconfig.me/json: 403 Client Error: Forbidden for url: https://ifconfig.me/json
+2025-08-12 16:19:08,435 - ERROR - All direct IP lookup services failed.
+2025-08-12 16:19:08,531 - DEBUG - TCP ping to kixy.com:443 (direct) successful. Latency: 94ms.
+2025-08-12 16:19:08,531 - DEBUG - Sending response: {'connected': False, 'socks_port': None, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 94, 'ping_error': None, 'web_check_status': 'N/A (Tunnel Down)'}
+2025-08-12 16:19:21,261 - INFO - --- Native host script started ---
+2025-08-12 16:19:21,261 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:19:21,261 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:19:21,279 - INFO - SSH tunnel not found. Performing direct connection checks for diagnostics.
+2025-08-12 16:19:21,279 - DEBUG - Attempting to fetch direct IP details from https://ip-api.com/json
+2025-08-12 16:19:21,397 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:19:22,149 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:19:22,149 - WARNING - Failed to fetch direct IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:19:22,149 - DEBUG - Attempting to fetch direct IP details from https://ipinfo.io/json
+2025-08-12 16:19:22,237 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:19:22,888 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:19:22,889 - WARNING - Failed to fetch direct IP info from https://ipinfo.io/json: 403 Client Error: Forbidden for url: https://ipinfo.io/json
+2025-08-12 16:19:22,889 - DEBUG - Attempting to fetch direct IP details from https://ifconfig.me/json
+2025-08-12 16:19:22,891 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:19:23,317 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:19:23,318 - WARNING - Failed to fetch direct IP info from https://ifconfig.me/json: 403 Client Error: Forbidden for url: https://ifconfig.me/json
+2025-08-12 16:19:23,318 - ERROR - All direct IP lookup services failed.
+2025-08-12 16:19:23,370 - DEBUG - TCP ping to kixy.com:443 (direct) successful. Latency: 50ms.
+2025-08-12 16:19:23,371 - DEBUG - Sending response: {'connected': False, 'socks_port': None, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 50, 'ping_error': None, 'web_check_status': 'N/A (Tunnel Down)'}
+2025-08-12 16:19:51,631 - INFO - --- Native host script started ---
+2025-08-12 16:19:51,631 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:19:51,631 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:19:51,650 - INFO - SSH tunnel not found. Performing direct connection checks for diagnostics.
+2025-08-12 16:19:51,650 - DEBUG - Attempting to fetch direct IP details from https://ip-api.com/json
+2025-08-12 16:19:51,654 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:19:52,499 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:19:52,500 - WARNING - Failed to fetch direct IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:19:52,500 - DEBUG - Attempting to fetch direct IP details from https://ipinfo.io/json
+2025-08-12 16:19:52,502 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:19:52,893 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:19:52,893 - WARNING - Failed to fetch direct IP info from https://ipinfo.io/json: 403 Client Error: Forbidden for url: https://ipinfo.io/json
+2025-08-12 16:19:52,893 - DEBUG - Attempting to fetch direct IP details from https://ifconfig.me/json
+2025-08-12 16:19:52,896 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:19:53,423 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:19:53,425 - WARNING - Failed to fetch direct IP info from https://ifconfig.me/json: 403 Client Error: Forbidden for url: https://ifconfig.me/json
+2025-08-12 16:19:53,426 - ERROR - All direct IP lookup services failed.
+2025-08-12 16:19:53,498 - DEBUG - TCP ping to kixy.com:443 (direct) successful. Latency: 70ms.
+2025-08-12 16:19:53,498 - DEBUG - Sending response: {'connected': False, 'socks_port': None, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 70, 'ping_error': None, 'web_check_status': 'N/A (Tunnel Down)'}
+2025-08-12 16:20:25,266 - INFO - --- Native host script started ---
+2025-08-12 16:20:25,266 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:20:25,266 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:20:25,279 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:20:25,279 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:20:25,279 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:20:25,336 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:20:26,466 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:20:26,467 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:20:26,467 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:20:26,469 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:20:27,301 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:20:27,302 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:20:27,303 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:20:27,304 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:20:28,069 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:20:28,070 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:20:28,070 - ERROR - All IP lookup services failed.
+2025-08-12 16:20:28,264 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 192ms.
+2025-08-12 16:20:28,338 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:20:28,857 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:20:28,943 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:20:28,944 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 192, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:20:32,604 - INFO - --- Native host script started ---
+2025-08-12 16:20:32,604 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:20:32,604 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:20:32,620 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:20:32,620 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:20:32,620 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:20:32,624 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:20:33,340 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:20:33,340 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:20:33,341 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:20:33,422 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:20:34,185 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:20:34,186 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:20:34,186 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:20:34,189 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:20:34,949 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:20:34,950 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:20:34,950 - ERROR - All IP lookup services failed.
+2025-08-12 16:20:35,107 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 155ms.
+2025-08-12 16:20:35,110 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:20:36,298 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:20:36,300 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:20:36,301 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 155, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:20:51,634 - INFO - --- Native host script started ---
+2025-08-12 16:20:51,634 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:20:51,634 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:20:51,649 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:20:51,649 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:20:51,649 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:20:51,656 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:20:52,585 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:20:52,586 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:20:52,586 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:20:52,589 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:20:53,256 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:20:53,257 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:20:53,257 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:20:53,259 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:20:53,995 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:20:53,996 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:20:53,996 - ERROR - All IP lookup services failed.
+2025-08-12 16:20:54,165 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 167ms.
+2025-08-12 16:20:54,222 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:20:54,871 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:20:54,981 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:20:54,981 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 167, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:21:51,640 - INFO - --- Native host script started ---
+2025-08-12 16:21:51,640 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:21:51,640 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:21:51,653 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:21:51,653 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:21:51,653 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:21:51,758 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:21:52,966 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:21:52,967 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:21:52,967 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:21:53,059 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:21:53,825 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:21:53,826 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:21:53,826 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:21:53,909 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:21:54,634 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:21:54,636 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:21:54,636 - ERROR - All IP lookup services failed.
+2025-08-12 16:21:54,816 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 178ms.
+2025-08-12 16:21:54,907 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:21:55,539 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:21:55,620 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:21:55,621 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 178, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:22:51,632 - INFO - --- Native host script started ---
+2025-08-12 16:22:51,633 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:22:51,633 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:22:51,645 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:22:51,645 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:22:51,645 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:22:51,719 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:22:52,596 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:22:52,597 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:22:52,598 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:22:52,639 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:22:53,303 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:22:53,304 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:22:53,304 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:22:53,371 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:22:54,423 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:22:54,425 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:22:54,425 - ERROR - All IP lookup services failed.
+2025-08-12 16:22:54,886 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 188ms.
+2025-08-12 16:22:54,933 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:22:55,553 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:22:55,619 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:22:55,620 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 188, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:23:51,634 - INFO - --- Native host script started ---
+2025-08-12 16:23:51,634 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:23:51,634 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:23:51,648 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:23:51,648 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:23:51,648 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:23:51,770 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:23:53,673 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:23:53,675 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:23:53,675 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:23:54,490 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:23:55,998 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:23:55,999 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:23:56,000 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:23:56,005 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:23:59,089 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:23:59,091 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:23:59,091 - ERROR - All IP lookup services failed.
+2025-08-12 16:23:59,287 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 194ms.
+2025-08-12 16:24:02,967 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:24:03,665 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:24:03,774 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:24:03,775 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 194, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:24:51,614 - INFO - --- Native host script started ---
+2025-08-12 16:24:51,614 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:24:51,614 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:24:51,628 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:24:51,628 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:24:51,628 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:24:51,718 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:24:52,456 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:24:52,457 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:24:52,457 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:24:52,492 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:24:53,266 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:24:53,268 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:24:53,268 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:24:53,273 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:24:54,431 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:24:54,432 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:24:54,432 - ERROR - All IP lookup services failed.
+2025-08-12 16:24:54,655 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 220ms.
+2025-08-12 16:24:55,024 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:24:55,831 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:24:55,900 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:24:55,900 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 220, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:25:52,636 - INFO - --- Native host script started ---
+2025-08-12 16:25:52,636 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:25:52,636 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:25:52,649 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:25:52,649 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:25:52,649 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:25:52,730 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:25:53,479 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:25:53,482 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:25:53,482 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:25:53,567 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:25:54,251 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:25:54,252 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:25:54,252 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:25:54,296 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:25:54,963 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:25:54,964 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:25:54,964 - ERROR - All IP lookup services failed.
+2025-08-12 16:25:55,415 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 449ms.
+2025-08-12 16:25:55,506 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:25:56,951 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:25:57,082 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:25:57,082 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 449, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:26:51,637 - INFO - --- Native host script started ---
+2025-08-12 16:26:51,637 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:26:51,637 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:26:51,651 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:26:51,651 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:26:51,651 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:26:51,738 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:26:52,738 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:26:52,740 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:26:52,740 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:26:52,806 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:26:53,660 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:26:53,660 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:26:53,660 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:26:53,661 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:26:54,549 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:26:54,550 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:26:54,550 - ERROR - All IP lookup services failed.
+2025-08-12 16:26:54,805 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 253ms.
+2025-08-12 16:26:54,889 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:26:55,673 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:26:55,720 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:26:55,721 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 253, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:27:51,636 - INFO - --- Native host script started ---
+2025-08-12 16:27:51,636 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:27:51,636 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:27:51,650 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:27:51,650 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:27:51,650 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:27:51,738 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:27:54,619 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:27:54,620 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:27:54,620 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:27:54,708 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:27:55,982 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:27:55,983 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:27:55,983 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:27:55,987 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:27:56,797 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:27:56,798 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:27:56,798 - ERROR - All IP lookup services failed.
+2025-08-12 16:27:56,990 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 190ms.
+2025-08-12 16:27:57,060 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:27:57,768 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:27:57,853 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:27:57,853 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 190, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:28:51,626 - INFO - --- Native host script started ---
+2025-08-12 16:28:51,626 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:28:51,627 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:28:51,640 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:28:51,640 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:28:51,640 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:28:51,703 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:28:52,550 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:28:52,552 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:28:52,553 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:28:52,639 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:28:53,871 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:28:53,873 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:28:53,873 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:28:54,078 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:28:54,784 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:28:54,785 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:28:54,785 - ERROR - All IP lookup services failed.
+2025-08-12 16:28:55,068 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 281ms.
+2025-08-12 16:28:55,223 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:28:56,443 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:28:56,523 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:28:56,524 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 281, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:29:51,635 - INFO - --- Native host script started ---
+2025-08-12 16:29:51,635 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:29:51,635 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:29:51,648 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:29:51,648 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:29:51,648 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:29:51,712 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:29:52,975 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:29:52,976 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:29:52,976 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:29:53,022 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:29:54,000 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:29:54,002 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:29:54,002 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:29:54,006 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:29:54,784 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:29:54,785 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:29:54,785 - ERROR - All IP lookup services failed.
+2025-08-12 16:29:54,986 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 199ms.
+2025-08-12 16:29:55,149 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:29:55,593 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:29:55,697 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:29:55,697 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 199, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:30:51,634 - INFO - --- Native host script started ---
+2025-08-12 16:30:51,634 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:30:51,634 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:30:51,647 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:30:51,647 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:30:51,647 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:30:51,721 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:30:52,628 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:30:52,629 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:30:52,629 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:30:52,890 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:30:53,634 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:30:53,636 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:30:53,637 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:30:53,640 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:30:54,373 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:30:54,374 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:30:54,374 - ERROR - All IP lookup services failed.
+2025-08-12 16:30:54,753 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 166ms.
+2025-08-12 16:30:54,802 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:30:55,847 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:30:55,909 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:30:55,910 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 166, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:31:04,228 - INFO - --- Native host script started ---
+2025-08-12 16:31:04,229 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:31:04,229 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:31:04,241 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:31:04,241 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:31:04,241 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:31:04,246 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:31:06,207 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:31:06,207 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:31:06,208 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:31:06,209 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:31:06,875 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:31:06,876 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:31:06,876 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:31:06,878 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:31:07,876 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:31:07,877 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:31:07,877 - ERROR - All IP lookup services failed.
+2025-08-12 16:31:08,054 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 176ms.
+2025-08-12 16:31:08,057 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:31:08,793 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:31:08,799 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:31:08,799 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 176, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:31:51,637 - INFO - --- Native host script started ---
+2025-08-12 16:31:51,637 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:31:51,637 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:31:51,650 - INFO - Found matching SSH process with PID: 10218
+2025-08-12 16:31:51,650 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:31:51,650 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json
+2025-08-12 16:31:51,723 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:31:52,482 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:31:52,483 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:31:52,484 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json
+2025-08-12 16:31:52,547 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:31:53,403 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:31:53,405 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:31:53,405 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json
+2025-08-12 16:31:53,409 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:31:54,048 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:31:54,050 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:31:54,050 - ERROR - All IP lookup services failed.
+2025-08-12 16:31:54,230 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 178ms.
+2025-08-12 16:31:54,276 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:31:54,882 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:31:55,013 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:31:55,014 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 178, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:32:51,634 - INFO - --- Native host script started ---
+2025-08-12 16:32:51,634 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:32:51,634 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:32:51,650 - INFO - SSH tunnel not found. Performing direct connection checks for diagnostics.
+2025-08-12 16:32:51,650 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json (direct)
+2025-08-12 16:32:51,725 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:32:52,326 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:32:52,327 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:32:52,327 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json (direct)
+2025-08-12 16:32:52,387 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:32:52,897 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:32:52,899 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 403 Client Error: Forbidden for url: https://ipinfo.io/json
+2025-08-12 16:32:52,899 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json (direct)
+2025-08-12 16:32:52,902 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:32:53,483 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:32:53,484 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 403 Client Error: Forbidden for url: https://ifconfig.me/json
+2025-08-12 16:32:53,485 - ERROR - All IP lookup services failed.
+2025-08-12 16:32:53,533 - DEBUG - TCP ping to kixy.com:443 (direct) successful. Latency: 45ms.
+2025-08-12 16:32:53,533 - DEBUG - Sending response: {'connected': False, 'socks_port': None, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 45, 'ping_error': None, 'web_check_status': 'N/A (Tunnel Down)'}
+2025-08-12 16:32:55,943 - INFO - --- Native host script started ---
+2025-08-12 16:32:55,943 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:32:55,943 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:32:55,958 - INFO - SSH tunnel not found. Performing direct connection checks for diagnostics.
+2025-08-12 16:32:55,959 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json (direct)
+2025-08-12 16:32:55,963 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:32:56,688 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:32:56,690 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:32:56,690 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json (direct)
+2025-08-12 16:32:56,694 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:32:57,274 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:32:57,276 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 403 Client Error: Forbidden for url: https://ipinfo.io/json
+2025-08-12 16:32:57,276 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json (direct)
+2025-08-12 16:32:57,280 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:32:57,643 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:32:57,645 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 403 Client Error: Forbidden for url: https://ifconfig.me/json
+2025-08-12 16:32:57,645 - ERROR - All IP lookup services failed.
+2025-08-12 16:32:57,732 - DEBUG - TCP ping to kixy.com:443 (direct) successful. Latency: 83ms.
+2025-08-12 16:32:57,732 - DEBUG - Sending response: {'connected': False, 'socks_port': None, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 83, 'ping_error': None, 'web_check_status': 'N/A (Tunnel Down)'}
+2025-08-12 16:33:51,635 - INFO - --- Native host script started ---
+2025-08-12 16:33:51,635 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:33:51,635 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:33:51,649 - INFO - Found matching SSH process with PID: 14403
+2025-08-12 16:33:51,649 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:33:51,649 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:33:57,797 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:34:02,799 - WARNING - Failed to fetch IP info from https://ip-api.com/json: SOCKSHTTPSConnectionPool(host='ip-api.com', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1050c7d10>, 'Connection to ip-api.com timed out. (connect timeout=5)'))
+2025-08-12 16:34:02,799 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:34:02,851 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:34:07,854 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: SOCKSHTTPSConnectionPool(host='ipinfo.io', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1065c22d0>, 'Connection to ipinfo.io timed out. (connect timeout=5)'))
+2025-08-12 16:34:07,854 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:34:07,916 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:34:12,918 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: SOCKSHTTPSConnectionPool(host='ifconfig.me', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1065c2bd0>, 'Connection to ifconfig.me timed out. (connect timeout=5)'))
+2025-08-12 16:34:12,919 - ERROR - All IP lookup services failed.
+2025-08-12 16:34:15,073 - WARNING - TCP ping to kixy.com:443 via SOCKS port 1031 failed: GeneralProxyError
+2025-08-12 16:34:15,123 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:34:20,126 - ERROR - Web check for https://gemini.google.com/app failed with exception: SOCKSHTTPSConnectionPool(host='gemini.google.com', port=443): Max retries exceeded with url: /app (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1065c3410>, 'Connection to gemini.google.com timed out. (connect timeout=5)'))
+2025-08-12 16:34:20,126 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': -1, 'ping_error': 'GeneralProxyError', 'web_check_status': 'Failed (Proxy Error)'}
+2025-08-12 16:34:22,635 - INFO - --- Native host script started ---
+2025-08-12 16:34:22,635 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:34:22,635 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:34:22,651 - INFO - Found matching SSH process with PID: 14403
+2025-08-12 16:34:22,651 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:34:22,651 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:34:22,713 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:34:27,716 - WARNING - Failed to fetch IP info from https://ip-api.com/json: SOCKSHTTPSConnectionPool(host='ip-api.com', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x104745370>, 'Connection to ip-api.com timed out. (connect timeout=5)'))
+2025-08-12 16:34:27,716 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:34:27,720 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:34:32,722 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: SOCKSHTTPSConnectionPool(host='ipinfo.io', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x104745af0>, 'Connection to ipinfo.io timed out. (connect timeout=5)'))
+2025-08-12 16:34:32,722 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:34:32,725 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:34:37,727 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: SOCKSHTTPSConnectionPool(host='ifconfig.me', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1047463f0>, 'Connection to ifconfig.me timed out. (connect timeout=5)'))
+2025-08-12 16:34:37,727 - ERROR - All IP lookup services failed.
+2025-08-12 16:34:39,731 - WARNING - TCP ping to kixy.com:443 via SOCKS port 1031 failed: GeneralProxyError
+2025-08-12 16:34:39,735 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:34:44,737 - ERROR - Web check for https://gemini.google.com/app failed with exception: SOCKSHTTPSConnectionPool(host='gemini.google.com', port=443): Max retries exceeded with url: /app (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x104746c90>, 'Connection to gemini.google.com timed out. (connect timeout=5)'))
+2025-08-12 16:34:44,737 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': -1, 'ping_error': 'GeneralProxyError', 'web_check_status': 'Failed (Proxy Error)'}
+2025-08-12 16:34:51,634 - INFO - --- Native host script started ---
+2025-08-12 16:34:51,634 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:34:51,634 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:34:51,649 - INFO - Found matching SSH process with PID: 14403
+2025-08-12 16:34:51,649 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:34:51,649 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:34:51,706 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:34:56,709 - WARNING - Failed to fetch IP info from https://ip-api.com/json: SOCKSHTTPSConnectionPool(host='ip-api.com', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x103040ad0>, 'Connection to ip-api.com timed out. (connect timeout=5)'))
+2025-08-12 16:34:56,709 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:34:56,765 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:35:01,768 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: SOCKSHTTPSConnectionPool(host='ipinfo.io', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x105666090>, 'Connection to ipinfo.io timed out. (connect timeout=5)'))
+2025-08-12 16:35:01,768 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:35:01,836 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:35:06,839 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: SOCKSHTTPSConnectionPool(host='ifconfig.me', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x105666990>, 'Connection to ifconfig.me timed out. (connect timeout=5)'))
+2025-08-12 16:35:06,839 - ERROR - All IP lookup services failed.
+2025-08-12 16:35:08,887 - WARNING - TCP ping to kixy.com:443 via SOCKS port 1031 failed: GeneralProxyError
+2025-08-12 16:35:08,927 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:35:13,929 - ERROR - Web check for https://gemini.google.com/app failed with exception: SOCKSHTTPSConnectionPool(host='gemini.google.com', port=443): Max retries exceeded with url: /app (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x105667200>, 'Connection to gemini.google.com timed out. (connect timeout=5)'))
+2025-08-12 16:35:13,930 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': -1, 'ping_error': 'GeneralProxyError', 'web_check_status': 'Failed (Proxy Error)'}
+2025-08-12 16:35:51,651 - INFO - --- Native host script started ---
+2025-08-12 16:35:51,651 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:35:51,651 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:35:51,667 - INFO - Found matching SSH process with PID: 14403
+2025-08-12 16:35:51,667 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:35:51,667 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:35:51,686 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:35:56,688 - WARNING - Failed to fetch IP info from https://ip-api.com/json: SOCKSHTTPSConnectionPool(host='ip-api.com', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1027ec0e0>, 'Connection to ip-api.com timed out. (connect timeout=5)'))
+2025-08-12 16:35:56,688 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:35:56,833 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:36:01,837 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: SOCKSHTTPSConnectionPool(host='ipinfo.io', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x10546e000>, 'Connection to ipinfo.io timed out. (connect timeout=5)'))
+2025-08-12 16:36:01,837 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:36:01,867 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:36:06,873 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: SOCKSHTTPSConnectionPool(host='ifconfig.me', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x10546e900>, 'Connection to ifconfig.me timed out. (connect timeout=5)'))
+2025-08-12 16:36:06,874 - ERROR - All IP lookup services failed.
+2025-08-12 16:36:09,055 - WARNING - TCP ping to kixy.com:443 via SOCKS port 1031 failed: GeneralProxyError
+2025-08-12 16:36:09,087 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:36:14,088 - ERROR - Web check for https://gemini.google.com/app failed with exception: SOCKSHTTPSConnectionPool(host='gemini.google.com', port=443): Max retries exceeded with url: /app (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x10546f170>, 'Connection to gemini.google.com timed out. (connect timeout=5)'))
+2025-08-12 16:36:14,089 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': -1, 'ping_error': 'GeneralProxyError', 'web_check_status': 'Failed (Proxy Error)'}
+2025-08-12 16:36:52,642 - INFO - --- Native host script started ---
+2025-08-12 16:36:52,642 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:36:52,642 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:36:52,658 - INFO - Found matching SSH process with PID: 14403
+2025-08-12 16:36:52,659 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:36:52,659 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:36:52,665 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:36:57,667 - WARNING - Failed to fetch IP info from https://ip-api.com/json: SOCKSHTTPSConnectionPool(host='ip-api.com', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x10469d760>, 'Connection to ip-api.com timed out. (connect timeout=5)'))
+2025-08-12 16:36:57,667 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:36:57,670 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:37:02,672 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: SOCKSHTTPSConnectionPool(host='ipinfo.io', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x104b61f40>, 'Connection to ipinfo.io timed out. (connect timeout=5)'))
+2025-08-12 16:37:02,673 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:37:02,677 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:37:07,681 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: SOCKSHTTPSConnectionPool(host='ifconfig.me', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x104b62840>, 'Connection to ifconfig.me timed out. (connect timeout=5)'))
+2025-08-12 16:37:07,681 - ERROR - All IP lookup services failed.
+2025-08-12 16:37:09,684 - WARNING - TCP ping to kixy.com:443 via SOCKS port 1031 failed: GeneralProxyError
+2025-08-12 16:37:09,689 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:37:14,692 - ERROR - Web check for https://gemini.google.com/app failed with exception: SOCKSHTTPSConnectionPool(host='gemini.google.com', port=443): Max retries exceeded with url: /app (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x104b630e0>, 'Connection to gemini.google.com timed out. (connect timeout=5)'))
+2025-08-12 16:37:14,693 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': -1, 'ping_error': 'GeneralProxyError', 'web_check_status': 'Failed (Proxy Error)'}
+2025-08-12 16:37:38,449 - INFO - --- Native host script started ---
+2025-08-12 16:37:38,449 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:37:38,449 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:37:38,463 - INFO - Found matching SSH process with PID: 14403
+2025-08-12 16:37:38,463 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:37:38,463 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:37:38,485 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:37:43,487 - WARNING - Failed to fetch IP info from https://ip-api.com/json: SOCKSHTTPSConnectionPool(host='ip-api.com', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x1027f87a0>, 'Connection to ip-api.com timed out. (connect timeout=5)'))
+2025-08-12 16:37:43,487 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:37:43,525 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:37:48,529 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: SOCKSHTTPSConnectionPool(host='ipinfo.io', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x102b99850>, 'Connection to ipinfo.io timed out. (connect timeout=5)'))
+2025-08-12 16:37:48,529 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:37:48,545 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:37:53,546 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: SOCKSHTTPSConnectionPool(host='ifconfig.me', port=443): Max retries exceeded with url: /json (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x102b9a150>, 'Connection to ifconfig.me timed out. (connect timeout=5)'))
+2025-08-12 16:37:53,547 - ERROR - All IP lookup services failed.
+2025-08-12 16:37:55,549 - WARNING - TCP ping to kixy.com:443 via SOCKS port 1031 failed: GeneralProxyError
+2025-08-12 16:37:55,552 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:38:00,555 - ERROR - Web check for https://gemini.google.com/app failed with exception: SOCKSHTTPSConnectionPool(host='gemini.google.com', port=443): Max retries exceeded with url: /app (Caused by ConnectTimeoutError(<urllib3.contrib.socks.SOCKSHTTPSConnection object at 0x102b9a9f0>, 'Connection to gemini.google.com timed out. (connect timeout=5)'))
+2025-08-12 16:38:00,555 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': -1, 'ping_error': 'GeneralProxyError', 'web_check_status': 'Failed (Proxy Error)'}
+2025-08-12 16:38:51,637 - INFO - --- Native host script started ---
+2025-08-12 16:38:51,637 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:38:51,637 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:38:51,654 - INFO - SSH tunnel not found. Performing direct connection checks for diagnostics.
+2025-08-12 16:38:51,654 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json (direct)
+2025-08-12 16:38:51,688 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:38:52,133 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:38:52,133 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:38:52,134 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json (direct)
+2025-08-12 16:38:52,154 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:38:52,423 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:38:52,424 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 403 Client Error: Forbidden for url: https://ipinfo.io/json
+2025-08-12 16:38:52,424 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json (direct)
+2025-08-12 16:38:52,427 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:38:52,833 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 403 299
+2025-08-12 16:38:52,834 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 403 Client Error: Forbidden for url: https://ifconfig.me/json
+2025-08-12 16:38:52,835 - ERROR - All IP lookup services failed.
+2025-08-12 16:38:52,889 - DEBUG - TCP ping to kixy.com:443 (direct) successful. Latency: 53ms.
+2025-08-12 16:38:52,890 - DEBUG - Sending response: {'connected': False, 'socks_port': None, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 53, 'ping_error': None, 'web_check_status': 'N/A (Tunnel Down)'}
+2025-08-12 16:39:18,746 - INFO - --- Native host script started ---
+2025-08-12 16:39:18,746 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:39:18,746 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:39:18,765 - INFO - Found matching SSH process with PID: 16503
+2025-08-12 16:39:18,765 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:39:18,765 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:39:18,770 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:39:19,306 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:39:19,306 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:39:19,306 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:39:19,307 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:39:19,801 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:39:19,801 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:39:19,801 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:39:19,802 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:39:20,269 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:39:20,269 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:39:20,269 - ERROR - All IP lookup services failed.
+2025-08-12 16:39:20,373 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 103ms.
+2025-08-12 16:39:20,375 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:39:20,776 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:39:20,803 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:39:20,803 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 103, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:39:22,037 - INFO - --- Native host script started ---
+2025-08-12 16:39:22,037 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:39:22,037 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:39:22,054 - INFO - Found matching SSH process with PID: 16503
+2025-08-12 16:39:22,054 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:39:22,054 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:39:22,059 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:39:22,596 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:39:22,597 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:39:22,597 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:39:22,599 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:39:23,101 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:39:23,102 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:39:23,102 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:39:23,104 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:39:23,611 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:39:23,612 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:39:23,612 - ERROR - All IP lookup services failed.
+2025-08-12 16:39:23,724 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 110ms.
+2025-08-12 16:39:23,726 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:39:24,130 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:39:24,134 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:39:24,134 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 110, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:39:26,350 - INFO - --- Native host script started ---
+2025-08-12 16:39:26,350 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:39:26,350 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:39:26,365 - INFO - Found matching SSH process with PID: 16503
+2025-08-12 16:39:26,365 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:39:26,365 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:39:26,369 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:39:26,931 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:39:26,932 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:39:26,932 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:39:26,935 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:39:27,433 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:39:27,439 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:39:27,440 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:39:27,443 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:39:27,952 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:39:27,952 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:39:27,952 - ERROR - All IP lookup services failed.
+2025-08-12 16:39:28,073 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 119ms.
+2025-08-12 16:39:28,078 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:39:28,480 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:39:28,489 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:39:28,490 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 119, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:39:51,635 - INFO - --- Native host script started ---
+2025-08-12 16:39:51,635 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:39:51,635 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:39:51,649 - INFO - Found matching SSH process with PID: 16503
+2025-08-12 16:39:51,649 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:39:51,649 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:39:51,654 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:39:52,168 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:39:52,169 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:39:52,169 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:39:52,173 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:39:52,679 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:39:52,681 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:39:52,681 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:39:52,685 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:39:53,169 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:39:53,171 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:39:53,171 - ERROR - All IP lookup services failed.
+2025-08-12 16:39:53,293 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 121ms.
+2025-08-12 16:39:53,298 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:39:53,710 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:39:53,719 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:39:53,719 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 121, 'ping_error': None, 'web_check_status': 'OK'}
+2025-08-12 16:40:51,632 - INFO - --- Native host script started ---
+2025-08-12 16:40:51,632 - DEBUG - Received message: {'command': 'getStatus', 'sshCommand': '1031', 'pingHost': 'kixy.com', 'webCheckUrl': 'https://gemini.google.com/app'}
+2025-08-12 16:40:51,632 - DEBUG - Checking for SSH process with identifier: '1031'
+2025-08-12 16:40:51,646 - INFO - Found matching SSH process with PID: 16503
+2025-08-12 16:40:51,646 - INFO - Extracted SOCKS port 1031 from command line.
+2025-08-12 16:40:51,646 - DEBUG - Attempting to fetch IP details from https://ip-api.com/json with proxy
+2025-08-12 16:40:51,680 - DEBUG - Starting new HTTPS connection (1): ip-api.com:443
+2025-08-12 16:40:52,205 - DEBUG - https://ip-api.com:443 "GET /json HTTP/1.1" 403 107
+2025-08-12 16:40:52,206 - WARNING - Failed to fetch IP info from https://ip-api.com/json: 403 Client Error: Forbidden for url: https://ip-api.com/json
+2025-08-12 16:40:52,206 - DEBUG - Attempting to fetch IP details from https://ipinfo.io/json with proxy
+2025-08-12 16:40:52,237 - DEBUG - Starting new HTTPS connection (1): ipinfo.io:443
+2025-08-12 16:40:52,726 - DEBUG - https://ipinfo.io:443 "GET /json HTTP/1.1" 429 None
+2025-08-12 16:40:52,727 - WARNING - Failed to fetch IP info from https://ipinfo.io/json: 429 Client Error: Too Many Requests for url: https://ipinfo.io/json
+2025-08-12 16:40:52,727 - DEBUG - Attempting to fetch IP details from https://ifconfig.me/json with proxy
+2025-08-12 16:40:52,728 - DEBUG - Starting new HTTPS connection (1): ifconfig.me:443
+2025-08-12 16:40:53,210 - DEBUG - https://ifconfig.me:443 "GET /json HTTP/1.1" 404 9
+2025-08-12 16:40:53,211 - WARNING - Failed to fetch IP info from https://ifconfig.me/json: 404 Client Error: Not Found for url: https://ifconfig.me/json
+2025-08-12 16:40:53,212 - ERROR - All IP lookup services failed.
+2025-08-12 16:40:53,332 - DEBUG - TCP ping to kixy.com:443 via SOCKS port 1031 successful. Latency: 118ms.
+2025-08-12 16:40:53,363 - DEBUG - Starting new HTTPS connection (1): gemini.google.com:443
+2025-08-12 16:40:53,747 - DEBUG - https://gemini.google.com:443 "HEAD /app HTTP/1.1" 302 0
+2025-08-12 16:40:53,752 - DEBUG - Web check for https://gemini.google.com/app successful with status 302.
+2025-08-12 16:40:53,753 - DEBUG - Sending response: {'connected': True, 'socks_port': 1031, 'ip': 'N/A', 'country': 'N/A', 'ping_ms': 118, 'ping_error': None, 'web_check_status': 'OK'}

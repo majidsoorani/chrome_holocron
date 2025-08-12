@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Holocron Status</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <h3>Holocron Tunnel Status</h3>
+    <p>Status: <span id="connection_status" class="status">Loading...</span></p>
+    <p class="detail">IP: <span id="ip_address">N/A</span></p>
+    <p class="detail">Country: <span id="country">N/A</span></p>
+    <p class="detail">Ping: <span id="ping">N/A</span></p>
+    <p class="detail">Web Check: <span id="web_check_status">N/A</span></p>
+    <div id="proxy-container" class="proxy-info" style="display: none;">
+      <p id="proxy-message"></p>
+      <button id="apply-proxy-button">Apply System Proxy</button>
+      <button id="revert-proxy-button">Revert System Proxy</button>
+    </div>
+    <hr>
+    <button id="refresh_button" style="width: 100%;">Refresh Status</button>
+    <script src="popup.js"></script>
+  </body>
+</html>
