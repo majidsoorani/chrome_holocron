@@ -7,4 +7,3 @@ backends/log/
 # IDE-specific files
 .idea/
 .vscode/
-backends/log/holocron_native_host.log
