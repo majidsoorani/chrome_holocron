@@ -26,6 +26,11 @@ logging.basicConfig(
 )
 logging.info("--- Native host script started ---")
 
+# --- Paths ---
+# Path to the shell script for starting/stopping the tunnel
+SCRIPT_DIR = Path(__file__).resolve().parent
+SHELL_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
+
 def read_message():
     """Reads a message from stdin, prefixed with a 4-byte length."""
     raw_length = sys.stdin.buffer.read(4)
@@ -153,60 +158,114 @@ def get_tunnel_status(ssh_command_identifier):
 
     return {"connected": False, "socks_port": None}
 
+def execute_tunnel_command(command, config=None):
+    """Executes the work_connect.sh script with 'start' or 'stop'."""
+    if command not in ["start", "stop"]:
+        return {"success": False, "message": f"Invalid command: {command}"}
+
+    if not SHELL_SCRIPT_PATH.is_file():
+        error_msg = f"Shell script not found at {SHELL_SCRIPT_PATH}"
+        logging.error(error_msg)
+        return {"success": False, "message": error_msg}
+
+    try:
+        cmd_list = [str(SHELL_SCRIPT_PATH), command]
+
+        if command == "start" and config:
+            if config.get( "sshUser"):
+                cmd_list.extend(["--user", config.get("sshUser")])
+            if config.get("sshHost"):
+                cmd_list.extend(["--host", config.get("sshHost")])
+            if config.get("sshCommandIdentifier"):
+                cmd_list.extend(["--identifier", config.get("sshCommandIdentifier")])
+            
+            for rule in config.get("portForwards", []):
+                if rule.get("type") == "D" and rule.get("localPort"):
+                    cmd_list.extend(["-D", str(rule.get("localPort"))])
+                elif rule.get("type") == "L" and all(k in rule for k in ["localPort", "remoteHost", "remotePort"]):
+                    forward_str = f"{rule['localPort']}:{rule['remoteHost']}:{rule['remotePort']}"
+                    cmd_list.extend(["-L", forward_str])
+
+        logging.info(f"Executing command: {' '.join(cmd_list)}")
+
+        # Use a longer timeout for 'start' as it may need to establish a connection and prompt for a password.
+        timeout = 45 if command == "start" else 10
+        result = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False # We check the returncode manually to provide better error messages
+        )
+        logging.info(f"Script stdout: {result.stdout.strip()}")
+        if result.returncode != 0:
+            # Handle special exit code 2: Condition not met (e.g., not on work Wi-Fi)
+            if result.returncode == 2:
+                message = result.stdout.strip() or result.stderr.strip()
+                logging.info(f"Script exited with code 2 (condition not met): {message}")
+                # Report as a failure so the UI shows the message, but the message itself is informational.
+                return {"success": False, "message": message}
+
+            error_output = result.stderr.strip() or result.stdout.strip()
+            logging.error(f"Script execution failed for command '{command}'. Exit code: {result.returncode}. Output: {error_output}")
+
+            # Check for the specific sudo password error and provide a user-friendly message.
+            if "a terminal is required to read the password" in error_output:
+                user_friendly_error = (
+                    "Sudo password required. To fix this, run 'sudo visudo' in a terminal and add this line at the end: "
+                    "majidsoorani ALL=(ALL) NOPASSWD: /usr/bin/wdutil"
+                )
+                return {"success": False, "message": user_friendly_error}
+
+            return {"success": False, "message": f"Failed to {command} tunnel: {error_output}"}
+        return {"success": True, "message": result.stdout.strip()}
+    except subprocess.TimeoutExpired:
+        logging.error(f"Script execution timed out for command '{command}'.")
+        return {"success": False, "message": f"Timeout: The command '{command}' took too long to execute."}
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during script execution: {e}", exc_info=True)
+        return {"success": False, "message": f"An unexpected error occurred: {e}"}
+
 def main():
     """Main loop to read commands and send status."""
     while True:
         try:
             message = read_message()
             logging.debug(f"Received message: {message}")
-            if message.get("command") != "getStatus":
-                continue
+            command = message.get("command")
 
-            ssh_command_id = message.get("sshCommand")
-            status = get_tunnel_status(ssh_command_id)
-            response = {
-                "connected": status["connected"],
-                "socks_port": status.get("socks_port") # Ensure port is always included
-            }
+            if command == "getStatus":
+                ssh_command_id = message.get("sshCommand")
+                status = get_tunnel_status(ssh_command_id)
+                response = { "connected": status["connected"], "socks_port": status.get("socks_port") }
 
-            # If the tunnel is connected and we have a SOCKS port, perform all proxied checks.
-            if status["connected"] and status.get("socks_port"):
-                socks_port = status["socks_port"]
+                if status["connected"] and status.get("socks_port"):
+                    socks_port = status["socks_port"]
+                    web_latency, web_status, web_error = perform_web_check(url=message.get("webCheckUrl"), socks_port=socks_port)
+                    response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
 
-                # 1. Perform a full web check through the proxy for application-level latency.
-                web_latency, web_status, web_error = perform_web_check(
-                    url=message.get("webCheckUrl"),
-                    socks_port=socks_port
-                )
-                response["web_check_latency_ms"] = web_latency
-                response["web_check_status"] = web_status
-                response["web_check_error"] = web_error
+                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=socks_port)
+                    response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
+                else:
+                    logging.info("SSH tunnel not found. Performing direct TCP ping for diagnostics.")
+                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=None)
+                    response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
+                    response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "web_check_error": None})
 
-                # 2. Also perform a TCP ping through the proxy for network-level latency.
-                tcp_latency, tcp_ping_error = perform_tcp_ping(
-                    host=message.get("pingHost", "youtube.com"),
-                    socks_port=socks_port
-                )
-                response["tcp_ping_ms"] = tcp_latency
-                response["tcp_ping_error"] = tcp_ping_error
+                logging.debug(f"Sending response: {response}")
+                send_message(response)
+
+            elif command == "startTunnel":
+                config = message.get("config")
+                response = execute_tunnel_command("start", config)
+                send_message(response)
+
+            elif command == "stopTunnel":
+                response = execute_tunnel_command("stop")
+                send_message(response)
+
             else:
-                # Tunnel is down. Perform a direct TCP ping for basic connectivity diagnostics.
-                logging.info("SSH tunnel not found. Performing direct TCP ping for diagnostics.")
-                
-                tcp_latency, tcp_ping_error = perform_tcp_ping(
-                    host=message.get("pingHost", "youtube.com"),
-                    socks_port=None  # Explicitly None for a direct check
-                )
-                response["tcp_ping_ms"] = tcp_latency
-                response["tcp_ping_error"] = tcp_ping_error
-
-                # Set web check fields to default values for consistency in the UI
-                response["web_check_latency_ms"] = -1
-                response["web_check_status"] = "N/A (Tunnel Down)"
-                response["web_check_error"] = None
-            
-            logging.debug(f"Sending response: {response}")
-            send_message(response)
+                logging.warning(f"Unknown command received: {command}")
 
         except Exception as e:
             logging.error(f"An unhandled exception occurred in the main loop: {e}", exc_info=True)

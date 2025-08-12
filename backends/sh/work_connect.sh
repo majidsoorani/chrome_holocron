@@ -1,19 +1,16 @@
 #!/bin/bash
 
 # ==============================================================================
-# SSH Tunnel Manager for Work Networks
+# Holocron SSH Tunnel Manager
 #
 # Description:
 # This script automatically starts or stops an SSH tunnel when on a designated
-# work Wi-Fi network. It creates a lock file to manage the tunnel's state.
+# work Wi-Fi network. It receives all connection parameters via command-line
+# arguments and uses a lock file to manage the tunnel's state.
 #
 # Requirements:
 # The script uses 'wdutil' to detect the network, which requires administrator
-# privileges. You will be prompted for your password via `sudo` when starting.
-# For automated/passwordless use, see the "Advanced Usage" section below.
-#
-# Usage:
-# ./tunnel.sh {start|stop|restart|status}
+# privileges. For passwordless use, see the "Passwordless Sudo" section.
 # ==============================================================================
 
 # --- Configuration ---
@@ -21,27 +18,9 @@
 WORK_SSIDS=("X28P-5G-AFC960" "X28-5G-AFC960" "X28-2.4G-552360" "X28-5G-552360" "X28P-2.4G-AFC960" "<redacted>") # <-- EDIT THIS LINE
 LOCK_FILE="$HOME/.ssh/holocron_tunnel.lock"
 
-# --- SSH Connection Details (Use environment variables for secrets) ---
-# For security best practices, set these in your shell profile (~/.zshrc, etc.)
-# Example:
-#   export SSH_USER="ubuntu"
-#   export SSH_HOST="bastion.example.com"
-#   export DB_HOST="your-rds-instance.rds.amazonaws.com"
-SSH_USER="${SSH_USER:-ubuntu}"
-SSH_HOST="${SSH_HOST:-34.244.201.246}"
-DB_HOST="${DB_HOST:-warehouse.cluster-cpmkv4ljjrvu.eu-west-1.rds.amazonaws.com}"
-
 # --- Full paths for reliability ---
 SSH_PATH="/usr/bin/ssh"
 WDUTIL_PATH="/usr/bin/wdutil"
-
-# --- Advanced Usage: Passwordless Sudo (for automation) ---
-# To run this script from an automated service (like launchd) without a password
-# prompt, you can allow your user to run wdutil without a password.
-# 1. Open the sudoers file by running: `sudo visudo`
-# 2. Add this line at the end, replacing 'your_username' with your macOS username:
-#    your_username ALL=(ALL) NOPASSWD: /usr/bin/wdutil
-# 3. Save and exit. This is a powerful change; be certain of the security implications.
 
 # --- Helper Functions ---
 status_tunnels() {
@@ -67,15 +46,6 @@ status_tunnels() {
 }
 
 start_tunnels() {
-    # --- Sudo Pre-check ---
-    # Refresh sudo credentials upfront so the password prompt doesn't appear later.
-    echo "ℹ️ This script requires admin privileges to check the Wi-Fi network."
-    sudo -v
-    if [ $? -ne 0 ]; then
-      echo "❌ Sudo credentials not provided or incorrect. Aborting." >&2
-      return 1
-    fi
-
     # --- Pre-flight Checks ---
     if [ -f "$LOCK_FILE" ]; then
         PID=$(cat "$LOCK_FILE")
@@ -87,6 +57,40 @@ start_tunnels() {
             rm -f "$LOCK_FILE"
         fi
     fi
+
+    # --- Argument Parsing ---
+    local ssh_user=""
+    local ssh_host=""
+    local forwards=()
+    local socks_port=""
+    local identifier=""
+
+    while (( "$#" )); do
+      case "$1" in
+        --user)
+          ssh_user="$2"
+          shift 2
+          ;;
+        --host)
+          ssh_host="$2"
+          shift 2
+          ;;
+        --identifier)
+          identifier="$2"
+          shift 2
+          ;;
+        -L|-D)
+          forwards+=("$1" "$2")
+          if [ "$1" == "-D" ]; then
+            socks_port="$2"
+          fi
+          shift 2
+          ;;
+        *) # Should not happen if called from native host
+          shift
+          ;;
+      esac
+    done
 
     # --- SSID Detection ---
     # Use `sudo` with `wdutil` as it requires elevated privileges.
@@ -108,22 +112,31 @@ start_tunnels() {
 
     if ! $is_work_network; then
         echo "ℹ️ Not on a work Wi-Fi network ('$CURRENT_SSID'). Tunnel not started."
-        return 1
+        return 2 # Special exit code for "condition not met"
     fi
 
     # --- Start Tunnel ---
     echo "🚀 Starting SSH tunnel on work network '$CURRENT_SSID'..."
-    SSH_ARGS=(
+    local final_ssh_args=(
         -N # Do not execute a remote command.
         -o "ServerAliveInterval=60"
         -o "ExitOnForwardFailure=yes"
-        -L "5434:${DB_HOST}:5432"
-        -D "1031"
-        "${SSH_USER}@${SSH_HOST}"
     )
 
+    # Inject the identifier into the command line in a non-functional way
+    # so the process can be found later. The -N flag prevents execution.
+    if [ -n "$identifier" ]; then
+        final_ssh_args+=(-o "RemoteCommand=$identifier")
+    fi
+
+    # Add dynamic forwards
+    for ((i=0; i<${#forwards[@]}; i+=2)); do
+        final_ssh_args+=("${forwards[i]}" "${forwards[i+1]}")
+    done
+    final_ssh_args+=("${ssh_user}@${ssh_host}")
+
     # Start SSH in the background, redirecting its output to /dev/null
-    "${SSH_PATH}" "${SSH_ARGS[@]}" > /dev/null 2>&1 &
+    "${SSH_PATH}" "${final_ssh_args[@]}" > /dev/null 2>&1 &
     SSH_PID=$!
 
     # Ensure the directory for the lock file exists before writing to it.
@@ -131,14 +144,22 @@ start_tunnels() {
     echo "$SSH_PID" > "$LOCK_FILE"
 
     # Wait for the SOCKS port to become available before declaring success.
-    # This avoids race conditions where the script finishes before the tunnel is ready.
-    echo "⏳ Waiting for SOCKS proxy on port 1031 to become available..."
+    if [ -z "$socks_port" ]; then
+        echo "✅ Tunnel process started with PID $SSH_PID (no SOCKS port to check)."
+        return 0
+    fi
+
+    echo "⏳ Waiting for SOCKS proxy on port $socks_port to become available..."
     for i in {1..10}; do # Wait for up to 10 seconds
         # Use nc (netcat) to check the port. -z is for zero-I/O mode (port scanning)
-        if nc -z 127.0.0.1 1031 2>/dev/null; then
+        if nc -z 127.0.0.1 "$socks_port" 2>/dev/null; then
             echo "✅ Tunnel established successfully with PID $SSH_PID."
-            echo "   - SOCKS Proxy: 127.0.0.1:1031"
-            echo "   - DB Tunnel:   localhost:5434 -> ${DB_HOST}:5432"
+            # List all forwards for user confirmation
+            for ((i=0; i<${#forwards[@]}; i+=2)); do
+                type_flag="${forwards[i]}"
+                rule="${forwards[i+1]}"
+                echo "   - Forward (${type_flag}): ${rule}"
+            done
             return 0 # Success
         fi
 
@@ -152,7 +173,7 @@ start_tunnels() {
     done
 
     # If the loop finishes, the port never became available.
-    echo "❌ Error: Timed out waiting for the SOCKS proxy on port 1031." >&2
+    echo "❌ Error: Timed out waiting for the SOCKS proxy on port $socks_port." >&2
     echo "   The SSH process (PID $SSH_PID) is running, but the port is not responding." >&2
     echo "   Stopping the new SSH process to clean up." >&2
     kill "$SSH_PID"
@@ -187,15 +208,15 @@ stop_tunnels() {
 restart_tunnels() {
     echo "🔄 Restarting tunnel..."
     stop_tunnels
-    sleep 1 # Give a moment for ports to be released.
-    start_tunnels
+    sleep 1 # Give a moment for ports to be released
+    start_tunnels "$@"
 }
 
 # --- Main Logic ---
 case "$1" in
-    start) start_tunnels ;;
+    start) start_tunnels "${@:2}" ;;
     stop) stop_tunnels ;;
-    restart) restart_tunnels ;;
+    restart) restart_tunnels "${@:2}" ;;
     status) status_tunnels ;;
     *)
       echo "Usage: $0 {start|stop|restart|status}"

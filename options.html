@@ -8,31 +8,64 @@
   <div class="container">
     <h1>Holocron Settings</h1>
 
-    <div class="form-group">
-      <label for="ssh-command">SSH Command Identifier</label>
-      <input type="text" id="ssh-command" placeholder="e.g., 1031 or bastion.host">
-      <p class="description">Enter a unique and stable part of your SSH command. <strong>Using the full command is not reliable.</strong></p>
+    <div class="form-section">
+      <h2>Connection Monitoring</h2>
+      <div class="form-group">
+        <label for="ssh-command">SSH Process Identifier</label>
+        <input type="text" id="ssh-command" placeholder="e.g., holocron-tunnel">
+        <small>A unique string in the SSH command to identify the tunnel process. The script will add this automatically if not present.</small>
+      </div>
+      <div class="form-group">
+        <label for="ping-host">TCP Ping Host</label>
+        <input type="text" id="ping-host" placeholder="e.g., youtube.com">
+        <small>A reliable host for a low-level TCP connection check.</small>
+      </div>
+      <div class="form-group">
+        <label for="web-check-url">Web Check URL</label>
+        <input type="text" id="web-check-url" placeholder="e.g., https://gemini.google.com/app">
+        <small>A full URL to check for application-level connectivity through the tunnel.</small>
+      </div>
     </div>
 
-    <div class="form-group">
-      <label for="ping-host">Host for TCP Ping Check</label>
-      <input type="text" id="ping-host" placeholder="e.g., youtube.com">
-      <p class="description">Host for the raw TCP connection test. Determines the color of the <strong>inner</strong> icon circle.</p>
+    <div class="form-section">
+      <h2>SSH Tunnel Configuration</h2>
+      <div class="form-group">
+        <label for="ssh-user">SSH User</label>
+        <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
+      </div>
+      <div class="form-group">
+        <label for="ssh-host">SSH Host (Bastion)</label>
+        <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
+      </div>
+
+      <fieldset class="port-forwarding-section">
+        <legend>Port Forwarding Rules</legend>
+        <div id="port-forwarding-rules">
+          <!-- Rules will be dynamically inserted here -->
+        </div>
+        <button id="add-rule-button" class="button-secondary">Add Rule</button>
+      </fieldset>
     </div>
 
-    <div class="form-group">
-      <label for="web-check-url">Web Connectivity Check URL</label>
-      <input type="text" id="web-check-url" placeholder="e.g., https://internal.corp.net">
-      <p class="description">URL for the full web request test. Determines the color of the <strong>outer</strong> icon circle and the site status.</p>
-    </div>
-
-    <div class="button-group">
+    <div class="actions">
       <button id="save-button" class="button-primary">Save Settings</button>
       <button id="test-button" class="button-secondary">Test Connection</button>
     </div>
-
-    <p id="status-message"></p>
+    <div id="status-message"></div>
   </div>
+
+  <template id="port-forward-rule-template">
+    <div class="rule-item">
+      <select class="rule-type"><option value="L">Local (-L)</option><option value="D">Dynamic (-D)</option></select>
+      <input type="text" class="rule-local-port" placeholder="Local Port">
+      <span class="rule-colon">:</span>
+      <input type="text" class="rule-remote-host" placeholder="Remote Host">
+      <span class="rule-colon">:</span>
+      <input type="text" class="rule-remote-port" placeholder="Remote Port">
+      <button class="remove-rule-button" title="Remove Rule">&times;</button>
+    </div>
+  </template>
+
+  <script src="constants.js"></script>
   <script src="options.js"></script>
 </body>
-</html>

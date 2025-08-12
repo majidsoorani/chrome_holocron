@@ -9,6 +9,9 @@
       <div class="header">
         <h3>Holocron Tunnel</h3>
         <div id="status_indicator" class="status-indicator"></div>
+        <button id="refresh_button" class="icon-button" title="Refresh Status">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+        </button>
         <span id="connection_status">Loading...</span>
       </div>
 
@@ -27,15 +30,29 @@
         </div>
       </div>
 
+      <!-- Tunnel Controls -->
+      <div id="tunnel-controls" class="tunnel-controls" style="display: none;">
+        <p id="tunnel-message"></p>
+        <div class="buttons">
+          <button id="connect-button" class="button-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M8 5V19L19 12L8 5Z"></path></svg>
+            Connect
+          </button>
+          <button id="disconnect-button" class="button-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M6 6H18V18H6V6Z"></path></svg>
+            Disconnect
+          </button>
+        </div>
+      </div>
+
       <div id="proxy-container" class="proxy-info" style="display: none;">
         <p id="proxy-message"></p>
         <div class="buttons"><button id="apply-proxy-button" class="button-primary">Apply Browser Proxy</button>
         <button id="revert-proxy-button" class="button-secondary">Revert Proxy</button></div>
       </div>
-
-      <button id="refresh_button" class="button-secondary">Refresh Status</button>
     </div>
-    <div id="spinner" class="spinner-overlay"></div>
+    <div id="spinner" class="spinner-overlay" style="display: flex;"><div class="spinner"></div></div>
+    <script src="constants.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

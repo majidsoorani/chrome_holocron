@@ -1,10 +1,13 @@
 // Holocron Shared Constants
 
 const STORAGE_KEYS = {
-  // Sync settings (user-configured)
+  // --- Sync settings (user-configured) ---
   SSH_COMMAND_ID: 'sshCommandIdentifier',
   PING_HOST: 'pingHost',
   WEB_CHECK_URL: 'webCheckUrl',
+  SSH_USER: 'sshUser',
+  SSH_HOST: 'sshHost',
+  PORT_FORWARDS: 'portForwards',
 
   // Local state (managed by extension)
   IS_PROXY_MANAGED: 'isProxyManagedByHolocron',
@@ -20,6 +23,8 @@ const COMMANDS = {
   SET_BROWSER_PROXY: 'setBrowserProxy',
   CLEAR_BROWSER_PROXY: 'clearBrowserProxy',
   TEST_CONNECTION: 'testConnection',
+  START_TUNNEL: 'startTunnel',
+  STOP_TUNNEL: 'stopTunnel',
 
   // From background script to UI
   STATUS_UPDATED: 'statusUpdated',

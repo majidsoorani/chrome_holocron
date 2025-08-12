@@ -1,27 +1,7 @@
 // This is a background service worker for the extension.
 
-// --- Constants ---
+importScripts('constants.js');
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
-
-const STORAGE_KEYS = {
-  IS_PROXY_MANAGED: 'isProxyManagedByHolocron',
-  ORIGINAL_PROXY: 'originalProxySettings',
-  SSH_COMMAND_ID: 'sshCommandIdentifier',
-  PING_HOST: 'pingHost',
-  WEB_CHECK_URL: 'webCheckUrl',
-};
-
-const COMMANDS = {
-  // from other scripts to background
-  GET_POPUP_STATUS: 'getPopupStatus',
-  SET_BROWSER_PROXY: 'setBrowserProxy',
-  CLEAR_BROWSER_PROXY: 'clearBrowserProxy',
-  TEST_CONNECTION: 'testConnection',
-  // from background to other scripts
-  STATUS_UPDATED: 'statusUpdated',
-  // to native host
-  GET_STATUS: 'getStatus',
-};
 
 let lastStatus = { connected: false }; // Store the last known status
 let isUpdateInProgress = false; // A flag to prevent concurrent updates.
@@ -211,6 +191,42 @@ function checkNativeHostConnection(sshCommand, pingHost, webCheckUrl) {
   });
 }
 
+/**
+ * Sends a command to the native host to start or stop the tunnel.
+ * @param {string} command - 'startTunnel' or 'stopTunnel'.
+ * @returns {Promise<object>} A promise that resolves with the response from the native host.
+ */
+function sendTunnelCommand(command, config = null) {
+  return new Promise((resolve, reject) => {
+    try {
+      const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+      let responseReceived = false;
+
+      port.onMessage.addListener((response) => {
+        responseReceived = true;
+        resolve(response);
+        port.disconnect();
+      });
+
+      port.onDisconnect.addListener(() => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(`Native host disconnected: ${chrome.runtime.lastError.message}`));
+        } else if (!responseReceived) {
+          reject(new Error("Connection closed by native host without a response. Check native script for errors."));
+        }
+      });
+
+      const message = { command };
+      if (config) {
+        message.config = config;
+      }
+      port.postMessage(message);
+    } catch (e) {
+      reject(new Error(`Failed to connect to native host: ${e.message}`));
+    }
+  });
+}
+
 async function updateStatus() {
   if (isUpdateInProgress) {
     console.log("Update check already in progress. Skipping.");
@@ -362,6 +378,35 @@ function FindProxyForURL(url, host) {
           message = "Host connected, but reports tunnel is down.";
         }
         sendResponse({ success: true, message: message });
+      } catch (error) {
+        sendResponse({ success: false, message: error.message });
+      }
+    })();
+    return true; // Indicate async response.
+  }
+
+  // Listeners for tunnel control
+  if (request.command === COMMANDS.START_TUNNEL || request.command === COMMANDS.STOP_TUNNEL) {
+    (async () => {
+      try {
+        let config = null;
+        // Only fetch and send config for the 'start' command
+        if (request.command === COMMANDS.START_TUNNEL) {
+          const settings = await chrome.storage.sync.get([
+            STORAGE_KEYS.SSH_USER,
+            STORAGE_KEYS.SSH_HOST,
+            STORAGE_KEYS.PORT_FORWARDS,
+            STORAGE_KEYS.SSH_COMMAND_ID
+          ]);
+          config = settings;
+        }
+
+        const response = await sendTunnelCommand(request.command, config);
+        sendResponse(response);
+
+        // After a start/stop attempt, trigger a status update to refresh the UI.
+        // A small delay gives the SSH process time to start/stop before we check.
+        setTimeout(updateStatus, 1500);
       } catch (error) {
         sendResponse({ success: false, message: error.message });
       }

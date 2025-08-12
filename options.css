@@ -37,6 +37,12 @@ h1 {
   padding-bottom: 16px;
 }
 
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -66,16 +72,32 @@ input[type="text"]:focus {
   box-shadow: 0 0 0 3px rgba(97, 175, 239, 0.2);
 }
 
-.description {
+input.invalid, .rule-item input.invalid {
+  border-color: var(--bad-color);
+}
+
+input.invalid:focus, .rule-item input.invalid:focus {
+  box-shadow: 0 0 0 3px rgba(224, 108, 117, 0.3);
+}
+
+.error-message {
+  color: var(--bad-color);
+  font-weight: 500;
+}
+
+.form-group small {
   font-size: 12px;
   color: #999;
   line-height: 1.4;
-  margin: 0;
+  margin-top: -4px;
 }
 
-.description strong {
-  color: var(--warn-color);
-  font-weight: 500;
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 24px;
 }
 
 .button-group {
@@ -119,3 +141,61 @@ button:active {
 .success { background-color: rgba(152, 195, 121, 0.15); color: var(--good-color); }
 .error { background-color: rgba(224, 108, 117, 0.15); color: var(--bad-color); }
 .info { background-color: rgba(97, 175, 239, 0.15); color: var(--neutral-color); }
+
+/* --- Port Forwarding Specific Styles --- */
+.port-forwarding-section {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 8px;
+}
+
+.port-forwarding-section legend {
+  padding: 0 8px;
+  font-weight: 600;
+  color: var(--header-color);
+}
+
+#port-forwarding-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rule-item select, .rule-item input {
+  padding: 8px;
+  font-size: 13px;
+}
+
+.rule-type {
+  background-color: var(--input-bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--text-color);
+  flex-basis: 120px;
+}
+
+.rule-local-port { flex-basis: 100px; }
+.rule-remote-host { flex-grow: 1; }
+.rule-remote-port { flex-basis: 100px; }
+
+.remove-rule-button {
+  background: none;
+  border: none;
+  color: var(--bad-color);
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 8px;
+  line-height: 1;
+  flex-grow: 0;
+  flex-shrink: 0;
+}
+.remove-rule-button:hover { background-color: rgba(224, 108, 117, 0.1); border-radius: 50%; }

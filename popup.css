@@ -41,6 +41,7 @@ body {
   font-size: 16px;
   font-weight: 600;
   color: var(--header-color);
+  margin-left: auto; /* Pushes status text to the right */
   flex-grow: 1;
 }
 
@@ -99,7 +100,7 @@ body {
 .detail-item .value.warn { color: var(--warn-color); }
 
 /* --- Proxy Controls --- */
-.proxy-info {
+.tunnel-controls, .proxy-info {
   background-color: rgba(0,0,0,0.2);
   border-radius: 6px;
   padding: 12px;
@@ -107,11 +108,19 @@ body {
   border-left: 3px solid var(--neutral-color);
 }
 
-.proxy-info p {
-  margin: 0 0 10px 0;
+
+.tunnel-controls {
+  /* Use warn color for the primary action of connecting/disconnecting */
+  border-left: 3px solid var(--warn-color);
 }
 
-.proxy-info .buttons {
+
+.tunnel-controls p, .proxy-info p {
+  margin: 0 0 10px 0;
+  min-height: 1em; /* Prevent layout shift when text changes */
+}
+
+.tunnel-controls .buttons, .proxy-info .buttons {
   display: flex;
   gap: 8px;
   justify-content: center;
@@ -127,15 +136,37 @@ button {
   font-weight: 500;
   cursor: pointer;
   transition: background-color 0.2s ease, transform 0.1s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  width: 100%;
+  flex-grow: 1;
 }
 
 button:active {
   transform: scale(0.98);
+}
+
+.buttons button {
+    width: 100%; /* Make buttons inside a .buttons div fill the width */
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.icon-button:hover {
+  background-color: var(--button-hover-bg);
+  color: white;
 }
 
 .button-primary { background-color: var(--neutral-color); color: white; }
@@ -151,7 +182,7 @@ button:active {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(40, 44, 52, 0.7);
+  background-color: rgba(40, 44, 52, 0.8);
   display: none; /* Hidden by default */
   align-items: center;
   justify-content: center;
