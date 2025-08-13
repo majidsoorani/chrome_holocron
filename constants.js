@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   PORT_FORWARDS: 'portForwards',
   WIFI_SSIDS: 'wifiSsidList', // New key for Wi-Fi networks
   GEOIP_BYPASS_ENABLED: 'geoIpBypassEnabled',
+  AUTO_RECONNECT_ENABLED: 'autoReconnectEnabled',
 
   // --- State ---
   IS_PROXY_MANAGED: 'isProxyManagedByHolocron',

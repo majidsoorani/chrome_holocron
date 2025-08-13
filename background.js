@@ -3,8 +3,11 @@
 importScripts('constants.js', 'iran_ip_ranges.js');
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
+// --- State Variables ---
 let lastStatus = { connected: false }; // Store the last known status
 let isUpdateInProgress = false; // A flag to prevent concurrent updates.
+let lastReconnectAttemptTimestamp = 0; // For throttling auto-reconnect attempts.
+const RECONNECT_COOLDOWN_MS = 10000; // 10 seconds
 
 function broadcastStatus() {
   // Send the latest status to any listeners (like the popup).
@@ -121,6 +124,47 @@ function setActionIcon(status) {
 }
 
 /**
+ * Attempts to automatically restart the SSH tunnel.
+ * This is triggered when the connection drops and the user has enabled the feature.
+ * It includes a cooldown mechanism to prevent rapid-fire reconnection attempts.
+ */
+async function attemptAutoReconnect() {
+  const now = Date.now();
+  if (now - lastReconnectAttemptTimestamp < RECONNECT_COOLDOWN_MS) {
+    console.log(`Auto-reconnect throttled. Last attempt was less than ${RECONNECT_COOLDOWN_MS / 1000}s ago.`);
+    return;
+  }
+  lastReconnectAttemptTimestamp = now;
+
+  console.log("Attempting to automatically reconnect the tunnel...");
+  try {
+    // This logic is similar to the START_TUNNEL message handler.
+    const settings = await chrome.storage.sync.get([
+      STORAGE_KEYS.SSH_USER,
+      STORAGE_KEYS.SSH_HOST,
+      STORAGE_KEYS.PORT_FORWARDS,
+      STORAGE_KEYS.SSH_COMMAND_ID,
+      STORAGE_KEYS.WIFI_SSIDS
+    ]);
+
+    const response = await communicateWithNativeHost({
+      command: COMMANDS.START_TUNNEL,
+      config: settings
+    });
+
+    if (response.success) {
+      console.log("Auto-reconnect command sent successfully.");
+      // A small delay gives the SSH process time to start before we check.
+      setTimeout(updateStatus, 1500);
+    } else {
+      console.error("Auto-reconnect failed:", response.message);
+    }
+  } catch (error) {
+    console.error("Error during auto-reconnect attempt:", error.message);
+  }
+}
+
+/**
  * Centralized function to update the extension's state, icon, and broadcast to listeners.
  * @param {object} newStatus - The new status object, e.g., { connected: false }.
  * @param {string|null} errorMessage - An optional error message to log for debugging.
@@ -130,23 +174,40 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
     // Use console.error for actual errors, console.log for informational messages.
     newStatus.connected ? console.log(errorMessage) : console.error(errorMessage);
   }
+
+  const wasConnected = lastStatus.connected;
   lastStatus = newStatus;
 
-  // Automatically clear the browser proxy if the tunnel disconnects while managed.
+  // --- Handle state transitions ---
+  // Check if the tunnel has just disconnected.
   const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
-  if (isProxyManagedByHolocron && !newStatus.connected) {
-    console.log("Tunnel disconnected. Automatically clearing browser proxy.");
-    const { [STORAGE_KEYS.ORIGINAL_PROXY]: originalProxySettings } = await chrome.storage.local.get(STORAGE_KEYS.ORIGINAL_PROXY);
-    if (originalProxySettings) {
-      await chrome.proxy.settings.set({ value: originalProxySettings, scope: 'regular' });
-    } else {
-      // Fallback to clearing if no original settings were found.
-      await chrome.proxy.settings.clear({ scope: 'regular' });
+  if (wasConnected && !newStatus.connected) {
+    console.log("Tunnel has disconnected. Initiating disconnect sequence.");
+
+    // 1. First, clear the browser proxy if we were managing it.
+    // This is critical to restore the user's internet access immediately.
+    if (isProxyManagedByHolocron) {
+      console.log("Automatically clearing browser proxy.");
+      const { [STORAGE_KEYS.ORIGINAL_PROXY]: originalProxySettings } = await chrome.storage.local.get(STORAGE_KEYS.ORIGINAL_PROXY);
+      if (originalProxySettings) {
+        await chrome.proxy.settings.set({ value: originalProxySettings, scope: 'regular' });
+      } else {
+        await chrome.proxy.settings.clear({ scope: 'regular' });
+      }
+      await chrome.storage.local.remove([STORAGE_KEYS.ORIGINAL_PROXY, STORAGE_KEYS.IS_PROXY_MANAGED]);
+      console.log("Browser proxy restored to original settings.");
+      lastStatus.proxyCleared = true; // For UI feedback
     }
-    await chrome.storage.local.remove([STORAGE_KEYS.ORIGINAL_PROXY, STORAGE_KEYS.IS_PROXY_MANAGED]);
-    console.log("Browser proxy restored to original settings.");
-    // Add the cleared status to the broadcast so the UI can update.
-    lastStatus.proxyCleared = true;
+
+    // 2. Second, check if we should attempt to reconnect.
+    const { [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectEnabled } = await chrome.storage.sync.get({
+      [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: true // Default to true
+    });
+
+    if (autoReconnectEnabled) {
+      // Use a timeout to let other state updates settle before reconnecting.
+      setTimeout(attemptAutoReconnect, 1000);
+    }
   }
 
   setActionIcon(newStatus);
