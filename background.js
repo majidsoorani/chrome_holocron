@@ -154,72 +154,31 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
 }
 
 /**
- * Connects to the native host and checks the status for a given command.
- * @param {string} sshCommand The command identifier to check.
- * @returns {Promise<object>} A promise that resolves with the status response from the native host.
+ * Sends a message to the native host and returns its response.
+ * This is a centralized function for all native host communication.
+ * @param {object} message The message object to send to the native host.
+ * @returns {Promise<object>} A promise that resolves with the response.
  */
-function checkNativeHostConnection(sshCommand, pingHost, webCheckUrl) {
+function communicateWithNativeHost(message) {
   return new Promise((resolve, reject) => {
     try {
       const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
       let responseReceived = false;
-
+ 
       port.onMessage.addListener((response) => {
         responseReceived = true;
         resolve(response);
         port.disconnect();
       });
-
+ 
       port.onDisconnect.addListener(() => {
         if (chrome.runtime.lastError) {
           reject(new Error(`Native host disconnected: ${chrome.runtime.lastError.message}`));
         } else if (!responseReceived) {
-          reject(new Error("Connection closed by native host without a response. Check native script for errors."));
-        }
-        // If response was received, the promise is already resolved. No action needed.
-      });
-
-      port.postMessage({
-        command: COMMANDS.GET_STATUS,
-        sshCommand: sshCommand,
-        pingHost: pingHost,
-        webCheckUrl: webCheckUrl
-      });
-    } catch (e) {
-      reject(new Error(`Failed to connect to native host: ${e.message}`));
-    }
-  });
-}
-
-/**
- * Sends a command to the native host to start or stop the tunnel.
- * @param {string} command - 'startTunnel' or 'stopTunnel'.
- * @returns {Promise<object>} A promise that resolves with the response from the native host.
- */
-function sendTunnelCommand(command, config = null) {
-  return new Promise((resolve, reject) => {
-    try {
-      const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
-      let responseReceived = false;
-
-      port.onMessage.addListener((response) => {
-        responseReceived = true;
-        resolve(response);
-        port.disconnect();
-      });
-
-      port.onDisconnect.addListener(() => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(`Native host disconnected: ${chrome.runtime.lastError.message}`));
-        } else if (!responseReceived) {
-          reject(new Error("Connection closed by native host without a response. Check native script for errors."));
+          reject(new Error("Connection closed by native host without a response. Check native script logs for errors."));
         }
       });
-
-      const message = { command };
-      if (config) {
-        message.config = config;
-      }
+ 
       port.postMessage(message);
     } catch (e) {
       reject(new Error(`Failed to connect to native host: ${e.message}`));
@@ -252,7 +211,12 @@ async function updateStatus() {
   }
 
   try {
-    const response = await checkNativeHostConnection(sshCommandIdentifier, pingHost, webCheckUrl);
+    const response = await communicateWithNativeHost({
+      command: COMMANDS.GET_STATUS,
+      sshCommandIdentifier,
+      pingHost,
+      webCheckUrl
+    });
     updateStateAndBroadcast(response && response.connected ? response : { connected: false });
   } catch (error) {
     const errorMessage = `Error during status update for command "${sshCommandIdentifier}": ${error.message}`;
@@ -368,7 +332,12 @@ function FindProxyForURL(url, host) {
         return;
       }
       try {
-        const response = await checkNativeHostConnection(sshCommand, pingHost, webCheckUrl);
+        const response = await communicateWithNativeHost({
+          command: COMMANDS.GET_STATUS,
+          sshCommandIdentifier: sshCommand, // Map from options page key
+          pingHost,
+          webCheckUrl
+        });
         let message;
         if (response && response.connected) {
           message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
@@ -401,7 +370,11 @@ function FindProxyForURL(url, host) {
           config = settings;
         }
 
-        const response = await sendTunnelCommand(request.command, config);
+        const response = await communicateWithNativeHost({
+          command: request.command,
+          config: config
+        });
+
         sendResponse(response);
 
         // After a start/stop attempt, trigger a status update to refresh the UI.

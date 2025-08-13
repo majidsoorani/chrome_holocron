@@ -11,6 +11,7 @@ import re
 import socks
 import socket
 import logging
+import getpass
 from pathlib import Path
 
 # --- Setup Logging ---
@@ -138,15 +139,18 @@ def get_tunnel_status(ssh_command_identifier):
         logging.warning("No SSH command identifier provided to get_tunnel_status.")
         return {"connected": False, "socks_port": None}
 
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'username']):
         try:
-            if proc.info['name'] == 'ssh' and proc.info['cmdline'] and any(ssh_command_identifier in s for s in proc.info['cmdline']):
-                logging.info(f"Found matching SSH process with PID: {proc.pid}")
-                
-                # Find the SOCKS port (-D flag)
+            # Ensure the process is 'ssh' and belongs to the current user for security
+            if proc.info['name'] == 'ssh' and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
                 cmd_str = " ".join(proc.info['cmdline'])
-                match = re.search(r'-D\s*(\d+)', cmd_str)
-                socks_port = int(match.group(1)) if match else None
+                # Use a specific, non-functional option to reliably identify our process
+                if f"HolocronIdentifier={ssh_command_identifier}" in cmd_str:
+                    logging.info(f"Found matching SSH process with PID: {proc.pid}")
+
+                    # Find the SOCKS port (-D flag)
+                    match = re.search(r'-D\s*(\d+)', cmd_str)
+                    socks_port = int(match.group(1)) if match else None
                 if socks_port:
                     logging.info(f"Extracted SOCKS port {socks_port} from command line.")
                 else:
@@ -209,11 +213,13 @@ def execute_tunnel_command(command, config=None):
             error_output = result.stderr.strip() or result.stdout.strip()
             logging.error(f"Script execution failed for command '{command}'. Exit code: {result.returncode}. Output: {error_output}")
 
-            # Check for the specific sudo password error and provide a user-friendly message.
-            if "a terminal is required to read the password" in error_output:
+            # Check for common sudo password errors and provide a user-friendly message.
+            if "a terminal is required to read the password" in error_output or "sudo: a password is required" in error_output:
+                current_user = getpass.getuser()
                 user_friendly_error = (
-                    "Sudo password required. To fix this, run 'sudo visudo' in a terminal and add this line at the end: "
-                    "majidsoorani ALL=(ALL) NOPASSWD: /usr/bin/wdutil"
+                    "Sudo password required for Wi-Fi check. To enable passwordless operation, "
+                    "run 'sudo visudo' and add this line at the end of the file "
+                    f"(replace '{current_user}' with your actual username if needed):\n\n{current_user} ALL=(ALL) NOPASSWD: /usr/bin/wdutil"
                 )
                 return {"success": False, "message": user_friendly_error}
 
@@ -235,7 +241,7 @@ def main():
             command = message.get("command")
 
             if command == "getStatus":
-                ssh_command_id = message.get("sshCommand")
+                ssh_command_id = message.get("sshCommandIdentifier")
                 status = get_tunnel_status(ssh_command_id)
                 response = { "connected": status["connected"], "socks_port": status.get("socks_port") }
 

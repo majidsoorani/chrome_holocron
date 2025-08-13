@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Holocron Status",
-  "version": "1.0",
-  "description": "Displays the status of the SSH Holocron tunnel.",
+  "version": "1.1",
+  "description": "Monitors and controls an SSH tunnel, providing status, latency checks, and browser proxy management.",
   "permissions": ["nativeMessaging", "alarms", "storage", "proxy"],
   "background": {
     "service_worker": "background.js"

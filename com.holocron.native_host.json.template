@@ -1,0 +1,9 @@
+{
+    "name": "com.holocron.native_host",
+    "description": "Native host for Holocron SSH Tunnel Manager",
+    "path": "__LAUNCHER_PATH__",
+    "type": "stdio",
+    "allowed_origins": [
+        "chrome-extension://YOUR_EXTENSION_ID_HERE/"
+    ]
+}

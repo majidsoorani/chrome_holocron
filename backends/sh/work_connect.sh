@@ -123,10 +123,11 @@ start_tunnels() {
         -o "ExitOnForwardFailure=yes"
     )
 
-    # Inject the identifier into the command line in a non-functional way
-    # so the process can be found later. The -N flag prevents execution.
+    # Inject a custom, non-functional SSH option with the identifier.
+    # This allows the native host script to reliably find this specific process
+    # without interfering with standard SSH operations.
     if [ -n "$identifier" ]; then
-        final_ssh_args+=(-o "RemoteCommand=$identifier")
+        final_ssh_args+=(-o "HolocronIdentifier=$identifier")
     fi
 
     # Add dynamic forwards
