@@ -9,6 +9,16 @@
     <h1>Holocron Settings</h1>
 
     <div class="form-section">
+      <h2>Connection Mode</h2>
+      <div class="form-group mode-selector">
+        <input type="radio" id="mode-ssh" name="connection-mode" value="ssh" checked>
+        <label for="mode-ssh">SSH Tunnel</label>
+        <input type="radio" id="mode-v2ray" name="connection-mode" value="v2ray">
+        <label for="mode-v2ray">V2Ray</label>
+      </div>
+    </div>
+
+    <div class="form-section">
       <h2>Connection Monitoring</h2>
       <div class="form-group">
         <label for="ssh-command">SSH Process Identifier</label>
@@ -39,35 +49,80 @@
       </fieldset>
     </div>
 
-    <div class="form-section">
-      <h2>SSH Tunnel Configuration</h2>
-      <div class="form-group">
-        <label for="ssh-user">SSH User</label>
-        <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
-      </div>
-      <div class="form-group">
-        <label for="ssh-host">SSH Host (Bastion)</label>
-        <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
-      </div>
-
-      <div class="form-group">
-        <label for="auto-reconnect-enabled">Automatic Reconnect</label>
-        <div class="checkbox-container">
-            <input type="checkbox" id="auto-reconnect-enabled">
-            <label for="auto-reconnect-enabled" class="checkbox-label">
-                Automatically attempt to reconnect the tunnel if it disconnects.
-            </label>
+    <div id="ssh-settings-container">
+      <div class="form-section">
+        <h2>SSH Tunnel Configuration</h2>
+        <div class="form-group">
+          <label for="ssh-user">SSH User</label>
+          <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
         </div>
-        <small>If the tunnel process stops unexpectedly, the extension will try to restart it. This respects the Wi-Fi network rules.</small>
-      </div>
-
-      <fieldset class="port-forwarding-section">
-        <legend>Port Forwarding Rules</legend>
-        <div id="port-forwarding-rules">
-          <!-- Rules will be dynamically inserted here -->
+        <div class="form-group">
+          <label for="ssh-host">SSH Host (Bastion)</label>
+          <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
         </div>
-        <button id="add-rule-button" class="button-secondary">Add Rule</button>
-      </fieldset>
+
+        <div class="form-group">
+          <label for="auto-reconnect-enabled">Automatic Reconnect</label>
+          <div class="checkbox-container">
+              <input type="checkbox" id="auto-reconnect-enabled">
+              <label for="auto-reconnect-enabled" class="checkbox-label">
+                  Automatically attempt to reconnect the tunnel if it disconnects.
+              </label>
+          </div>
+          <small>If the tunnel process stops unexpectedly, the extension will try to restart it. This respects the Wi-Fi network rules.</small>
+        </div>
+
+        <fieldset class="port-forwarding-section">
+          <legend>Port Forwarding Rules</legend>
+          <div id="port-forwarding-rules">
+            <!-- Rules will be dynamically inserted here -->
+          </div>
+          <button id="add-rule-button" class="button-secondary">Add Rule</button>
+        </fieldset>
+      </div>
+    </div>
+
+    <div id="v2ray-settings-container" style="display: none;">
+      <div class="form-section">
+        <h2>V2Ray Configuration</h2>
+        <div class="form-group">
+          <label for="v2ray-host">Server Address</label>
+          <input type="text" id="v2ray-host" placeholder="e.g., v2.example.com">
+        </div>
+        <div class="form-group">
+          <label for="v2ray-port">Server Port</label>
+          <input type="text" id="v2ray-port" placeholder="e.g., 443">
+        </div>
+        <div class="form-group">
+          <label for="v2ray-uuid">User ID (UUID)</label>
+          <input type="text" id="v2ray-uuid" placeholder="Your V2Ray UUID">
+        </div>
+        <div class="form-group">
+          <label for="v2ray-alterid">AlterId</label>
+          <input type="text" id="v2ray-alterid" placeholder="e.g., 64">
+        </div>
+        <div class="form-group">
+          <label for="v2ray-security">Security</label>
+          <select id="v2ray-security">
+            <option value="auto">auto</option>
+            <option value="aes-128-gcm">aes-128-gcm</option>
+            <option value="chacha20-poly1305">chacha20-poly1305</option>
+            <option value="none">none</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="v2ray-network">Network</label>
+          <select id="v2ray-network">
+            <option value="tcp">tcp</option>
+            <option value="ws">ws (WebSocket)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="v2ray-socks-port">Local SOCKS Port</label>
+          <input type="text" id="v2ray-socks-port" placeholder="e.g., 1080">
+          <small>The local port on which V2Ray will listen for SOCKS5 proxy connections.</small>
+        </div>
+      </div>
     </div>
 
     <div class="form-section">

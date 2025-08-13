@@ -36,10 +36,12 @@ logger.addHandler(handler)
 
 logging.info("--- Native host script started ---")
 
-# --- Paths ---
-# Path to the shell script for starting/stopping the tunnel
+# --- Paths & Constants ---
 SCRIPT_DIR = Path(__file__).resolve().parent
 SHELL_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
+V2RAY_CONFIG_PATH = Path("/tmp/holocron_v2ray_config.json")
+V2RAY_LOCK_FILE = Path(getpass.getuser()).home() / ".holocron_v2ray.lock"
+
 
 def read_message():
     """Reads a message from stdin, prefixed with a 4-byte length."""
@@ -136,40 +138,50 @@ def perform_web_check(url, socks_port, timeout=10):
             return -1, "Failed (Proxy Error)", "ProxyError"
         return -1, "Failed (Connection Error)", "ConnectionError"
 
-def get_tunnel_status(ssh_command_identifier):
-    """
-    Checks for the SSH process and extracts the SOCKS port.
+def get_v2ray_status():
+    """Checks for the V2Ray process."""
+    logging.debug("Checking for V2Ray process.")
+    if not V2RAY_LOCK_FILE.exists():
+        return {"connected": False, "socks_port": None}
 
-    Returns:
-        dict: {'connected': bool, 'socks_port': int|None}
-    """
+    try:
+        pid = int(V2RAY_LOCK_FILE.read_text())
+        proc = psutil.Process(pid)
+        # Check if the process name or command line indicates it's our V2Ray instance
+        if 'v2ray' in proc.name() and f'--config={V2RAY_CONFIG_PATH}' in " ".join(proc.cmdline()):
+             # To get the SOCKS port, we need to read the config file
+            if V2RAY_CONFIG_PATH.exists():
+                config_data = json.loads(V2RAY_CONFIG_PATH.read_text())
+                socks_port = config_data.get("inbounds", [{}])[0].get("port")
+                logging.info(f"Found V2Ray process with PID: {pid}. SOCKS port: {socks_port}")
+                return {"connected": True, "socks_port": socks_port}
+    except (psutil.NoSuchProcess, ValueError, FileNotFoundError, IndexError, KeyError):
+        # PID is invalid, lock file is stale, or config is malformed. Clean up.
+        V2RAY_LOCK_FILE.unlink(missing_ok=True)
+
+    return {"connected": False, "socks_port": None}
+
+
+def get_ssh_tunnel_status(ssh_command_identifier):
+    """Checks for the SSH process and extracts the SOCKS port."""
     logging.debug(f"Checking for SSH process with identifier: '{ssh_command_identifier}'")
     if not ssh_command_identifier:
-        logging.warning("No SSH command identifier provided to get_tunnel_status.")
+        logging.warning("No SSH command identifier provided.")
         return {"connected": False, "socks_port": None}
 
     for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'username']):
         try:
-            # Ensure the process is 'ssh' and belongs to the current user for security
             if proc.info['name'] == 'ssh' and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
                 cmd_str = " ".join(proc.info['cmdline'])
-                # Use the unique ControlPath to reliably identify our process.
-                # This avoids using non-standard SSH options.
                 if f"ControlPath=/tmp/holocron.ssh.socket.{ssh_command_identifier}" in cmd_str:
                     logging.info(f"Found matching SSH process with PID: {proc.pid}")
-
-                    # Find the SOCKS port (-D flag)
                     match = re.search(r'-D\s*(\d+)', cmd_str)
                     socks_port = int(match.group(1)) if match else None
                     if socks_port:
                         logging.info(f"Extracted SOCKS port {socks_port} from command line.")
-                    else:
-                        logging.warning("Found SSH process but could not extract SOCKS port from command.")
-
                     return {"connected": True, "socks_port": socks_port}
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
-
     return {"connected": False, "socks_port": None}
 
 def execute_tunnel_command(command, config=None):
@@ -262,6 +274,74 @@ def execute_tunnel_command(command, config=None):
         logging.error(f"An unexpected error occurred during script execution: {e}", exc_info=True)
         return {"success": False, "message": f"An unexpected error occurred: {e}"}
 
+def generate_v2ray_config(config):
+    """Generates a V2Ray JSON configuration from the provided settings."""
+    return {
+        "log": {
+            "loglevel": "warning"
+        },
+        "inbounds": [
+            {
+                "port": int(config.get("socksPort", 1080)),
+                "listen": "127.0.0.1",
+                "protocol": "socks",
+                "settings": {
+                    "auth": "noauth",
+                    "udp": True
+                }
+            }
+        ],
+        "outbounds": [
+            {
+                "protocol": "vmess",
+                "settings": {
+                    "vnext": [
+                        {
+                            "address": config.get("host"),
+                            "port": int(config.get("port")),
+                            "users": [
+                                {
+                                    "id": config.get("uuid"),
+                                    "alterId": int(config.get("alterId")),
+                                    "security": config.get("security", "auto")
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "streamSettings": {
+                    "network": config.get("network", "tcp")
+                }
+            }
+        ]
+    }
+
+def execute_v2ray_command(command, config=None):
+    """Handles starting and stopping the V2Ray process."""
+    if command == "start":
+        v2ray_json = generate_v2ray_config(config)
+        V2RAY_CONFIG_PATH.write_text(json.dumps(v2ray_json, indent=2))
+
+        # Start V2Ray process
+        proc = subprocess.Popen(['v2ray', '--config', str(V2RAY_CONFIG_PATH)])
+        V2RAY_LOCK_FILE.write_text(str(proc.pid))
+        return {"success": True, "message": f"V2Ray process started with PID {proc.pid}"}
+
+    elif command == "stop":
+        if not V2RAY_LOCK_FILE.exists():
+            return {"success": True, "message": "V2Ray appears to be stopped already."}
+        try:
+            pid = int(V2RAY_LOCK_FILE.read_text())
+            proc = psutil.Process(pid)
+            proc.terminate() # or proc.kill()
+            V2RAY_LOCK_FILE.unlink()
+            return {"success": True, "message": f"V2Ray process {pid} stopped."}
+        except (psutil.NoSuchProcess, ValueError):
+            V2RAY_LOCK_FILE.unlink(missing_ok=True)
+            return {"success": True, "message": "V2Ray process not found, cleaned up stale lock file."}
+    return {"success": False, "message": "Invalid V2Ray command."}
+
+
 def main():
     """Main loop to read commands and send status."""
     while True:
@@ -269,45 +349,45 @@ def main():
             message = read_message()
             logging.debug(f"Received message: {message}")
             command = message.get("command")
+            mode = message.get("mode", "ssh") # Default to ssh for backward compatibility
 
             if command == "getStatus":
-                ssh_command_id = message.get("sshCommandIdentifier")
-                status = get_tunnel_status(ssh_command_id)
+                if mode == "ssh":
+                    status = get_ssh_tunnel_status(message.get("sshCommandIdentifier"))
+                else: # v2ray
+                    status = get_v2ray_status()
+
                 response = { "connected": status["connected"], "socks_port": status.get("socks_port") }
 
                 if status["connected"] and status.get("socks_port"):
+                    # Health checks are generic and work for any SOCKS proxy
                     socks_port = status["socks_port"]
                     web_latency, web_status, web_error = perform_web_check(url=message.get("webCheckUrl"), socks_port=socks_port)
                     response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
-
-                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=socks_port)
+                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost"), socks_port=socks_port)
                     response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
                 else:
-                    logging.info("SSH tunnel not found. Performing direct TCP ping for diagnostics.")
-                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=None)
+                    # Perform a direct ping for basic diagnostics if tunnel is down
+                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost"), socks_port=None)
                     response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
                     response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "web_check_error": None})
 
-                logging.debug(f"Sending response: {response}")
                 send_message(response)
 
-            elif command == "startTunnel":
-                config = message.get("config")
-                response = execute_tunnel_command("start", config)
-                send_message(response)
-
-            elif command == "stopTunnel":
-                response = execute_tunnel_command("stop")
+            elif command in ["startTunnel", "stopTunnel"]:
+                action = "start" if command == "startTunnel" else "stop"
+                if mode == "ssh":
+                    response = execute_tunnel_command(action, message.get("config"))
+                else: # v2ray
+                    response = execute_v2ray_command(action, message.get("config"))
                 send_message(response)
 
             else:
                 logging.warning(f"Unknown command received: {command}")
 
         except Exception as e:
-            # For any error during message processing, log it and continue the loop.
-            # This prevents the entire native host from crashing on a single failed command.
             logging.error(f"An unhandled exception occurred in the main loop: {e}", exc_info=True)
-            continue # Keep the host alive for subsequent requests.
+            continue
 
 if __name__ == '__main__':
     main()

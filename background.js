@@ -138,18 +138,27 @@ async function attemptAutoReconnect() {
 
   console.log("Attempting to automatically reconnect the tunnel...");
   try {
-    // This logic is similar to the START_TUNNEL message handler.
-    const settings = await chrome.storage.sync.get([
-      STORAGE_KEYS.SSH_USER,
-      STORAGE_KEYS.SSH_HOST,
-      STORAGE_KEYS.PORT_FORWARDS,
-      STORAGE_KEYS.SSH_COMMAND_ID,
-      STORAGE_KEYS.WIFI_SSIDS
-    ]);
+    // This logic is now aligned with the main START_TUNNEL handler
+    const settings = await chrome.storage.sync.get(Object.values(STORAGE_KEYS));
+    const mode = settings[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
+
+    let config;
+    if (mode === 'ssh') {
+      config = {
+        ssh_user: settings[STORAGE_KEYS.SSH_USER],
+        ssh_host: settings[STORAGE_KEYS.SSH_HOST],
+        port_forwards: settings[STORAGE_KEYS.PORT_FORWARDS],
+        ssh_command_id: settings[STORAGE_KEYS.SSH_COMMAND_ID],
+        wifi_ssids: settings[STORAGE_KEYS.WIFI_SSIDS]
+      };
+    } else { // v2ray
+      config = settings[STORAGE_KEYS.V2RAY_CONFIG];
+    }
 
     const response = await communicateWithNativeHost({
       command: COMMANDS.START_TUNNEL,
-      config: settings
+      mode: mode,
+      config: config
     });
 
     if (response.success) {
@@ -254,33 +263,36 @@ async function updateStatus() {
   }
   isUpdateInProgress = true;
 
-  const {
-    [STORAGE_KEYS.SSH_COMMAND_ID]: sshCommandIdentifier,
-    [STORAGE_KEYS.PING_HOST]: pingHost,
-    [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl
-  } = await chrome.storage.sync.get({
-    [STORAGE_KEYS.SSH_COMMAND_ID]: '',
-    [STORAGE_KEYS.PING_HOST]: 'youtube.com', // Default value
-    [STORAGE_KEYS.WEB_CHECK_URL]: 'https://gemini.google.com/app'
-  });
-
-  if (!sshCommandIdentifier) {
-    console.log("SSH command identifier not set. Please configure it in the options.");
-    updateStateAndBroadcast({ connected: false });
-    isUpdateInProgress = false;
-    return;
-  }
-
   try {
+    const settings = await chrome.storage.sync.get([
+      STORAGE_KEYS.CONNECTION_MODE,
+      STORAGE_KEYS.SSH_COMMAND_ID,
+      STORAGE_KEYS.PING_HOST,
+      STORAGE_KEYS.WEB_CHECK_URL
+    ]);
+
+    const mode = settings[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
+    const sshCommandIdentifier = settings[STORAGE_KEYS.SSH_COMMAND_ID];
+    const pingHost = settings[STORAGE_KEYS.PING_HOST] || 'youtube.com';
+    const webCheckUrl = settings[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
+
+    if (mode === 'ssh' && !sshCommandIdentifier) {
+      console.log("SSH command identifier not set. Please configure it in the options.");
+      updateStateAndBroadcast({ connected: false });
+      isUpdateInProgress = false;
+      return;
+    }
+
     const response = await communicateWithNativeHost({
       command: COMMANDS.GET_STATUS,
-      sshCommandIdentifier,
-      pingHost,
-      webCheckUrl
+      mode: mode, // Pass the current mode to the native host
+      sshCommandIdentifier: sshCommandIdentifier,
+      pingHost: pingHost,
+      webCheckUrl: webCheckUrl
     });
     updateStateAndBroadcast(response && response.connected ? response : { connected: false });
   } catch (error) {
-    const errorMessage = `Error during status update for command "${sshCommandIdentifier}": ${error.message}`;
+    const errorMessage = `Error during status update: ${error.message}`;
     updateStateAndBroadcast({ connected: false }, errorMessage);
   } finally {
     isUpdateInProgress = false;
@@ -408,7 +420,11 @@ function FindProxyForURL(url, host) {
   // Listener for the new test connection feature from the options page.
   if (request.command === COMMANDS.TEST_CONNECTION) {
     (async () => {
-      const { sshCommand, pingHost, webCheckUrl } = request;
+      const { sshCommand, pingHost, webCheckUrl, mode } = request;
+      if (mode !== 'ssh') {
+        sendResponse({ success: false, message: "Test Connection is only available for SSH mode." });
+        return;
+      }
       if (!sshCommand) {
         sendResponse({ success: false, message: "SSH Command Identifier cannot be empty." });
         return;
@@ -418,9 +434,11 @@ function FindProxyForURL(url, host) {
         return;
       }
       try {
+        // GET_STATUS is now mode-aware, so we pass the mode.
         const response = await communicateWithNativeHost({
           command: COMMANDS.GET_STATUS,
-          sshCommandIdentifier: sshCommand, // Map from options page key
+          mode: 'ssh', // Force SSH mode for testing
+          sshCommandIdentifier: sshCommand,
           pingHost,
           webCheckUrl
         });
@@ -444,23 +462,29 @@ function FindProxyForURL(url, host) {
   if (request.command === COMMANDS.START_TUNNEL || request.command === COMMANDS.STOP_TUNNEL) {
     (async () => {
       try {
-        let config = null;
-        // Only fetch and send config for the 'start' command
-        if (request.command === COMMANDS.START_TUNNEL) {
-          const settings = await chrome.storage.sync.get([
-            STORAGE_KEYS.SSH_USER,
-            STORAGE_KEYS.SSH_HOST,
-            STORAGE_KEYS.PORT_FORWARDS,
-            STORAGE_KEYS.SSH_COMMAND_ID,
-            STORAGE_KEYS.WIFI_SSIDS
-          ]);
-          config = settings;
+        const settings = await chrome.storage.sync.get(Object.values(STORAGE_KEYS));
+        const mode = settings[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
+
+        let config;
+        if (mode === 'ssh') {
+          config = {
+            ssh_user: settings[STORAGE_KEYS.SSH_USER],
+            ssh_host: settings[STORAGE_KEYS.SSH_HOST],
+            port_forwards: settings[STORAGE_KEYS.PORT_FORWARDS],
+            ssh_command_id: settings[STORAGE_KEYS.SSH_COMMAND_ID],
+            wifi_ssids: settings[STORAGE_KEYS.WIFI_SSIDS]
+          };
+        } else { // v2ray
+          config = settings[STORAGE_KEYS.V2RAY_CONFIG];
         }
 
-        const response = await communicateWithNativeHost({
+        const message = {
           command: request.command,
-          config: config
-        });
+          mode: mode,
+          config: request.command === COMMANDS.START_TUNNEL ? config : null
+        };
+
+        const response = await communicateWithNativeHost(message);
 
         sendResponse(response);
 

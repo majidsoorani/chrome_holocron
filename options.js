@@ -1,5 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
   // --- DOM Elements ---
+  // Mode Selection
+  const modeSshRadio = document.getElementById('mode-ssh');
+  const modeV2rayRadio = document.getElementById('mode-v2ray');
+  const sshSettingsContainer = document.getElementById('ssh-settings-container');
+  const v2raySettingsContainer = document.getElementById('v2ray-settings-container');
+
+  // SSH
   const commandInput = document.getElementById('ssh-command');
   const pingHostInput = document.getElementById('ping-host');
   const webCheckUrlInput = document.getElementById('web-check-url');
@@ -17,7 +24,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const testButton = document.getElementById('test-button');
   const statusMessage = document.getElementById('status-message');
 
+  // V2Ray
+  const v2rayHostInput = document.getElementById('v2ray-host');
+  const v2rayPortInput = document.getElementById('v2ray-port');
+  const v2rayUuidInput = document.getElementById('v2ray-uuid');
+  const v2rayAlterIdInput = document.getElementById('v2ray-alterid');
+  const v2raySecuritySelect = document.getElementById('v2ray-security');
+  const v2rayNetworkSelect = document.getElementById('v2ray-network');
+  const v2raySocksPortInput = document.getElementById('v2ray-socks-port');
+
+
   // --- Functions ---
+
+  function handleModeChange() {
+    if (modeSshRadio.checked) {
+      sshSettingsContainer.style.display = 'block';
+      v2raySettingsContainer.style.display = 'none';
+    } else {
+      sshSettingsContainer.style.display = 'none';
+      v2raySettingsContainer.style.display = 'block';
+    }
+  }
+
   // --- Port Forwarding Rule Management ---
 
   function createRuleElement(rule = {}) {
@@ -65,6 +93,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadSettings() {
     chrome.storage.sync.get(Object.values(STORAGE_KEYS), (result) => {
+      // Load Mode
+      const mode = result[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
+      if (mode === 'v2ray') {
+        modeV2rayRadio.checked = true;
+      } else {
+        modeSshRadio.checked = true;
+      }
+      handleModeChange(); // Update UI visibility based on loaded mode
+
+      // Load SSH Settings
       commandInput.value = result[STORAGE_KEYS.SSH_COMMAND_ID] || 'holocron-tunnel';
       pingHostInput.value = result[STORAGE_KEYS.PING_HOST] || 'youtube.com';
       webCheckUrlInput.value = result[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
@@ -90,6 +128,16 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         wifiSsids.forEach(createWifiElement);
       }
+
+      // Load V2Ray Settings
+      const v2rayConfig = result[STORAGE_KEYS.V2RAY_CONFIG] || {};
+      v2rayHostInput.value = v2rayConfig.host || '';
+      v2rayPortInput.value = v2rayConfig.port || '';
+      v2rayUuidInput.value = v2rayConfig.uuid || '';
+      v2rayAlterIdInput.value = v2rayConfig.alterId || '64';
+      v2raySecuritySelect.value = v2rayConfig.security || 'auto';
+      v2rayNetworkSelect.value = v2rayConfig.network || 'tcp';
+      v2raySocksPortInput.value = v2rayConfig.socksPort || '1080';
     });
   }
 
@@ -173,6 +221,29 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // 5. Validate V2Ray settings if in V2Ray mode
+    if (modeV2rayRadio.checked) {
+      const v2rayInputsToValidate = [
+        v2rayHostInput,
+        v2rayPortInput,
+        v2rayUuidInput,
+        v2rayAlterIdInput,
+        v2raySocksPortInput,
+      ];
+      v2rayInputsToValidate.forEach(input => {
+        if (!input.value.trim()) {
+          showError(input, 'This field cannot be empty.');
+        }
+      });
+      // Validate ports
+      [v2rayPortInput, v2raySocksPortInput].forEach(portInput => {
+        const port = portInput.value.trim();
+        if (port && (!/^\d+$/.test(port) || +port < 1 || +port > 65535)) {
+          showError(portInput, 'Port must be a number from 1-65535.');
+        }
+      });
+    }
+
     return isValid;
   }
 
@@ -220,6 +291,17 @@ document.addEventListener('DOMContentLoaded', () => {
       [STORAGE_KEYS.WIFI_SSIDS]: wifiSsids,
       [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: geoIpBypassCheckbox.checked,
       [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectCheckbox.checked,
+      // --- New V2Ray and Mode settings ---
+      [STORAGE_KEYS.CONNECTION_MODE]: modeSshRadio.checked ? 'ssh' : 'v2ray',
+      [STORAGE_KEYS.V2RAY_CONFIG]: {
+        host: v2rayHostInput.value.trim(),
+        port: v2rayPortInput.value.trim(),
+        uuid: v2rayUuidInput.value.trim(),
+        alterId: v2rayAlterIdInput.value.trim(),
+        security: v2raySecuritySelect.value,
+        network: v2rayNetworkSelect.value,
+        socksPort: v2raySocksPortInput.value.trim(),
+      }
     };
 
     chrome.storage.sync.set(settings, () => {
@@ -233,6 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Event Listeners ---
+  modeSshRadio.addEventListener('change', handleModeChange);
+  modeV2rayRadio.addEventListener('change', handleModeChange);
   addRuleButton.addEventListener('click', () => createRuleElement());
   addWifiButton.addEventListener('click', () => createWifiElement());
   saveButton.addEventListener('click', saveSettings); // This now calls the version with validation
@@ -247,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const request = {
       command: COMMANDS.TEST_CONNECTION,
+      mode: modeSshRadio.checked ? 'ssh' : 'v2ray',
       sshCommand: sshIdentifier,
       pingHost: pingHost,
       webCheckUrl: webCheckUrl

@@ -33,6 +33,15 @@ if [ -z "$PYTHON_EXEC" ] || [ ! -x "$PYTHON_EXEC" ]; then
 fi
 echo "✅ Found system Python 3 at: $PYTHON_EXEC"
 
+echo "🔎 Checking for V2Ray (optional)..."
+if ! command -v v2ray &> /dev/null; then
+    echo "⚠️ Warning: 'v2ray' command not found in your PATH."
+    echo "   The V2Ray functionality will not work until V2Ray is installed and accessible."
+else
+    echo "✅ Found V2Ray executable."
+fi
+
+
 # --- Step 1: Setup Python Virtual Environment ---
 echo "🔧 Setting up Python virtual environment..."
 VENV_DIR="$PROJECT_ROOT/.venv"
