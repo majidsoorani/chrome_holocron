@@ -365,7 +365,8 @@ function FindProxyForURL(url, host) {
             STORAGE_KEYS.SSH_USER,
             STORAGE_KEYS.SSH_HOST,
             STORAGE_KEYS.PORT_FORWARDS,
-            STORAGE_KEYS.SSH_COMMAND_ID
+            STORAGE_KEYS.SSH_COMMAND_ID,
+            STORAGE_KEYS.WIFI_SSIDS
           ]);
           config = settings;
         }
@@ -378,8 +379,13 @@ function FindProxyForURL(url, host) {
         sendResponse(response);
 
         // After a start/stop attempt, trigger a status update to refresh the UI.
-        // A small delay gives the SSH process time to start/stop before we check.
-        setTimeout(updateStatus, 1500);
+        if (response.success && response.already_running) {
+          // If it was already running, we can update the status immediately.
+          updateStatus();
+        } else {
+          // Otherwise, a small delay gives the SSH process time to start/stop before we check.
+          setTimeout(updateStatus, 1500);
+        }
       } catch (error) {
         sendResponse({ success: false, message: error.message });
       }

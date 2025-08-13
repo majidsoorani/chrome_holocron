@@ -11,20 +11,29 @@ import re
 import socks
 import socket
 import logging
+import logging.handlers
 import getpass
+import platform
 from pathlib import Path
 
 # --- Setup Logging ---
-# This will create a log file in your home directory to help with debugging.
-# The log file will be located at: backends/log/holocron_native_host.log
+# This configures a rotating log file to prevent it from growing indefinitely.
 log_dir = Path(__file__).resolve().parent.parent / "log"
 log_dir.mkdir(parents=True, exist_ok=True)
 log_file = log_dir / "holocron_native_host.log"
-logging.basicConfig(
-    filename=log_file,
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+
+# Create a rotating file handler: 1MB max size, 3 backup files.
+handler = logging.handlers.RotatingFileHandler(
+    log_file, maxBytes=1_048_576, backupCount=3
 )
+# Add function name to the log format for better debugging context.
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s')
+handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+logger.addHandler(handler)
+
 logging.info("--- Native host script started ---")
 
 # --- Paths ---
@@ -144,19 +153,20 @@ def get_tunnel_status(ssh_command_identifier):
             # Ensure the process is 'ssh' and belongs to the current user for security
             if proc.info['name'] == 'ssh' and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
                 cmd_str = " ".join(proc.info['cmdline'])
-                # Use a specific, non-functional option to reliably identify our process
-                if f"HolocronIdentifier={ssh_command_identifier}" in cmd_str:
+                # Use the unique ControlPath to reliably identify our process.
+                # This avoids using non-standard SSH options.
+                if f"ControlPath=/tmp/holocron.ssh.socket.{ssh_command_identifier}" in cmd_str:
                     logging.info(f"Found matching SSH process with PID: {proc.pid}")
 
                     # Find the SOCKS port (-D flag)
                     match = re.search(r'-D\s*(\d+)', cmd_str)
                     socks_port = int(match.group(1)) if match else None
-                if socks_port:
-                    logging.info(f"Extracted SOCKS port {socks_port} from command line.")
-                else:
-                    logging.warning("Found SSH process but could not extract SOCKS port from command.")
+                    if socks_port:
+                        logging.info(f"Extracted SOCKS port {socks_port} from command line.")
+                    else:
+                        logging.warning("Found SSH process but could not extract SOCKS port from command.")
 
-                return {"connected": True, "socks_port": socks_port}
+                    return {"connected": True, "socks_port": socks_port}
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
 
@@ -182,6 +192,10 @@ def execute_tunnel_command(command, config=None):
                 cmd_list.extend(["--host", config.get("sshHost")])
             if config.get("sshCommandIdentifier"):
                 cmd_list.extend(["--identifier", config.get("sshCommandIdentifier")])
+
+            for ssid in config.get("wifiSsidList", []):
+                if ssid: # Ensure not empty
+                    cmd_list.extend(["--ssid", ssid])
             
             for rule in config.get("portForwards", []):
                 if rule.get("type") == "D" and rule.get("localPort"):
@@ -202,6 +216,12 @@ def execute_tunnel_command(command, config=None):
             check=False # We check the returncode manually to provide better error messages
         )
         logging.info(f"Script stdout: {result.stdout.strip()}")
+        # Handle special exit code 3: Already running (this is a success case)
+        if result.returncode == 3:
+            message = result.stdout.strip() or "Tunnel is already running."
+            logging.info(f"Script exited with code 3 (already running): {message}")
+            return {"success": True, "already_running": True, "message": message}
+
         if result.returncode != 0:
             # Handle special exit code 2: Condition not met (e.g., not on work Wi-Fi)
             if result.returncode == 2:
@@ -215,12 +235,21 @@ def execute_tunnel_command(command, config=None):
 
             # Check for common sudo password errors and provide a user-friendly message.
             if "a terminal is required to read the password" in error_output or "sudo: a password is required" in error_output:
-                current_user = getpass.getuser()
-                user_friendly_error = (
-                    "Sudo password required for Wi-Fi check. To enable passwordless operation, "
-                    "run 'sudo visudo' and add this line at the end of the file "
-                    f"(replace '{current_user}' with your actual username if needed):\n\n{current_user} ALL=(ALL) NOPASSWD: /usr/bin/wdutil"
-                )
+                # Provide platform-specific advice for passwordless sudo
+                if platform.system() == "Darwin":
+                    current_user = getpass.getuser()
+                    user_friendly_error = (
+                        "Sudo password required for Wi-Fi check. To enable passwordless operation, "
+                        "run 'sudo visudo' and add this line at the end of the file "
+                        f"(replace '{current_user}' with your actual username if needed):\n\n{current_user} ALL=(ALL) NOPASSWD: /usr/bin/wdutil"
+                    )
+                else:
+                    # Generic message for other OSes (e.g., Linux)
+                    user_friendly_error = (
+                        "Sudo password required to run the connection script. "
+                        "Please configure passwordless sudo for the script at: "
+                        f"{SHELL_SCRIPT_PATH}"
+                    )
                 return {"success": False, "message": user_friendly_error}
 
             return {"success": False, "message": f"Failed to {command} tunnel: {error_output}"}
@@ -274,8 +303,10 @@ def main():
                 logging.warning(f"Unknown command received: {command}")
 
         except Exception as e:
+            # For any error during message processing, log it and continue the loop.
+            # This prevents the entire native host from crashing on a single failed command.
             logging.error(f"An unhandled exception occurred in the main loop: {e}", exc_info=True)
-            sys.exit(1) # Exit with a non-zero code to indicate an error
+            continue # Keep the host alive for subsequent requests.
 
 if __name__ == '__main__':
     main()

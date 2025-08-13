@@ -9,10 +9,10 @@
 # to configure these paths automatically.
 
 # Path to the Python executable. This will be replaced by the install script.
-PYTHON_EXEC="__PYTHON_EXEC_PATH__"
+PYTHON_EXEC="/Users/majidsoorani/chrome_holocron/.venv/bin/python"
 
 # Path to the Python native host script. This will be replaced by the install script.
-SCRIPT_PATH="__PYTHON_SCRIPT_PATH__"
+SCRIPT_PATH="/Users/majidsoorani/chrome_holocron/backends/python/holocron_native_host.py"
 
 # Execute the script with the specified Python interpreter, passing along all arguments.
 exec "$PYTHON_EXEC" "$SCRIPT_PATH" "$@"

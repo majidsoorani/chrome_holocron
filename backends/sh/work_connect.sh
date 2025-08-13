@@ -14,9 +14,8 @@
 # ==============================================================================
 
 # --- Configuration ---
-# Add ALL your work Wi-Fi network names (SSIDs) inside the parentheses.
-WORK_SSIDS=("X28P-5G-AFC960" "X28-5G-AFC960" "X28-2.4G-552360" "X28-5G-552360" "X28P-2.4G-AFC960" "<redacted>") # <-- EDIT THIS LINE
 LOCK_FILE="$HOME/.ssh/holocron_tunnel.lock"
+SSH_LOG_FILE="/tmp/holocron_ssh_output.log" # Temporary log for SSH connection errors
 
 # --- Full paths for reliability ---
 SSH_PATH="/usr/bin/ssh"
@@ -51,7 +50,7 @@ start_tunnels() {
         PID=$(cat "$LOCK_FILE")
         if ps -p "$PID" > /dev/null; then
             echo "✅ Tunnel is already running with PID $PID. No action needed."
-            return 0
+            return 3 # Special exit code for "already running"
         else
             echo "⚠️ Found stale lock file for PID $PID. Removing it."
             rm -f "$LOCK_FILE"
@@ -64,6 +63,7 @@ start_tunnels() {
     local forwards=()
     local socks_port=""
     local identifier=""
+    local work_ssids=()
 
     while (( "$#" )); do
       case "$1" in
@@ -79,6 +79,10 @@ start_tunnels() {
           identifier="$2"
           shift 2
           ;;
+        --ssid)
+          work_ssids+=("$2")
+          shift 2
+          ;;
         -L|-D)
           forwards+=("$1" "$2")
           if [ "$1" == "-D" ]; then
@@ -92,27 +96,34 @@ start_tunnels() {
       esac
     done
 
-    # --- SSID Detection ---
-    # Use `sudo` with `wdutil` as it requires elevated privileges.
-    CURRENT_SSID=$(sudo "$WDUTIL_PATH" info 2>/dev/null | grep -w 'SSID' | awk '{print $3}')
+    # --- SSID Detection (Optional) ---
+    # If work SSIDs are configured, check if we are on one of them.
+    # If no SSIDs are configured, the check is skipped, allowing manual connection from any network.
+    if [ ${#work_ssids[@]} -gt 0 ]; then
+        echo "ℹ️ Work Wi-Fi networks configured. Checking current network..."
+        # Use `sudo` with `wdutil` as it requires elevated privileges.
+        CURRENT_SSID=$(sudo "$WDUTIL_PATH" info 2>/dev/null | grep -w 'SSID' | awk '{print $3}')
 
-    if [ -z "$CURRENT_SSID" ]; then
-        echo "❌ Error: Could not determine current Wi-Fi SSID." >&2
-        echo "   Please ensure you are connected to a Wi-Fi network." >&2
-        return 1
-    fi
-
-    is_work_network=false
-    for ssid in "${WORK_SSIDS[@]}"; do
-        if [[ "$ssid" == "$CURRENT_SSID" ]]; then
-            is_work_network=true
-            break
+        if [ -z "$CURRENT_SSID" ]; then
+            echo "⚠️ Warning: Could not determine current Wi-Fi SSID (e.g., on a wired connection)." >&2
+            echo "   Since work networks are configured, the connection will not start automatically." >&2
+            return 2 # Condition not met, as we can't verify the SSID.
         fi
-    done
 
-    if ! $is_work_network; then
-        echo "ℹ️ Not on a work Wi-Fi network ('$CURRENT_SSID'). Tunnel not started."
-        return 2 # Special exit code for "condition not met"
+        is_work_network=false
+        for ssid in "${work_ssids[@]}"; do
+            if [[ "$ssid" == "$CURRENT_SSID" ]]; then
+                is_work_network=true
+                break
+            fi
+        done
+
+        if ! $is_work_network; then
+            echo "ℹ️ Not on a configured work Wi-Fi network ('$CURRENT_SSID'). Tunnel not started."
+            return 2 # Special exit code for "condition not met"
+        fi
+    else
+        echo "ℹ️ No work Wi-Fi networks configured. Skipping SSID check."
     fi
 
     # --- Start Tunnel ---
@@ -123,11 +134,12 @@ start_tunnels() {
         -o "ExitOnForwardFailure=yes"
     )
 
-    # Inject a custom, non-functional SSH option with the identifier.
-    # This allows the native host script to reliably find this specific process
-    # without interfering with standard SSH operations.
+    # Use a unique ControlPath to tag the SSH process with the identifier.
+    # This is a standard SSH option, and since ControlMaster is 'no' by default,
+    # it won't create a socket but will appear in the process's command line,
+    # allowing the native host to find it reliably.
     if [ -n "$identifier" ]; then
-        final_ssh_args+=(-o "HolocronIdentifier=$identifier")
+        final_ssh_args+=(-o "ControlPath=/tmp/holocron.ssh.socket.$identifier")
     fi
 
     # Add dynamic forwards
@@ -137,7 +149,8 @@ start_tunnels() {
     final_ssh_args+=("${ssh_user}@${ssh_host}")
 
     # Start SSH in the background, redirecting its output to /dev/null
-    "${SSH_PATH}" "${final_ssh_args[@]}" > /dev/null 2>&1 &
+    # Capture SSH output to a log file for debugging in case of failure.
+    "${SSH_PATH}" "${final_ssh_args[@]}" > "$SSH_LOG_FILE" 2>&1 &
     SSH_PID=$!
 
     # Ensure the directory for the lock file exists before writing to it.
@@ -146,6 +159,7 @@ start_tunnels() {
 
     # Wait for the SOCKS port to become available before declaring success.
     if [ -z "$socks_port" ]; then
+        rm -f "$SSH_LOG_FILE" # Clean up log on success
         echo "✅ Tunnel process started with PID $SSH_PID (no SOCKS port to check)."
         return 0
     fi
@@ -154,6 +168,7 @@ start_tunnels() {
     for i in {1..10}; do # Wait for up to 10 seconds
         # Use nc (netcat) to check the port. -z is for zero-I/O mode (port scanning)
         if nc -z 127.0.0.1 "$socks_port" 2>/dev/null; then
+            rm -f "$SSH_LOG_FILE" # Clean up log on success
             echo "✅ Tunnel established successfully with PID $SSH_PID."
             # List all forwards for user confirmation
             for ((i=0; i<${#forwards[@]}; i+=2)); do
@@ -167,15 +182,26 @@ start_tunnels() {
         # Check if the ssh process died prematurely
         if ! ps -p "$SSH_PID" > /dev/null; then
             echo "❌ Error: SSH process with PID $SSH_PID failed to start or exited unexpectedly." >&2
+            if [ -f "$SSH_LOG_FILE" ]; then
+                echo "   --- SSH Connection Log ---" >&2
+                # Indent the output for readability
+                sed 's/^/   | /' "$SSH_LOG_FILE" >&2
+                echo "   --------------------------" >&2
+                rm -f "$SSH_LOG_FILE"
+            fi
             rm -f "$LOCK_FILE"
             return 1
         fi
         sleep 1
     done
 
-    # If the loop finishes, the port never became available.
+    # If the loop finishes, the port never became available. Capture the error.
     echo "❌ Error: Timed out waiting for the SOCKS proxy on port $socks_port." >&2
     echo "   The SSH process (PID $SSH_PID) is running, but the port is not responding." >&2
+    if [ -f "$SSH_LOG_FILE" ]; then
+        echo "   The SSH process may have printed errors. Check its log for details." >&2
+        # Don't remove the log file in this case, so it can be inspected manually.
+    fi
     echo "   Stopping the new SSH process to clean up." >&2
     kill "$SSH_PID"
     rm -f "$LOCK_FILE"

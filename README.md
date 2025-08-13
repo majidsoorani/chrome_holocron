@@ -49,7 +49,7 @@ Control Script (work_connect.sh)
 
 ## Prerequisites
 
-- **macOS**: Required for the `wdutil` command used to detect the current Wi-Fi network SSID.
+- **macOS**: Required for the `wdutil` command used to detect the current Wi-Fi network SSID. The automatic connection feature is currently macOS-only. Manual controls will work on other Unix-like systems.
 - **Google Chrome** (or other Chromium-based browsers, with path adjustments).
 - **Python 3.x**.
 - **SSH client** and configured SSH keys for your target host.
@@ -65,44 +65,38 @@ An installation script is provided to automate the setup process.
     ```
 
 2.  **Run the Installer**
-    This script will install Python dependencies, set script permissions, and configure the native messaging host for Chrome.
+    This script will create a Python virtual environment, install dependencies, set script permissions, and configure the native messaging host for Chrome.
     ```bash
     chmod +x install.sh
     ./install.sh
     ```
+    **The script will pause and ask you to complete the next steps.**
 
 3.  **Load the Extension in Chrome**
-    The installer will guide you through this, but the steps are:
     - Open Chrome and navigate to `chrome://extensions`.
     - Enable **Developer mode** in the top-right corner.
     - Click **Load unpacked**.
     - Select the `chrome_holocron` directory (the one containing `manifest.json`).
 
 4.  **Link the Native Host to the Extension**
-    - After loading the extension, find its card on the `chrome://extensions` page and copy the **ID** (it's a long string of letters).
-    - Open the native host manifest file. The path was printed by the install script, but it's typically: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.holocron.native_host.json`.
-    - In that file, replace `YOUR_EXTENSION_ID_HERE` with the ID you copied.
-    - Save the file and **restart Chrome**.
+    - After loading the extension, copy its **ID** (a long string of letters).
+    - Paste this ID back into the terminal where the `install.sh` script is waiting.
+    - The script will automatically configure the connection.
+    - **Restart Chrome completely** for the changes to take effect.
 
 ## Configuration
 
-1.  **Set Work Wi-Fi Networks**
-    - Edit the script: `backends/sh/work_connect.sh`.
-    - Add your work Wi-Fi network names (SSIDs) to the `WORK_SSIDS` array.
-    ```sh
-    WORK_SSIDS=("MyWorkWifi" "Another-Work-Network")
-    ```
-
-2.  **Configure Extension Options**
+1.  **Configure Extension Options**
     - Right-click the Holocron icon in your Chrome toolbar and select **Options**.
     - Fill in all the required fields:
+        - **Automatic Connection Networks (Optional)**: Add the SSIDs of Wi-Fi networks where the tunnel should auto-connect. If you leave this list empty, the automatic connection feature is disabled, and you can manually start the tunnel from any network.
         - **SSH Details**: Your username and the server's hostname.
         - **Health Checks**: The host to ping and the URL for the web check.
         - **Port Forwarding**: Define your local, remote, or dynamic (`-D`) port forwards. A default SOCKS proxy on port 1031 is included.
     - Click **Save Settings**.
 
-3.  **Enable Passwordless Sudo (Recommended)**
-    The script needs `sudo` to check your Wi-Fi network. To avoid being prompted for a password, you can add a `sudoers` rule. The application will guide you if this is needed, but you can do it proactively.
+2.  **Enable Passwordless Sudo (Recommended for macOS)**
+    On macOS, the script needs `sudo` to check your Wi-Fi network with `wdutil`. To avoid being prompted for a password, you can add a `sudoers` rule. The application will guide you if this is needed, but you can do it proactively.
     - Run `sudo visudo` in your terminal.
     - Add the following line at the end of the file, replacing `your_username` with your actual macOS username:
     ```
@@ -110,11 +104,21 @@ An installation script is provided to automate the setup process.
     ```
     - Save the file (in `vi`, press `Esc` then type `:wq!` and `Enter`).
 
+## Security Considerations
+
+**Security is paramount.** This system is designed to interact with sensitive infrastructure. Adhere to the following principles:
+
+- **Never share logs or screenshots without redacting sensitive information.** Logs can contain real IP addresses and hostnames, which is a security risk. Always replace sensitive data with placeholders like `<redacted>` or `bastion.example.com` before sharing.
+- **Use a secrets manager for production credentials.** While this tool uses your local SSH configuration, for any team-based or production environment, SSH keys and other secrets should be managed through a proper secrets management tool.
+- **The default configuration uses safe placeholders.** The initial values in the options page use non-real hostnames like `database.example.com`. This is intentional to protect your infrastructure details.
+
 ## Troubleshooting
 
-- **"Native host has exited" or "Failed to connect to native host"**: This usually means the Python script failed. Check the log file for errors at `backends/log/holocron_native_host.log`.
+- **"Native host has exited" or "Failed to connect to native host"**: This usually means the Python script failed. The first step is to check the log file for errors at `backends/log/holocron_native_host.log`. The last few lines will usually contain a detailed Python error message (a "traceback") that explains why the script stopped. The log file is automatically rotated when it reaches 1MB in size, so it will not grow indefinitely.
 - **Extension icon is always red**:
     - Ensure the SSH Command Identifier in the options matches what's used in your scripts.
     - Use the "Test Connection" button in the options page to get a detailed status.
     - Verify you can manually `ssh` to the host from your terminal.
+- **Popup is stuck on "Connecting..." but the tunnel is already running**: This could happen if the extension's state gets out of sync. The periodic status check (every minute) or clicking the connect button again will force a refresh. The changes implemented in this version make this scenario much less likely by handling the "already running" state more intelligently.
+- **Connection fails with "Permission denied (publickey)" or similar SSH errors**: This error, which may appear in the popup after a connection attempt, means the SSH connection itself is failing. Verify that your SSH keys are correctly set up in `~/.ssh/` and that your public key has been added to the `~/.ssh/authorized_keys` file on the remote server (`bastion.example.com`).
 - **Connect button shows "Sudo password required"**: You need to set up passwordless sudo as described in the configuration steps.

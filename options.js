@@ -7,12 +7,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const sshHostInput = document.getElementById('ssh-host');
   const rulesContainer = document.getElementById('port-forwarding-rules');
   const addRuleButton = document.getElementById('add-rule-button');
+  const wifiListContainer = document.getElementById('wifi-networks-list');
+  const addWifiButton = document.getElementById('add-wifi-button');
   const ruleTemplate = document.getElementById('port-forward-rule-template');
+  const wifiTemplate = document.getElementById('wifi-network-template');
   const saveButton = document.getElementById('save-button');
   const testButton = document.getElementById('test-button');
   const statusMessage = document.getElementById('status-message');
 
   // --- Functions ---
+  // --- Port Forwarding Rule Management ---
 
   function createRuleElement(rule = {}) {
     const content = ruleTemplate.content.cloneNode(true);
@@ -44,6 +48,19 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleInputs(); // Initial setup
   }
 
+  // --- Wi-Fi SSID Management ---
+
+  function createWifiElement(ssid = '') {
+    const content = wifiTemplate.content.cloneNode(true);
+    const ruleElement = content.querySelector('.rule-item');
+    const ssidInput = ruleElement.querySelector('.wifi-ssid-input');
+    const removeButton = ruleElement.querySelector('.remove-rule-button');
+
+    ssidInput.value = ssid;
+    removeButton.addEventListener('click', () => ruleElement.remove());
+    wifiListContainer.appendChild(ruleElement);
+  }
+
   function loadSettings() {
     chrome.storage.sync.get(Object.values(STORAGE_KEYS), (result) => {
       commandInput.value = result[STORAGE_KEYS.SSH_COMMAND_ID] || 'holocron-tunnel';
@@ -52,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sshUserInput.value = result[STORAGE_KEYS.SSH_USER] || '';
       sshHostInput.value = result[STORAGE_KEYS.SSH_HOST] || '';
 
-      rulesContainer.innerHTML = ''; // Clear existing rules
+      rulesContainer.innerHTML = ''; // Clear existing port forwarding rules
       const portForwards = result[STORAGE_KEYS.PORT_FORWARDS] || [];
       if (portForwards.length === 0) {
         // Add default rules for a new user
@@ -60,6 +77,14 @@ document.addEventListener('DOMContentLoaded', () => {
         createRuleElement({ type: 'L', localPort: '5434', remoteHost: 'database.example.com', remotePort: '5432' });
       } else {
         portForwards.forEach(createRuleElement);
+      }
+
+      wifiListContainer.innerHTML = ''; // Clear existing Wi-Fi networks
+      const wifiSsids = result[STORAGE_KEYS.WIFI_SSIDS] || [];
+      if (wifiSsids.length === 0) {
+        createWifiElement('MyWorkWifi-5G'); // Add a default example
+      } else {
+        wifiSsids.forEach(createWifiElement);
       }
     });
   }
@@ -136,6 +161,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // 4. Validate Wi-Fi SSIDs
+    document.querySelectorAll('#wifi-networks-list .rule-item').forEach((ruleEl) => {
+      const ssidInput = ruleEl.querySelector('.wifi-ssid-input');
+      if (!ssidInput.value.trim()) {
+        showError(ssidInput, 'SSID cannot be empty.');
+      }
+    });
+
     return isValid;
   }
 
@@ -149,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const rules = [];
+    const portForwardRules = [];
     document.querySelectorAll('#port-forwarding-rules .rule-item').forEach(el => {
       const type = el.querySelector('.rule-type').value;
       const localPort = el.querySelector('.rule-local-port').value;
@@ -162,7 +195,14 @@ document.addEventListener('DOMContentLoaded', () => {
           rule.remoteHost = remoteHost;
           rule.remotePort = remotePort;
         }
-        rules.push(rule);
+        portForwardRules.push(rule);
+      }
+    });
+
+    const wifiSsids = [];
+    document.querySelectorAll('#wifi-networks-list .rule-item .wifi-ssid-input').forEach(input => {
+      if (input.value.trim()) {
+        wifiSsids.push(input.value.trim());
       }
     });
 
@@ -172,7 +212,8 @@ document.addEventListener('DOMContentLoaded', () => {
       [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrlInput.value,
       [STORAGE_KEYS.SSH_USER]: sshUserInput.value,
       [STORAGE_KEYS.SSH_HOST]: sshHostInput.value,
-      [STORAGE_KEYS.PORT_FORWARDS]: rules,
+      [STORAGE_KEYS.PORT_FORWARDS]: portForwardRules,
+      [STORAGE_KEYS.WIFI_SSIDS]: wifiSsids,
     };
 
     chrome.storage.sync.set(settings, () => {
@@ -187,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Event Listeners ---
   addRuleButton.addEventListener('click', () => createRuleElement());
+  addWifiButton.addEventListener('click', () => createWifiElement());
   saveButton.addEventListener('click', saveSettings); // This now calls the version with validation
 
   testButton.addEventListener('click', () => {

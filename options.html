@@ -13,7 +13,7 @@
       <div class="form-group">
         <label for="ssh-command">SSH Process Identifier</label>
         <input type="text" id="ssh-command" placeholder="e.g., holocron-tunnel">
-        <small>A unique string in the SSH command to identify the tunnel process. The script will add this automatically if not present.</small>
+        <small>A unique string used to identify the tunnel process. The script uses this to create a unique tag for the SSH command.</small>
       </div>
       <div class="form-group">
         <label for="ping-host">TCP Ping Host</label>
@@ -25,6 +25,18 @@
         <input type="text" id="web-check-url" placeholder="e.g., https://gemini.google.com/app">
         <small>A full URL to check for application-level connectivity through the tunnel.</small>
       </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Automatic Connection Networks (Optional)</h2>
+      <small>The tunnel will only auto-connect on these Wi-Fi networks. Leave this section empty to disable the check and allow manual connection from any network.</small>
+      <fieldset class="wifi-networks-section">
+        <legend>Permitted SSIDs</legend>
+        <div id="wifi-networks-list">
+          <!-- SSIDs will be dynamically inserted here -->
+        </div>
+        <button id="add-wifi-button" class="button-secondary">Add Wi-Fi Network</button>
+      </fieldset>
     </div>
 
     <div class="form-section">
@@ -63,6 +75,13 @@
       <span class="rule-colon">:</span>
       <input type="text" class="rule-remote-port" placeholder="Remote Port">
       <button class="remove-rule-button" title="Remove Rule">&times;</button>
+    </div>
+  </template>
+
+  <template id="wifi-network-template">
+    <div class="rule-item">
+      <input type="text" class="wifi-ssid-input" placeholder="e.g., MyWorkWifi-5G">
+      <button class="remove-rule-button" title="Remove SSID">&times;</button>
     </div>
   </template>
 

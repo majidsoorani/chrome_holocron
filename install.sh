@@ -27,23 +27,32 @@ REQUIREMENTS_PATH="$PROJECT_ROOT/requirements.txt"
 # --- Pre-flight Checks ---
 echo "🔎 Checking for Python interpreter..."
 PYTHON_EXEC=$(which python3)
-if [ -z "$PYTHON_EXEC" ]; then
+if [ -z "$PYTHON_EXEC" ] || [ ! -x "$PYTHON_EXEC" ]; then
     echo "❌ Error: python3 not found in your PATH. Please install Python 3."
     exit 1
 fi
-echo "✅ Found Python 3 at: $PYTHON_EXEC"
+echo "✅ Found system Python 3 at: $PYTHON_EXEC"
+
+# --- Step 1: Setup Python Virtual Environment ---
+echo "🔧 Setting up Python virtual environment..."
+VENV_DIR="$PROJECT_ROOT/.venv"
+if [ ! -d "$VENV_DIR" ]; then
+    "$PYTHON_EXEC" -m venv "$VENV_DIR"
+    echo "✅ Virtual environment created at: $VENV_DIR"
+else
+    echo "✅ Virtual environment already exists."
+fi
+# From now on, use the Python interpreter from the virtual environment
+PYTHON_EXEC="$VENV_DIR/bin/python"
 
 echo "🔎 Checking for required Python packages..."
 if [ -f "$REQUIREMENTS_PATH" ]; then
-    if ! "$PYTHON_EXEC" -m pip show -r "$REQUIREMENTS_PATH" &> /dev/null; then
-        echo "⚠️ Some Python packages are missing."
-        echo "   Attempting to install them using pip..."
-        if ! "$PYTHON_EXEC" -m pip install -r "$REQUIREMENTS_PATH"; then
-            echo "❌ Error: Failed to install Python packages. Please install them manually from requirements.txt"
-            exit 1
-        fi
+    echo "   Installing/updating packages from requirements.txt..."
+    if ! "$PYTHON_EXEC" -m pip install -r "$REQUIREMENTS_PATH"; then
+        echo "❌ Error: Failed to install Python packages into the virtual environment."
+        exit 1
     fi
-    echo "✅ All required Python packages are installed."
+    echo "✅ Python packages are up to date in the virtual environment."
 else
     echo "⚠️ Warning: requirements.txt not found. Skipping package check."
 fi
@@ -54,14 +63,14 @@ chmod +x "$LAUNCHER_SCRIPT_PATH"
 chmod +x "$PROJECT_ROOT/backends/sh/work_connect.sh"
 echo "✅ Scripts are now executable."
 
-# --- Step 2: Update paths in the launcher script ---
+# --- Step 3: Update paths in the launcher script ---
 echo "✍️  Updating paths in launcher script..."
 sed -i.bak "s|__PYTHON_EXEC_PATH__|$PYTHON_EXEC|" "$LAUNCHER_SCRIPT_PATH"
 sed -i.bak "s|__PYTHON_SCRIPT_PATH__|$PYTHON_SCRIPT_PATH|" "$LAUNCHER_SCRIPT_PATH"
 rm "${LAUNCHER_SCRIPT_PATH}.bak"
 echo "✅ Launcher script configured."
 
-# --- Step 3: Create and install the native host manifest ---
+# --- Step 4: Create and install the native host manifest ---
 echo "✍️  Creating native host manifest..."
 sed "s|__LAUNCHER_PATH__|$LAUNCHER_SCRIPT_PATH|" "$MANIFEST_TEMPLATE_PATH" > "/tmp/$NATIVE_HOST_NAME.json"
 echo "✅ Manifest created."
@@ -71,19 +80,31 @@ mkdir -p "$CHROME_NATIVE_HOSTS_DIR"
 mv "/tmp/$NATIVE_HOST_NAME.json" "$FINAL_MANIFEST_PATH"
 echo "✅ Manifest installed at: $FINAL_MANIFEST_PATH"
 
-# --- Final Step: Remind user to load the extension ---
+# --- Final Step: Interactive Extension ID Configuration ---
 echo ""
 echo "🎉 Installation Complete!"
 echo ""
-echo "🔴 IMPORTANT FINAL STEPS 🔴"
+echo "🔴 ACTION REQUIRED: Please follow these steps carefully 🔴"
 echo "1. Open Chrome and go to 'chrome://extensions'."
 echo "2. Enable 'Developer mode' in the top right."
 echo "3. Click 'Load unpacked' and select the '$PROJECT_ROOT' directory."
-echo "4. Once loaded, find the Holocron extension and copy its 'ID' (a long string of letters)."
-echo "5. Open the manifest file: $FINAL_MANIFEST_PATH"
-echo "6. Replace 'YOUR_EXTENSION_ID_HERE' with the ID you just copied."
-echo "7. Save the file and RESTART CHROME for the change to take effect."
+echo "4. The 'Holocron Status' extension will appear. Find its 'ID' (it is a long string of letters)."
 echo ""
-echo "After that, you can configure the extension:"
-echo " - Edit 'backends/sh/work_connect.sh' to add your work Wi-Fi SSIDs."
-echo " - Right-click the Holocron icon and select 'Options' to set up your SSH connection."
+
+# -p for prompt, -r to prevent backslash interpretation
+read -r -p "5. Paste the Extension ID here and press [Enter]: " extension_id
+
+if [ -z "$extension_id" ]; then
+    echo "❌ No Extension ID provided. Please run the script again."
+    exit 1
+fi
+
+echo "✍️  Updating manifest with your Extension ID..."
+sed -i.bak "s|YOUR_EXTENSION_ID_HERE|$extension_id|" "$FINAL_MANIFEST_PATH"
+rm "${FINAL_MANIFEST_PATH}.bak"
+
+echo "✅ Manifest updated successfully!"
+echo "🔒 The native host is now locked to your specific extension instance."
+echo ""
+echo "🚀 FINAL STEP: Please RESTART CHROME completely for the changes to take effect."
+echo "   (Cmd+Q on macOS, or right-click the dock icon and choose 'Quit')."
