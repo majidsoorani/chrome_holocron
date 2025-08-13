@@ -186,18 +186,19 @@ def execute_tunnel_command(command, config=None):
         cmd_list = [str(SHELL_SCRIPT_PATH), command]
 
         if command == "start" and config:
-            if config.get( "sshUser"):
-                cmd_list.extend(["--user", config.get("sshUser")])
-            if config.get("sshHost"):
-                cmd_list.extend(["--host", config.get("sshHost")])
-            if config.get("sshCommandIdentifier"):
-                cmd_list.extend(["--identifier", config.get("sshCommandIdentifier")])
+            # Note: The keys used here (e.g., "ssh_user") MUST match the keys sent from the JavaScript side.
+            if config.get("ssh_user"):
+                cmd_list.extend(["--user", config.get("ssh_user")])
+            if config.get("ssh_host"):
+                cmd_list.extend(["--host", config.get("ssh_host")])
+            if config.get("ssh_command_id"):
+                cmd_list.extend(["--identifier", config.get("ssh_command_id")])
 
-            for ssid in config.get("wifiSsidList", []):
-                if ssid: # Ensure not empty
+            for ssid in config.get("wifi_ssids", []):
+                if ssid:  # Ensure not empty
                     cmd_list.extend(["--ssid", ssid])
-            
-            for rule in config.get("portForwards", []):
+
+            for rule in config.get("port_forwards", []):
                 if rule.get("type") == "D" and rule.get("localPort"):
                     cmd_list.extend(["-D", str(rule.get("localPort"))])
                 elif rule.get("type") == "L" and all(k in rule for k in ["localPort", "remoteHost", "remotePort"]):

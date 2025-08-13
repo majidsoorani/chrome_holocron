@@ -22,28 +22,6 @@ SSH_PATH="/usr/bin/ssh"
 WDUTIL_PATH="/usr/bin/wdutil"
 
 # --- Helper Functions ---
-status_tunnels() {
-    if [ ! -f "$LOCK_FILE" ]; then
-        echo "Tunnel status: 🔴 Stopped (No lock file found)."
-        return 1
-    fi
-
-    PID=$(cat "$LOCK_FILE")
-    if [ -z "$PID" ]; then
-        echo "Tunnel status: 🔴 Stopped (Lock file is empty). Cleaning up."
-        rm -f "$LOCK_FILE"
-        return 1
-    fi
-
-    # Check if a process with PID is an ssh command
-    if ps -p "$PID" -o comm= | grep -q "ssh"; then
-        echo "Tunnel status: 🟢 Running with PID $PID."
-    else
-        echo "Tunnel status: 🔴 Stopped (Stale lock file for non-existent PID $PID). Cleaning up."
-        rm -f "$LOCK_FILE"
-    fi
-}
-
 start_tunnels() {
     # --- Pre-flight Checks ---
     if [ -f "$LOCK_FILE" ]; then
@@ -232,21 +210,12 @@ stop_tunnels() {
     fi
 }
 
-restart_tunnels() {
-    echo "🔄 Restarting tunnel..."
-    stop_tunnels
-    sleep 1 # Give a moment for ports to be released
-    start_tunnels "$@"
-}
-
 # --- Main Logic ---
 case "$1" in
     start) start_tunnels "${@:2}" ;;
     stop) stop_tunnels ;;
-    restart) restart_tunnels "${@:2}" ;;
-    status) status_tunnels ;;
     *)
-      echo "Usage: $0 {start|stop|restart|status}"
+      echo "Usage: $0 {start|stop}"
       exit 1
       ;;
 esac
