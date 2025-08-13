@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const webCheckUrlInput = document.getElementById('web-check-url');
   const sshUserInput = document.getElementById('ssh-user');
   const sshHostInput = document.getElementById('ssh-host');
+  const geoIpBypassCheckbox = document.getElementById('geoip-bypass-enabled');
   const rulesContainer = document.getElementById('port-forwarding-rules');
   const addRuleButton = document.getElementById('add-rule-button');
   const wifiListContainer = document.getElementById('wifi-networks-list');
@@ -68,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
       webCheckUrlInput.value = result[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
       sshUserInput.value = result[STORAGE_KEYS.SSH_USER] || '';
       sshHostInput.value = result[STORAGE_KEYS.SSH_HOST] || '';
+      geoIpBypassCheckbox.checked = result[STORAGE_KEYS.GEOIP_BYPASS_ENABLED] !== false; // Default to true
 
       rulesContainer.innerHTML = ''; // Clear existing port forwarding rules
       const portForwards = result[STORAGE_KEYS.PORT_FORWARDS] || [];
@@ -214,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
       [STORAGE_KEYS.SSH_HOST]: sshHostInput.value,
       [STORAGE_KEYS.PORT_FORWARDS]: portForwardRules,
       [STORAGE_KEYS.WIFI_SSIDS]: wifiSsids,
+      [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: geoIpBypassCheckbox.checked,
     };
 
     chrome.storage.sync.set(settings, () => {

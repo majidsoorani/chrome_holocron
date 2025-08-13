@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   WEB_CHECK_URL: 'webCheckUrl',
   PORT_FORWARDS: 'portForwards',
   WIFI_SSIDS: 'wifiSsidList', // New key for Wi-Fi networks
+  GEOIP_BYPASS_ENABLED: 'geoIpBypassEnabled',
 
   // --- State ---
   IS_PROXY_MANAGED: 'isProxyManagedByHolocron',

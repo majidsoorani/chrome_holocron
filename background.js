@@ -1,6 +1,6 @@
 // This is a background service worker for the extension.
 
-importScripts('constants.js');
+importScripts('constants.js', 'iran_ip_ranges.js');
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
 let lastStatus = { connected: false }; // Store the last known status
@@ -263,32 +263,57 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
       try {
+        // Get user setting for GeoIP bypass
+        const { [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: geoIpBypassEnabled } = await chrome.storage.sync.get({
+          [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: true // Default to enabled
+        });
+
         // Store original settings before changing them.
         const originalSettings = await chrome.proxy.settings.get({ incognito: false });
 
         // --- Create a PAC script for advanced routing ---
         // This allows for conditional proxying, such as bypassing specific domains.
-        const pacScript = `
+        let pacScript = `
 function FindProxyForURL(url, host) {
   // 1. Bypass requests to Iranian top-level domains (.ir)
   if (shExpMatch(host, "*.ir")) {
     return "DIRECT";
   }
 
-  // 2. Bypass localhost and other local addresses (replaces '<local>')
+  // 2. Bypass localhost and other local addresses
   if (isPlainHostName(host) || shExpMatch(host, "localhost") || shExpMatch(host, "127.0.0.1")) {
     return "DIRECT";
   }
+`;
 
-  // 3. For all other traffic, use the SOCKS proxy.
+        if (geoIpBypassEnabled) {
+          // Inject the GeoIP check logic and the IP ranges into the PAC script
+          pacScript += `
+  // 3. GeoIP check for Iran. This may introduce a small latency for DNS resolution.
+  try {
+    const ip = dnsResolve(host);
+    if (ip) {
+      const ranges = ${JSON.stringify(IRAN_IP_RANGES_NETMASK)};
+      for (let i = 0; i < ranges.length; i++) {
+        if (isInNet(ip, ranges[i][0], ranges[i][1])) {
+          return "DIRECT";
+        }
+      }
+    }
+  } catch (e) {
+    // dnsResolve can fail for some hosts, fall through to proxy.
+  }
+`;
+        }
+
+        pacScript += `
+  // Final step: For all other traffic, use the SOCKS proxy.
   return "SOCKS5 127.0.0.1:${socksPort}";
 }`;
 
         const config = {
           mode: "pac_script",
-          pacScript: {
-            data: pacScript
-          }
+          pacScript: { data: pacScript }
         };
 
         await chrome.proxy.settings.set({ value: config, scope: 'regular' });
@@ -297,7 +322,7 @@ function FindProxyForURL(url, host) {
           [STORAGE_KEYS.IS_PROXY_MANAGED]: true,
           [STORAGE_KEYS.ORIGINAL_PROXY]: originalSettings.value
         });
-        sendResponse({ success: true, message: "Browser proxy set with .ir bypass rule." });
+        sendResponse({ success: true, message: "Browser proxy set." });
       } catch (e) {
         sendResponse({ success: false, message: `Failed to set proxy: ${e.message}` });
       }
