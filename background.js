@@ -4,7 +4,8 @@ importScripts('constants.js', 'iran_ip_ranges.js');
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
 // --- State Variables ---
-let lastStatus = { connected: false }; // Store the last known status
+let lastStatus = { connected: false, activeProxyId: null }; // Store the last known status
+let activeProxyConfig = null; // Store the full config of the active proxy
 let isUpdateInProgress = false; // A flag to prevent concurrent updates.
 let lastReconnectAttemptTimestamp = 0; // For throttling auto-reconnect attempts.
 const RECONNECT_COOLDOWN_MS = 10000; // 10 seconds
@@ -123,45 +124,6 @@ function setActionIcon(status) {
   chrome.action.setIcon({ imageData: imageData });
 }
 
-/**
- * Attempts to automatically restart the SSH tunnel.
- * This is triggered when the connection drops and the user has enabled the feature.
- * It includes a cooldown mechanism to prevent rapid-fire reconnection attempts.
- */
-async function attemptAutoReconnect() {
-  const now = Date.now();
-  if (now - lastReconnectAttemptTimestamp < RECONNECT_COOLDOWN_MS) {
-    console.log(`Auto-reconnect throttled. Last attempt was less than ${RECONNECT_COOLDOWN_MS / 1000}s ago.`);
-    return;
-  }
-  lastReconnectAttemptTimestamp = now;
-
-  console.log("Attempting to automatically reconnect the tunnel...");
-  try {
-    const { [STORAGE_KEYS.PROXY_LIST]: proxyList = [] } = await chrome.storage.sync.get(STORAGE_KEYS.PROXY_LIST);
-    const activeProxy = proxyList.find(p => p.isActive);
-
-    if (!activeProxy) {
-        console.log("Auto-reconnect skipped: No active proxy.");
-        return;
-    }
-
-    const response = await communicateWithNativeHost({
-      command: COMMANDS.START_TUNNEL,
-      config: activeProxy
-    });
-
-    if (response.success) {
-      console.log("Auto-reconnect command sent successfully.");
-      // A small delay gives the SSH process time to start before we check.
-      setTimeout(updateStatus, 1500);
-    } else {
-      console.error("Auto-reconnect failed:", response.message);
-    }
-  } catch (error) {
-    console.error("Error during auto-reconnect attempt:", error.message);
-  }
-}
 
 /**
  * Centralized function to update the extension's state, icon, and broadcast to listeners.
@@ -181,6 +143,8 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
   // Check if the tunnel has just disconnected.
   const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
   if (wasConnected && !newStatus.connected) {
+    activeProxyConfig = null; // Clear the active proxy config
+    lastStatus.activeProxyId = null;
     console.log("Tunnel has disconnected. Initiating disconnect sequence.");
 
     // 1. First, clear the browser proxy if we were managing it.
@@ -198,15 +162,8 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
       lastStatus.proxyCleared = true; // For UI feedback
     }
 
-    // 2. Second, check if we should attempt to reconnect.
-    const { [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectEnabled } = await chrome.storage.sync.get({
-      [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: true // Default to true
-    });
-
-    if (autoReconnectEnabled) {
-      // Use a timeout to let other state updates settle before reconnecting.
-      setTimeout(attemptAutoReconnect, 1000);
-    }
+    // The auto-reconnect feature is removed for now as the new UI flow
+    // doesn't have a persistent 'active' proxy setting.
   }
 
   setActionIcon(newStatus);
@@ -254,39 +211,36 @@ async function updateStatus() {
   isUpdateInProgress = true;
 
   try {
-    const settings = await chrome.storage.sync.get([STORAGE_KEYS.PROXY_LIST, STORAGE_KEYS.PING_HOST, STORAGE_KEYS.WEB_CHECK_URL]);
-    const proxyList = settings[STORAGE_KEYS.PROXY_LIST] || [];
-    const activeProxy = proxyList.find(p => p.isActive);
-
-    const pingHost = settings[STORAGE_KEYS.PING_HOST] || 'youtube.com';
-    const webCheckUrl = settings[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
-
-    if (!activeProxy) {
-      // No active proxy, so we are disconnected.
-      updateStateAndBroadcast({ connected: false });
+    // If no proxy is active, we are disconnected.
+    if (!activeProxyConfig) {
+      updateStateAndBroadcast({ connected: false, activeProxyId: null });
       isUpdateInProgress = false;
       return;
     }
 
-    // For getStatus, we only need to send the type and any specific identifiers.
-    // The native host doesn't need the full config to check status.
+    const { [STORAGE_KEYS.PING_HOST]: pingHost, [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl } = await chrome.storage.sync.get([STORAGE_KEYS.PING_HOST, STORAGE_KEYS.WEB_CHECK_URL]);
+
     const statusRequest = {
       command: COMMANDS.GET_STATUS,
-      mode: activeProxy.type,
-      pingHost: pingHost,
-      webCheckUrl: webCheckUrl
+      mode: activeProxyConfig.type,
+      pingHost: pingHost || 'youtube.com',
+      webCheckUrl: webCheckUrl || 'https://gemini.google.com/app'
     };
 
-    // For SSH, we still need the unique identifier.
-    if (activeProxy.type === 'ssh') {
-      statusRequest.sshCommandIdentifier = activeProxy.ssh_command_id;
+    if (activeProxyConfig.type === 'ssh') {
+      statusRequest.sshCommandIdentifier = activeProxyConfig.ssh_command_id;
     }
 
     const response = await communicateWithNativeHost(statusRequest);
-    updateStateAndBroadcast(response && response.connected ? response : { connected: false });
+    // Add the active proxy ID to the status object so the UI knows which proxy is connected.
+    if (response.connected) {
+        response.activeProxyId = activeProxyConfig.id;
+    }
+    updateStateAndBroadcast(response);
+
   } catch (error) {
     const errorMessage = `Error during status update: ${error.message}`;
-    updateStateAndBroadcast({ connected: false }, errorMessage);
+    updateStateAndBroadcast({ connected: false, activeProxyId: null }, errorMessage);
   } finally {
     isUpdateInProgress = false;
   }
@@ -411,41 +365,40 @@ function FindProxyForURL(url, host) {
   }
 
   // Listeners for tunnel control
-  if (request.command === COMMANDS.START_TUNNEL || request.command === COMMANDS.STOP_TUNNEL) {
+  if (request.command === COMMANDS.START_TUNNEL) {
     (async () => {
-      try {
-        const { [STORAGE_KEYS.PROXY_LIST]: proxyList = [] } = await chrome.storage.sync.get(STORAGE_KEYS.PROXY_LIST);
-        const activeProxy = proxyList.find(p => p.isActive);
-
-        if (request.command === COMMANDS.START_TUNNEL && !activeProxy) {
-            sendResponse({ success: false, message: "No active proxy selected." });
-            return;
+        try {
+            activeProxyConfig = request.config; // Store the config of the proxy we are trying to connect
+            const response = await communicateWithNativeHost({
+                command: request.command,
+                config: activeProxyConfig
+            });
+            sendResponse(response);
+            // After a start attempt, trigger a status update to refresh the UI.
+            setTimeout(updateStatus, 1500);
+        } catch (error) {
+            sendResponse({ success: false, message: error.message });
         }
-
-        const message = {
-          command: request.command,
-          // The config passed to the native host IS the proxy object.
-          // The native host will use the 'type' field to determine how to handle it.
-          config: activeProxy
-        };
-
-        const response = await communicateWithNativeHost(message);
-
-        sendResponse(response);
-
-        // After a start/stop attempt, trigger a status update to refresh the UI.
-        if (response.success && response.already_running) {
-          // If it was already running, we can update the status immediately.
-          updateStatus();
-        } else {
-          // Otherwise, a small delay gives the SSH process time to start/stop before we check.
-          setTimeout(updateStatus, 1500);
-        }
-      } catch (error) {
-        sendResponse({ success: false, message: error.message });
-      }
     })();
-    return true; // Indicate async response.
+    return true;
+  }
+
+  if (request.command === COMMANDS.STOP_TUNNEL) {
+    (async () => {
+        try {
+            // Use the stored active config to stop the connection
+            const response = await communicateWithNativeHost({
+                command: request.command,
+                config: activeProxyConfig
+            });
+            sendResponse(response);
+            // After a stop attempt, trigger a status update to refresh the UI.
+            setTimeout(updateStatus, 1500);
+        } catch (error) {
+            sendResponse({ success: false, message: error.message });
+        }
+    })();
+    return true;
   }
   return false; // Explicitly return false for other messages.
 });

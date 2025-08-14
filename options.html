@@ -3,140 +3,59 @@
 <head>
   <title>Holocron Settings</title>
   <link rel="stylesheet" href="options.css">
+  <style>
+    /* Basic styles for the new layout */
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f0f2f5; }
+    .header { background-color: white; padding: 10px 15px; border-bottom: 1px solid #dcdcdc; display: flex; justify-content: space-between; align-items: center; }
+    .header h1 { margin: 0; font-size: 18px; }
+    .add-button { font-size: 24px; text-decoration: none; color: #007aff; }
+    .global-connect-section { background-color: white; padding: 20px; text-align: center; border-bottom: 1px solid #dcdcdc; }
+    .proxy-list { margin: 0; padding: 0; list-style: none; }
+    .proxy-item { background-color: white; border-bottom: 1px solid #dcdcdc; padding: 10px 15px; display: flex; align-items: center; cursor: pointer; }
+    .proxy-item.selected { background-color: #e5f2ff; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background-color: grey; margin-right: 15px; }
+    .proxy-details { flex-grow: 1; }
+    .proxy-name { font-weight: 500; }
+    .proxy-info { font-size: 12px; color: #888; }
+    .proxy-latency { font-size: 14px; color: #888; }
+    .tab-bar { position: fixed; bottom: 0; width: 100%; display: flex; justify-content: space-around; background-color: white; border-top: 1px solid #dcdcdc; padding: 5px 0; }
+    .tab-item { color: #888; text-decoration: none; font-size: 12px; text-align: center; }
+    .tab-item.active { color: #007aff; }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Holocron Connection Manager</h1>
 
-    <div class="actions">
-      <button id="import-button" class="button-primary">Import from URL(s)</button>
-      <button id="add-ssh-button" class="button-secondary">Add SSH Manually</button>
-    </div>
+  <div class="header">
+    <h1>Connections</h1>
+    <a href="#" id="add-proxy-button" class="add-button">+</a>
+  </div>
 
-    <div class="form-section">
-        <h2>Proxy Configurations</h2>
-        <div id="proxy-list-container">
-            <!-- Proxy items will be dynamically inserted here -->
-        </div>
-    </div>
+  <div class="global-connect-section">
+    <button id="global-connect-button">Connect</button>
+  </div>
 
-    <div class="form-section">
-      <h2>Global Settings</h2>
-      <div class="form-group">
-        <label for="ping-host">TCP Ping Host</label>
-        <input type="text" id="ping-host" placeholder="e.g., youtube.com">
-        <small>A reliable host for a low-level TCP connection check.</small>
-      </div>
-      <div class="form-group">
-        <label for="web-check-url">Web Check URL</label>
-        <input type="text" id="web-check-url" placeholder="e.g., https://gemini.google.com/app">
-        <small>A full URL to check for application-level connectivity through the tunnel.</small>
-      </div>
-       <div class="form-group">
-        <label for="auto-reconnect-enabled">Automatic Reconnect</label>
-        <div class="checkbox-container">
-            <input type="checkbox" id="auto-reconnect-enabled">
-            <label for="auto-reconnect-enabled" class="checkbox-label">
-                Automatically attempt to reconnect the active connection if it disconnects.
-            </label>
-        </div>
-      </div>
-    </div>
+  <ul id="proxy-list" class="proxy-list">
+    <!-- Proxy items will be dynamically inserted here -->
+  </ul>
 
-    <div class="actions">
-      <button id="save-global-settings-button" class="button-primary">Save Global Settings</button>
-    </div>
-    <div id="status-message"></div>
+  <div class="tab-bar">
+      <a href="#" class="tab-item active">Home</a>
+      <a href="#" class="tab-item">Settings</a>
   </div>
 
   <template id="proxy-item-template">
-    <div class="proxy-item">
-        <div class="proxy-info">
-            <span class="proxy-type-badge"></span>
-            <span class="proxy-name"></span>
+    <li class="proxy-item">
+        <div class="status-dot"></div>
+        <div class="proxy-details">
+            <div class="proxy-name"></div>
+            <div class="proxy-info"></div>
         </div>
-        <div class="proxy-actions">
-            <button class="button-activate button-secondary">Activate</button>
-            <button class="button-edit button-secondary">Edit</button>
-            <button class="button-delete button-danger">Delete</button>
-        </div>
-    </div>
+        <div class="proxy-latency">--ms</div>
+    </li>
   </template>
-
-  <div id="import-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <span class="close-button">&times;</span>
-        <h2>Import Proxy URLs</h2>
-        <p>Paste one or more proxy URLs below (one per line).</p>
-        <textarea id="import-textarea" rows="10" placeholder="ss://...\nvless://...\n..."></textarea>
-        <button id="import-confirm-button" class="button-primary">Import</button>
-    </div>
-  </div>
 
   <script src="constants.js"></script>
   <script src="uri_parser.js"></script>
   <script src="options.js"></script>
-
-  <div id="add-ssh-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <form>
-        <span class="close-button">&times;</span>
-        <h2>Add SSH Configuration</h2>
-        <div class="form-group">
-            <label for="ssh-remarks">Remarks (Name)</label>
-            <input type="text" id="ssh-remarks" placeholder="e.g., My Work Bastion">
-        </div>
-        <div class="form-group">
-            <label for="ssh-command-id">SSH Process Identifier</label>
-            <input type="text" id="ssh-command-id" placeholder="e.g., holocron-work-ssh">
-            <small>A unique string to identify this specific SSH process.</small>
-        </div>
-        <div class="form-group">
-            <label for="ssh-user">SSH User</label>
-            <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
-        </div>
-        <div class="form-group">
-            <label for="ssh-host">SSH Host (Bastion)</label>
-            <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
-        </div>
-        <fieldset class="port-forwarding-section">
-            <legend>Port Forwarding Rules</legend>
-            <div id="ssh-port-forwarding-rules">
-                <!-- Rules will be dynamically inserted here -->
-            </div>
-            <button id="ssh-add-rule-button" class="button-secondary" type="button">Add Rule</button>
-        </fieldset>
-        <fieldset class="wifi-networks-section">
-            <legend>Auto-connect on these Wi-Fi SSIDs</legend>
-            <small>Leave empty to disable automatic connection on specific networks.</small>
-            <div id="ssh-wifi-networks-list">
-                <!-- SSIDs will be dynamically inserted here -->
-            </div>
-            <button id="ssh-add-wifi-button" class="button-secondary" type="button">Add Wi-Fi Network</button>
-        </fieldset>
-        <button id="ssh-save-button" class="button-primary" type="button">Save SSH Config</button>
-      </form>
-    </div>
-  </div>
-
-  <template id="ssh-port-forward-rule-template">
-    <div class="rule-item">
-      <select class="rule-type"><option value="L">Local (-L)</option><option value="D">Dynamic (-D)</option></select>
-      <input type="text" class="rule-local-port" placeholder="Local Port">
-      <span class="rule-colon">:</span>
-      <input type="text" class="rule-remote-host" placeholder="Remote Host">
-      <span class="rule-colon">:</span>
-      <input type="text" class="rule-remote-port" placeholder="Remote Port">
-      <button class="remove-rule-button" title="Remove Rule">&times;</button>
-    </div>
-  </template>
-
-  <template id="ssh-wifi-network-template">
-    <div class="rule-item">
-      <input type="text" class="wifi-ssid-input" placeholder="e.g., MyWorkWifi-5G">
-      <button class="remove-rule-button" title="Remove SSID">&times;</button>
-    </div>
-  </template>
-
 </body>
 </html>
