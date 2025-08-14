@@ -40,7 +40,9 @@ logging.info("--- Native host script started ---")
 SCRIPT_DIR = Path(__file__).resolve().parent
 SHELL_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
 V2RAY_CONFIG_PATH = Path("/tmp/holocron_v2ray_config.json")
-V2RAY_LOCK_FILE = Path(getpass.getuser()).home() / ".holocron_v2ray.lock"
+V2RAY_LOCK_FILE = Path.home() / ".holocron_v2ray.lock"
+SHADOWSOCKS_CONFIG_PATH = Path("/tmp/holocron_shadowsocks_config.json")
+SHADOWSOCKS_LOCK_FILE = Path.home() / ".holocron_shadowsocks.lock"
 
 
 def read_message():
@@ -276,6 +278,28 @@ def execute_tunnel_command(command, config=None):
 
 def generate_v2ray_config(config):
     """Generates a V2Ray JSON configuration from the provided settings."""
+    protocol = config.get("protocol", "vmess") # Default to vmess
+
+    outbound_settings = {
+        "vnext": [
+            {
+                "address": config.get("server"),
+                "port": int(config.get("port")),
+                "users": [
+                    {
+                        "id": config.get("uuid"),
+                        "security": config.get("security", "auto")
+                    }
+                ]
+            }
+        ]
+    }
+    # VLESS has a different user structure
+    if protocol == 'vless':
+        outbound_settings["vnext"][0]["users"][0]["flow"] = "xtls-rprx-direct"
+    else: # vmess
+        outbound_settings["vnext"][0]["users"][0]["alterId"] = int(config.get("alterId", 0))
+
     return {
         "log": {
             "loglevel": "warning"
@@ -285,33 +309,14 @@ def generate_v2ray_config(config):
                 "port": int(config.get("socksPort", 1080)),
                 "listen": "127.0.0.1",
                 "protocol": "socks",
-                "settings": {
-                    "auth": "noauth",
-                    "udp": True
-                }
+                "settings": { "auth": "noauth", "udp": True }
             }
         ],
         "outbounds": [
             {
-                "protocol": "vmess",
-                "settings": {
-                    "vnext": [
-                        {
-                            "address": config.get("host"),
-                            "port": int(config.get("port")),
-                            "users": [
-                                {
-                                    "id": config.get("uuid"),
-                                    "alterId": int(config.get("alterId")),
-                                    "security": config.get("security", "auto")
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "streamSettings": {
-                    "network": config.get("network", "tcp")
-                }
+                "protocol": protocol,
+                "settings": outbound_settings,
+                "streamSettings": { "network": config.get("network", "tcp") }
             }
         ]
     }
@@ -342,6 +347,57 @@ def execute_v2ray_command(command, config=None):
     return {"success": False, "message": "Invalid V2Ray command."}
 
 
+def get_shadowsocks_status():
+    """Checks for the Shadowsocks process and its SOCKS port from the lock file."""
+    logging.debug("Checking for Shadowsocks process.")
+    if not SHADOWSOCKS_LOCK_FILE.exists():
+        return {"connected": False, "socks_port": None}
+    try:
+        pid_str, socks_port_str = SHADOWSOCKS_LOCK_FILE.read_text().strip().split(':')
+        pid = int(pid_str)
+        socks_port = int(socks_port_str)
+        proc = psutil.Process(pid)
+        if 'ss-local' in proc.name().lower():
+            logging.info(f"Found Shadowsocks process with PID: {pid}. SOCKS port: {socks_port}")
+            return {"connected": True, "socks_port": socks_port}
+    except (psutil.NoSuchProcess, ValueError, KeyError, FileNotFoundError):
+        SHADOWSOCKS_LOCK_FILE.unlink(missing_ok=True)
+    return {"connected": False, "socks_port": None}
+
+
+def execute_shadowsocks_command(command, config=None):
+    """Handles starting and stopping the Shadowsocks ss-local process."""
+    if command == "start":
+        ss_config = {
+            "server": config.get("server"),
+            "server_port": config.get("port"),
+            "password": config.get("password"),
+            "method": config.get("method"),
+            "local_address": "127.0.0.1",
+            "local_port": config.get("socksPort", 1080)
+        }
+        SHADOWSOCKS_CONFIG_PATH.write_text(json.dumps(ss_config, indent=2))
+
+        cmd = ['ss-local', '-c', str(SHADOWSOCKS_CONFIG_PATH)]
+        proc = subprocess.Popen(cmd)
+        SHADOWSOCKS_LOCK_FILE.write_text(f"{proc.pid}:{ss_config['local_port']}")
+        return {"success": True, "message": f"Shadowsocks process started with PID {proc.pid}"}
+
+    elif command == "stop":
+        if not SHADOWSOCKS_LOCK_FILE.exists():
+            return {"success": True, "message": "Shadowsocks appears to be stopped already."}
+        try:
+            pid = int(SHADOWSOCKS_LOCK_FILE.read_text().strip().split(':')[0])
+            proc = psutil.Process(pid)
+            proc.terminate()
+            SHADOWSOCKS_LOCK_FILE.unlink()
+            return {"success": True, "message": f"Shadowsocks process {pid} stopped."}
+        except (psutil.NoSuchProcess, ValueError):
+            SHADOWSOCKS_LOCK_FILE.unlink(missing_ok=True)
+            return {"success": True, "message": "Cleaned up stale Shadowsocks lock file."}
+    return {"success": False, "message": "Invalid Shadowsocks command."}
+
+
 def main():
     """Main loop to read commands and send status."""
     while True:
@@ -349,25 +405,32 @@ def main():
             message = read_message()
             logging.debug(f"Received message: {message}")
             command = message.get("command")
-            mode = message.get("mode", "ssh") # Default to ssh for backward compatibility
+
+            # The 'type' of the active proxy config determines the mode.
+            # For start/stop, the full config is sent.
+            # For getStatus, only the active config's type and relevant identifiers are sent.
+            proxy_config = message.get("config", {})
+            mode = proxy_config.get("type") if proxy_config else message.get("mode")
+
 
             if command == "getStatus":
+                status = {}
                 if mode == "ssh":
                     status = get_ssh_tunnel_status(message.get("sshCommandIdentifier"))
-                else: # v2ray
+                elif mode == "v2ray":
                     status = get_v2ray_status()
+                elif mode == "ss":
+                    status = get_shadowsocks_status()
 
-                response = { "connected": status["connected"], "socks_port": status.get("socks_port") }
+                response = { "connected": status.get("connected", False), "socks_port": status.get("socks_port") }
 
-                if status["connected"] and status.get("socks_port"):
-                    # Health checks are generic and work for any SOCKS proxy
+                if status.get("connected") and status.get("socks_port"):
                     socks_port = status["socks_port"]
                     web_latency, web_status, web_error = perform_web_check(url=message.get("webCheckUrl"), socks_port=socks_port)
                     response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
                     tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost"), socks_port=socks_port)
                     response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
                 else:
-                    # Perform a direct ping for basic diagnostics if tunnel is down
                     tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost"), socks_port=None)
                     response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
                     response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "web_check_error": None})
@@ -376,10 +439,13 @@ def main():
 
             elif command in ["startTunnel", "stopTunnel"]:
                 action = "start" if command == "startTunnel" else "stop"
+                response = {}
                 if mode == "ssh":
-                    response = execute_tunnel_command(action, message.get("config"))
-                else: # v2ray
-                    response = execute_v2ray_command(action, message.get("config"))
+                    response = execute_tunnel_command(action, proxy_config)
+                elif mode == "v2ray":
+                    response = execute_v2ray_command(action, proxy_config)
+                elif mode == "ss":
+                    response = execute_shadowsocks_command(action, proxy_config)
                 send_message(response)
 
             else:

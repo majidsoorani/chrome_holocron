@@ -1,26 +1,25 @@
-# Holocron SSH Tunnel Manager
+# Holocron Connection Manager
 
 ![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple)
 
-Holocron is a Google Chrome extension designed to seamlessly manage an SSH tunnel connection. It automatically connects when you're on a designated Wi-Fi network, provides real-time connection and latency status, and offers one-click browser proxy configuration.
+Holocron is a Google Chrome extension designed to seamlessly manage multiple proxy connections, including SSH, V2Ray, and Shadowsocks. It provides real-time connection and latency status, one-click browser proxy configuration, and a simple interface for importing and managing your proxy list.
 
 ## Features
 
-- **Automatic Tunneling**: Connects the SSH tunnel automatically when you join a pre-configured work Wi-Fi network.
-- **Real-time Status**: The extension icon and popup provide immediate feedback on the tunnel's status (Connected/Disconnected).
+- **Multi-Protocol Support**: Natively manages SSH, V2Ray (VLESS), and Shadowsocks connections.
+- **Easy Configuration Import**: Quickly import proxy configurations by pasting standard URI links (`vless://`, `ss://`).
+- **Manual SSH Configuration**: A dedicated UI for manually adding and editing complex SSH tunnels with multiple port-forwards.
+- **Centralized Proxy List**: All your configurations are managed in a simple, clean list on the options page.
+- **One-Click Activation**: Activate any proxy from the list with a single click.
+- **Real-time Status**: The extension icon and popup provide immediate feedback on the active connection's status.
 - **Latency Monitoring**:
-    - **Web Check**: Measures latency of a full HTTPS request to a specified URL through the tunnel.
+    - **Web Check**: Measures latency of a full HTTPS request to a specified URL through the active tunnel.
     - **TCP Ping**: Measures raw TCP socket connection latency to a specified host.
-    - **Dynamic Icon**: The extension icon changes color and shape based on latency, giving you an at-a-glance view of connection quality.
-- **Manual Controls**: Easily connect or disconnect the tunnel manually from the extension popup.
+    - **Dynamic Icon**: The extension icon changes color based on latency, giving you an at-a-glance view of connection quality.
 - **Browser Proxy Management**:
-    - Apply a SOCKS5 proxy with one click to route your browser traffic through the tunnel.
+    - Applies a SOCKS5 proxy with one click to route your browser traffic through the active connection.
     - Includes a smart PAC script to bypass the proxy for local addresses and specific domains (e.g., `*.ir`).
-    - Revert to your original proxy settings with a single click.
-- **Highly Configurable**: An intuitive options page allows you to set:
-    - SSH connection details (user, host).
-    - Custom port forwarding rules (local, remote, and dynamic/SOCKS).
-    - Hosts and URLs for latency checks.
+    - Reverts to your original proxy settings with a single click.
 
 ## How It Works (Architecture)
 
@@ -36,23 +35,29 @@ Background Script (background.js)
 Native Host (holocron_native_host.py)
         |
         v (Subprocess)
-Control Script (work_connect.sh)
-        |
-        v
-      ssh
+      +-------------------+-----------------+
+      |                   |                 |
+      v                   v                 v
+  work_connect.sh       v2ray           ss-local
+      |
+      v
+     ssh
 ```
 
-- **UI (HTML/CSS/JS)**: The popup and options pages that you interact with.
-- **Background Script**: The extension's core logic. It orchestrates status checks, manages state, and communicates with the native host.
-- **Native Host (Python)**: A small Python script that acts as a bridge between the browser and your local system. It can check processes and execute shell scripts.
-- **Control Script (Bash)**: A shell script that handles the logic of checking the Wi-Fi network (`wdutil`) and starting/stopping the `ssh` process.
+- **UI (HTML/CSS/JS)**: The popup and options pages that you interact with. The options page allows you to manage a list of proxy configurations.
+- **Background Script**: The extension's core logic. It orchestrates status checks, manages the active proxy state, and communicates with the native host.
+- **Native Host (Python)**: A flexible Python script that acts as a bridge between the browser and your local system. It can generate configuration files and manage processes for SSH, V2Ray, and Shadowsocks.
+- **Control Scripts/Executables**: The native host executes the appropriate command-line tool (`ssh`, `v2ray`, `ss-local`) based on the active proxy's type.
 
 ## Prerequisites
 
-- **macOS**: Required for the `wdutil` command used to detect the current Wi-Fi network SSID. The automatic connection feature is currently macOS-only. Manual controls will work on other Unix-like systems.
+- **macOS**: Required for the `wdutil` command used to detect the current Wi-Fi network SSID for the SSH auto-connect feature. Manual controls will work on other Unix-like systems.
 - **Google Chrome** (or other Chromium-based browsers, with path adjustments).
 - **Python 3.x**.
-- **SSH client** and configured SSH keys for your target host.
+- **Required Proxy Clients**:
+    - **SSH**: A standard SSH client is required (`/usr/bin/ssh`).
+    - **V2Ray**: The `v2ray` executable must be in your system's PATH.
+    - **Shadowsocks**: The `ss-local` executable must be in your system's PATH (e.g., from `shadowsocks-libev`).
 
 ## Installation
 
@@ -61,16 +66,16 @@ An installation script is provided to automate the setup process.
 1.  **Clone the Repository**
     ```bash
     git clone <your-repo-url>
-    cd chrome_holocron
+    cd holocron-extension
     ```
 
 2.  **Run the Installer**
-    This script will create a Python virtual environment, install dependencies, set script permissions, and configure the native messaging host for Chrome.
+    This script will check for dependencies, create a Python virtual environment, install packages, set script permissions, and configure the native messaging host for Chrome.
     ```bash
     chmod +x install.sh
     ./install.sh
     ```
-    **The script will pause and ask you to complete the next steps.**
+    The script will warn you if any optional proxy clients (like `v2ray` or `ss-local`) are missing. It will then pause and ask you to complete the next steps.
 
 3.  **Load the Extension in Chrome**
     - Open Chrome and navigate to `chrome://extensions`.
@@ -86,39 +91,38 @@ An installation script is provided to automate the setup process.
 
 ## Configuration
 
-1.  **Configure Extension Options**
-    - Right-click the Holocron icon in your Chrome toolbar and select **Options**.
-    - Fill in all the required fields:
-        - **Automatic Connection Networks (Optional)**: Add the SSIDs of Wi-Fi networks where the tunnel should auto-connect. If you leave this list empty, the automatic connection feature is disabled, and you can manually start the tunnel from any network.
-        - **SSH Details**: Your username and the server's hostname.
-        - **Health Checks**: The host to ping and the URL for the web check.
-        - **Port Forwarding**: Define your local, remote, or dynamic (`-D`) port forwards. A default SOCKS proxy on port 1031 is included.
-    - Click **Save Settings**.
+The extension is managed through the Options page. Right-click the Holocron icon in your Chrome toolbar and select **Options**.
 
-2.  **Enable Passwordless Sudo (Recommended for macOS)**
-    On macOS, the script needs `sudo` to check your Wi-Fi network with `wdutil`. To avoid being prompted for a password, you can add a `sudoers` rule. The application will guide you if this is needed, but you can do it proactively.
-    - Run `sudo visudo` in your terminal.
-    - Add the following line at the end of the file, replacing `your_username` with your actual macOS username:
-    ```
-    your_username ALL=(ALL) NOPASSWD: /usr/bin/wdutil
-    ```
-    - Save the file (in `vi`, press `Esc` then type `:wq!` and `Enter`).
+1.  **Importing Proxies**
+    - Click the **Import from URL(s)** button.
+    - A dialog will appear. Paste one or more proxy URIs (one per line).
+    - Supported formats currently include `vless://` and `ss://`.
+    - Click "Import". The proxies will be added to your list.
+
+2.  **Adding an SSH Tunnel Manually**
+    - Click the **Add SSH Manually** button.
+    - A dialog will appear. Fill in the required SSH details, including a unique Process Identifier, user, host, and any port forwarding rules.
+    - Click "Save SSH Config".
+
+3.  **Managing Proxies**
+    - The main view shows your list of configured proxies.
+    - **Activate**: Click the "Activate" button on any proxy to make it the active connection. The extension will automatically try to connect to it.
+    - **Edit**: Click "Edit" to modify a proxy's configuration (currently only supported for SSH).
+    - **Delete**: Click "Delete" to remove a proxy from the list.
+
+4.  **Global Settings**
+    - You can configure global settings like the health check URLs that apply to all connections.
 
 ## Security Considerations
 
 **Security is paramount.** This system is designed to interact with sensitive infrastructure. Adhere to the following principles:
 
-- **Never share logs or screenshots without redacting sensitive information.** Logs can contain real IP addresses and hostnames, which is a security risk. Always replace sensitive data with placeholders like `<redacted>` or `bastion.example.com` before sharing.
-- **Use a secrets manager for production credentials.** While this tool uses your local SSH configuration, for any team-based or production environment, SSH keys and other secrets should be managed through a proper secrets management tool.
-- **The default configuration uses safe placeholders.** The initial values in the options page use non-real hostnames like `database.example.com`. This is intentional to protect your infrastructure details.
+- **Never share logs or screenshots without redacting sensitive information.**
+- **Use a secrets manager for production credentials.**
+- **The import feature will parse credentials from URIs.** Be mindful of where you source these URIs from.
 
 ## Troubleshooting
 
-- **"Native host has exited" or "Failed to connect to native host"**: This usually means the Python script failed. The first step is to check the log file for errors at `backends/log/holocron_native_host.log`. The last few lines will usually contain a detailed Python error message (a "traceback") that explains why the script stopped. The log file is automatically rotated when it reaches 1MB in size, so it will not grow indefinitely.
-- **Extension icon is always red**:
-    - Ensure the SSH Command Identifier in the options matches what's used in your scripts.
-    - Use the "Test Connection" button in the options page to get a detailed status.
-    - Verify you can manually `ssh` to the host from your terminal.
-- **Popup is stuck on "Connecting..." but the tunnel is already running**: This could happen if the extension's state gets out of sync. The periodic status check (every minute) or clicking the connect button again will force a refresh. The changes implemented in this version make this scenario much less likely by handling the "already running" state more intelligently.
-- **Connection fails with "Permission denied (publickey)" or similar SSH errors**: This error, which may appear in the popup after a connection attempt, means the SSH connection itself is failing. Verify that your SSH keys are correctly set up in `~/.ssh/` and that your public key has been added to the `~/.ssh/authorized_keys` file on the remote server (`bastion.example.com`).
-- **Connect button shows "Sudo password required"**: You need to set up passwordless sudo as described in the configuration steps.
+- **"Native host has exited"**: This usually means the Python script failed. Check the log file for errors at `backends/log/holocron_native_host.log`. The last few lines usually contain a detailed Python error message.
+- **Connection Fails**: If a specific proxy type fails to connect, ensure the corresponding client (`v2ray`, `ss-local`) is installed correctly and accessible in your system's PATH. Check the Python script log for any errors from the subprocess.
+- **SSH Connection Fails**: Verify your SSH keys are set up correctly. For automatic Wi-Fi based connection, ensure you have configured passwordless sudo for `wdutil` if required.

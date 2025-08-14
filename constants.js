@@ -3,17 +3,16 @@
 
 const STORAGE_KEYS = {
   // --- Settings ---
-  SSH_COMMAND_ID: 'sshCommandIdentifier',
-  SSH_USER: 'sshUser',
-  SSH_HOST: 'sshHost',
+  // --- Settings ---
+  // The main list of all configured proxies
+  PROXY_LIST: 'proxyList',
+
+  // Common settings that apply globally
   PING_HOST: 'pingHost',
   WEB_CHECK_URL: 'webCheckUrl',
-  PORT_FORWARDS: 'portForwards',
-  WIFI_SSIDS: 'wifiSsidList', // New key for Wi-Fi networks
+  WIFI_SSIDS: 'wifiSsidList',
   GEOIP_BYPASS_ENABLED: 'geoIpBypassEnabled',
   AUTO_RECONNECT_ENABLED: 'autoReconnectEnabled',
-  CONNECTION_MODE: 'connectionMode',
-  V2RAY_CONFIG: 'v2rayConfig',
 
   // --- State ---
   IS_PROXY_MANAGED: 'isProxyManagedByHolocron',

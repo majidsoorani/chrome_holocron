@@ -138,27 +138,17 @@ async function attemptAutoReconnect() {
 
   console.log("Attempting to automatically reconnect the tunnel...");
   try {
-    // This logic is now aligned with the main START_TUNNEL handler
-    const settings = await chrome.storage.sync.get(Object.values(STORAGE_KEYS));
-    const mode = settings[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
+    const { [STORAGE_KEYS.PROXY_LIST]: proxyList = [] } = await chrome.storage.sync.get(STORAGE_KEYS.PROXY_LIST);
+    const activeProxy = proxyList.find(p => p.isActive);
 
-    let config;
-    if (mode === 'ssh') {
-      config = {
-        ssh_user: settings[STORAGE_KEYS.SSH_USER],
-        ssh_host: settings[STORAGE_KEYS.SSH_HOST],
-        port_forwards: settings[STORAGE_KEYS.PORT_FORWARDS],
-        ssh_command_id: settings[STORAGE_KEYS.SSH_COMMAND_ID],
-        wifi_ssids: settings[STORAGE_KEYS.WIFI_SSIDS]
-      };
-    } else { // v2ray
-      config = settings[STORAGE_KEYS.V2RAY_CONFIG];
+    if (!activeProxy) {
+        console.log("Auto-reconnect skipped: No active proxy.");
+        return;
     }
 
     const response = await communicateWithNativeHost({
       command: COMMANDS.START_TUNNEL,
-      mode: mode,
-      config: config
+      config: activeProxy
     });
 
     if (response.success) {
@@ -264,32 +254,35 @@ async function updateStatus() {
   isUpdateInProgress = true;
 
   try {
-    const settings = await chrome.storage.sync.get([
-      STORAGE_KEYS.CONNECTION_MODE,
-      STORAGE_KEYS.SSH_COMMAND_ID,
-      STORAGE_KEYS.PING_HOST,
-      STORAGE_KEYS.WEB_CHECK_URL
-    ]);
+    const settings = await chrome.storage.sync.get([STORAGE_KEYS.PROXY_LIST, STORAGE_KEYS.PING_HOST, STORAGE_KEYS.WEB_CHECK_URL]);
+    const proxyList = settings[STORAGE_KEYS.PROXY_LIST] || [];
+    const activeProxy = proxyList.find(p => p.isActive);
 
-    const mode = settings[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
-    const sshCommandIdentifier = settings[STORAGE_KEYS.SSH_COMMAND_ID];
     const pingHost = settings[STORAGE_KEYS.PING_HOST] || 'youtube.com';
     const webCheckUrl = settings[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
 
-    if (mode === 'ssh' && !sshCommandIdentifier) {
-      console.log("SSH command identifier not set. Please configure it in the options.");
+    if (!activeProxy) {
+      // No active proxy, so we are disconnected.
       updateStateAndBroadcast({ connected: false });
       isUpdateInProgress = false;
       return;
     }
 
-    const response = await communicateWithNativeHost({
+    // For getStatus, we only need to send the type and any specific identifiers.
+    // The native host doesn't need the full config to check status.
+    const statusRequest = {
       command: COMMANDS.GET_STATUS,
-      mode: mode, // Pass the current mode to the native host
-      sshCommandIdentifier: sshCommandIdentifier,
+      mode: activeProxy.type,
       pingHost: pingHost,
       webCheckUrl: webCheckUrl
-    });
+    };
+
+    // For SSH, we still need the unique identifier.
+    if (activeProxy.type === 'ssh') {
+      statusRequest.sshCommandIdentifier = activeProxy.ssh_command_id;
+    }
+
+    const response = await communicateWithNativeHost(statusRequest);
     updateStateAndBroadcast(response && response.connected ? response : { connected: false });
   } catch (error) {
     const errorMessage = `Error during status update: ${error.message}`;
@@ -417,71 +410,23 @@ function FindProxyForURL(url, host) {
     return true;
   }
 
-  // Listener for the new test connection feature from the options page.
-  if (request.command === COMMANDS.TEST_CONNECTION) {
-    (async () => {
-      const { sshCommand, pingHost, webCheckUrl, mode } = request;
-      if (mode !== 'ssh') {
-        sendResponse({ success: false, message: "Test Connection is only available for SSH mode." });
-        return;
-      }
-      if (!sshCommand) {
-        sendResponse({ success: false, message: "SSH Command Identifier cannot be empty." });
-        return;
-      }
-      if (!pingHost) {
-        sendResponse({ success: false, message: "Ping Host cannot be empty." });
-        return;
-      }
-      try {
-        // GET_STATUS is now mode-aware, so we pass the mode.
-        const response = await communicateWithNativeHost({
-          command: COMMANDS.GET_STATUS,
-          mode: 'ssh', // Force SSH mode for testing
-          sshCommandIdentifier: sshCommand,
-          pingHost,
-          webCheckUrl
-        });
-        let message;
-        if (response && response.connected) {
-          message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
-        } else if (response) {
-          message = `Host connected, but tunnel is down. Direct TCP Ping: ${response.tcp_ping_ms}ms.`;
-        } else {
-          message = "Host connected, but reports tunnel is down.";
-        }
-        sendResponse({ success: true, message: message });
-      } catch (error) {
-        sendResponse({ success: false, message: error.message });
-      }
-    })();
-    return true; // Indicate async response.
-  }
-
   // Listeners for tunnel control
   if (request.command === COMMANDS.START_TUNNEL || request.command === COMMANDS.STOP_TUNNEL) {
     (async () => {
       try {
-        const settings = await chrome.storage.sync.get(Object.values(STORAGE_KEYS));
-        const mode = settings[STORAGE_KEYS.CONNECTION_MODE] || 'ssh';
+        const { [STORAGE_KEYS.PROXY_LIST]: proxyList = [] } = await chrome.storage.sync.get(STORAGE_KEYS.PROXY_LIST);
+        const activeProxy = proxyList.find(p => p.isActive);
 
-        let config;
-        if (mode === 'ssh') {
-          config = {
-            ssh_user: settings[STORAGE_KEYS.SSH_USER],
-            ssh_host: settings[STORAGE_KEYS.SSH_HOST],
-            port_forwards: settings[STORAGE_KEYS.PORT_FORWARDS],
-            ssh_command_id: settings[STORAGE_KEYS.SSH_COMMAND_ID],
-            wifi_ssids: settings[STORAGE_KEYS.WIFI_SSIDS]
-          };
-        } else { // v2ray
-          config = settings[STORAGE_KEYS.V2RAY_CONFIG];
+        if (request.command === COMMANDS.START_TUNNEL && !activeProxy) {
+            sendResponse({ success: false, message: "No active proxy selected." });
+            return;
         }
 
         const message = {
           command: request.command,
-          mode: mode,
-          config: request.command === COMMANDS.START_TUNNEL ? config : null
+          // The config passed to the native host IS the proxy object.
+          // The native host will use the 'type' field to determine how to handle it.
+          config: activeProxy
         };
 
         const response = await communicateWithNativeHost(message);

@@ -41,6 +41,14 @@ else
     echo "✅ Found V2Ray executable."
 fi
 
+echo "🔎 Checking for Shadowsocks (optional)..."
+if ! command -v ss-local &> /dev/null; then
+    echo "⚠️ Warning: 'ss-local' command not found in your PATH."
+    echo "   The Shadowsocks functionality will not work until a client (like shadowsocks-libev) is installed."
+else
+    echo "✅ Found ss-local executable."
+fi
+
 
 # --- Step 1: Setup Python Virtual Environment ---
 echo "🔧 Setting up Python virtual environment..."
