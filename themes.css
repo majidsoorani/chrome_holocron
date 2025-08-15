@@ -1,0 +1,21 @@
+:root {
+  --background-color: #f0f2f5;
+  --header-background: #ffffff;
+  --text-color: #000000;
+  --button-background: #007aff;
+  --button-text-color: #ffffff;
+  --proxy-item-background: #ffffff;
+  --proxy-item-selected-background: #e5f2ff;
+  --border-color: #dcdcdc;
+}
+
+[data-theme="dark"] {
+  --background-color: #1c1c1e;
+  --header-background: #2c2c2e;
+  --text-color: #ffffff;
+  --button-background: #0a84ff;
+  --button-text-color: #ffffff;
+  --proxy-item-background: #2c2c2e;
+  --proxy-item-selected-background: #3a3a3c;
+  --border-color: #3a3a3c;
+}

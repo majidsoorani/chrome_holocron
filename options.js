@@ -293,8 +293,25 @@ document.addEventListener('DOMContentLoaded', () => {
     importModal.style.display = 'none';
   });
 
+  // --- Theme Switcher ---
+  const themeSwitcher = document.getElementById('theme-switcher');
+
+  async function applyTheme() {
+    const result = await chrome.storage.sync.get('theme');
+    const theme = result.theme || 'light';
+    document.body.dataset.theme = theme;
+  }
+
+  themeSwitcher.addEventListener('click', async () => {
+    const currentTheme = document.body.dataset.theme;
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    document.body.dataset.theme = newTheme;
+    await chrome.storage.sync.set({ theme: newTheme });
+  });
+
   // --- Initial Load ---
   loadState();
+  applyTheme();
   chrome.runtime.onMessage.addListener((request) => {
     if (request.command === COMMANDS.STATUS_UPDATED) {
         connectionStatus = request.status;
