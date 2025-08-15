@@ -202,5 +202,17 @@
     </div>
   </template>
 
+  <div id="import-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Import Proxy URLs</h2>
+        <p>Paste one or more proxy URLs below, or import from your clipboard.</p>
+        <textarea id="import-textarea" rows="10" placeholder="ss://...\nvless://...\n..."></textarea>
+        <div class="actions">
+            <button id="import-from-clipboard-button" class="button-secondary" type="button">Import from Clipboard</button>
+            <button id="import-confirm-button" class="button-primary" type="button">Import</button>
+        </div>
+    </div>
+  </div>
 </body>
 </html>
