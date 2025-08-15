@@ -57,5 +57,150 @@
   <script src="constants.js"></script>
   <script src="uri_parser.js"></script>
   <script src="options.js"></script>
+
+  <div id="add-proxy-chooser-modal" class="modal" style="display: none;">
+      <div class="modal-content">
+          <span class="close-button">&times;</span>
+          <h2>Choose Proxy Type to Add</h2>
+          <div class="actions">
+              <button class="button-primary" data-proxy-type="ssh">SSH</button>
+              <button class="button-primary" data-proxy-type="v2ray">V2Ray</button>
+              <button class="button-primary" data-proxy-type="ss">Shadowsocks</button>
+          </div>
+      </div>
+  </div>
+
+  <div id="add-ssh-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <form>
+        <span class="close-button">&times;</span>
+        <h2>Add SSH Configuration</h2>
+        <div class="form-group">
+            <label for="ssh-remarks">Remarks (Name)</label>
+            <input type="text" id="ssh-remarks" placeholder="e.g., My Work Bastion">
+        </div>
+        <div class="form-group">
+            <label for="ssh-command-id">SSH Process Identifier</label>
+            <input type="text" id="ssh-command-id" placeholder="e.g., holocron-work-ssh">
+            <small>A unique string to identify this specific SSH process.</small>
+        </div>
+        <div class="form-group">
+            <label for="ssh-user">SSH User</label>
+            <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
+        </div>
+        <div class="form-group">
+            <label for="ssh-host">SSH Host (Bastion)</label>
+            <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
+        </div>
+        <fieldset class="port-forwarding-section">
+            <legend>Port Forwarding Rules</legend>
+            <div id="ssh-port-forwarding-rules"></div>
+            <button id="ssh-add-rule-button" class="button-secondary" type="button">Add Rule</button>
+        </fieldset>
+        <fieldset class="wifi-networks-section">
+            <legend>Auto-connect on these Wi-Fi SSIDs</legend>
+            <small>Leave empty to disable automatic connection.</small>
+            <div id="ssh-wifi-networks-list"></div>
+            <button id="ssh-add-wifi-button" class="button-secondary" type="button">Add Wi-Fi Network</button>
+        </fieldset>
+        <button id="ssh-save-button" class="button-primary" type="button">Save SSH Config</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="add-v2ray-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <form>
+        <span class="close-button">&times;</span>
+        <h2>V2Ray Configuration</h2>
+        <div class="form-group">
+            <label for="v2ray-remarks">Remarks (Name)</label>
+            <input type="text" id="v2ray-remarks" placeholder="e.g., My V2Ray Server">
+        </div>
+        <div class="form-group">
+            <label for="v2ray-protocol">Protocol</label>
+            <select id="v2ray-protocol">
+                <option value="vmess">VMess</option>
+                <option value="vless">VLESS</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="v2ray-server">Server Address</label>
+            <input type="text" id="v2ray-server" placeholder="e.g., v2.example.com">
+        </div>
+        <div class="form-group">
+            <label for="v2ray-port">Port</label>
+            <input type="number" id="v2ray-port" placeholder="e.g., 443">
+        </div>
+        <div class="form-group">
+            <label for="v2ray-uuid">UUID</label>
+            <input type="text" id="v2ray-uuid" placeholder="Your V2Ray UUID">
+        </div>
+        <div class="form-group">
+            <label for="v2ray-alterid">AlterId (VMess only)</label>
+            <input type="number" id="v2ray-alterid" placeholder="e.g., 64">
+        </div>
+        <div class="form-group">
+            <label for="v2ray-socks-port">Local SOCKS Port</label>
+            <input type="number" id="v2ray-socks-port" placeholder="e.g., 1080">
+        </div>
+        <button id="v2ray-save-button" class="button-primary" type="button">Save V2Ray Config</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="add-ss-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <form>
+        <span class="close-button">&times;</span>
+        <h2>Shadowsocks Configuration</h2>
+        <div class="form-group">
+            <label for="ss-remarks">Remarks (Name)</label>
+            <input type="text" id="ss-remarks" placeholder="e.g., My Shadowsocks Server">
+        </div>
+        <div class="form-group">
+            <label for="ss-server">Server Address</label>
+            <input type="text" id="ss-server" placeholder="e.g., ss.example.com">
+        </div>
+        <div class="form-group">
+            <label for="ss-port">Port</label>
+            <input type="number" id="ss-port" placeholder="e.g., 8388">
+        </div>
+        <div class="form-group">
+            <label for="ss-method">Encryption Method</label>
+            <input type="text" id="ss-method" placeholder="e.g., aes-256-gcm">
+        </div>
+        <div class="form-group">
+            <label for="ss-password">Password</label>
+            <input type="password" id="ss-password" placeholder="Your Shadowsocks password">
+        </div>
+        <div class="form-group">
+            <label for="ss-socks-port">Local SOCKS Port</label>
+            <input type="number" id="ss-socks-port" placeholder="e.g., 1080">
+        </div>
+        <button id="ss-save-button" class="button-primary" type="button">Save Shadowsocks Config</button>
+      </form>
+    </div>
+  </div>
+
+  <template id="ssh-port-forward-rule-template">
+    <div class="rule-item">
+      <select class="rule-type"><option value="L">Local (-L)</option><option value="D">Dynamic (-D)</option></select>
+      <input type="text" class="rule-local-port" placeholder="Local Port">
+      <span class="rule-colon">:</span>
+      <input type="text" class="rule-remote-host" placeholder="Remote Host">
+      <span class="rule-colon">:</span>
+      <input type="text" class="rule-remote-port" placeholder="Remote Port">
+      <button class="remove-rule-button" title="Remove Rule">&times;</button>
+    </div>
+  </template>
+
+  <template id="ssh-wifi-network-template">
+    <div class="rule-item">
+      <input type="text" class="wifi-ssid-input" placeholder="e.g., MyWorkWifi-5G">
+      <button class="remove-rule-button" title="Remove SSID">&times;</button>
+    </div>
+  </template>
+
 </body>
 </html>
