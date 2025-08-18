@@ -138,18 +138,13 @@ async function attemptAutoReconnect() {
 
   console.log("Attempting to automatically reconnect the tunnel...");
   try {
-    // This logic is similar to the START_TUNNEL message handler.
-    const settings = await chrome.storage.sync.get([
-      STORAGE_KEYS.SSH_USER,
-      STORAGE_KEYS.SSH_HOST,
-      STORAGE_KEYS.PORT_FORWARDS,
-      STORAGE_KEYS.SSH_COMMAND_ID,
-      STORAGE_KEYS.WIFI_SSIDS
-    ]);
+    // This logic is now identical to the START_TUNNEL message handler.
+    // Fetch all settings and let the native host decide what to do.
+    const settings = await chrome.storage.sync.get(null);
 
     const response = await communicateWithNativeHost({
       command: COMMANDS.START_TUNNEL,
-      config: settings
+      config: settings,
     });
 
     if (response.success) {
@@ -254,33 +249,29 @@ async function updateStatus() {
   }
   isUpdateInProgress = true;
 
-  const {
-    [STORAGE_KEYS.SSH_COMMAND_ID]: sshCommandIdentifier,
-    [STORAGE_KEYS.PING_HOST]: pingHost,
-    [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl
-  } = await chrome.storage.sync.get({
-    [STORAGE_KEYS.SSH_COMMAND_ID]: '',
-    [STORAGE_KEYS.PING_HOST]: 'youtube.com', // Default value
-    [STORAGE_KEYS.WEB_CHECK_URL]: 'https://gemini.google.com/app'
-  });
-
-  if (!sshCommandIdentifier) {
-    console.log("SSH command identifier not set. Please configure it in the options.");
-    updateStateAndBroadcast({ connected: false });
-    isUpdateInProgress = false;
-    return;
-  }
-
   try {
+    const settings = await chrome.storage.sync.get(null);
+    const connType = settings[STORAGE_KEYS.CONNECTION_TYPE] || 'ssh';
+
+    // Basic validation to prevent status checks if not configured
+    if (connType === 'ssh' && !settings[STORAGE_KEYS.SSH_COMMAND_ID]) {
+      console.log("SSH command identifier not set. Please configure it in the options.");
+      updateStateAndBroadcast({ connected: false });
+      return; // Exit before isUpdateInProgress is set to false
+    } else if (connType === 'openvpn' && !settings[STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME]) {
+      console.log("No active OpenVPN profile selected. Please configure it in the options.");
+      updateStateAndBroadcast({ connected: false });
+      return; // Exit
+    }
+
     const response = await communicateWithNativeHost({
       command: COMMANDS.GET_STATUS,
-      sshCommandIdentifier,
-      pingHost,
-      webCheckUrl
+      config: settings // Pass all settings to the native host
     });
+
     updateStateAndBroadcast(response && response.connected ? response : { connected: false });
   } catch (error) {
-    const errorMessage = `Error during status update for command "${sshCommandIdentifier}": ${error.message}`;
+    const errorMessage = `Error during status update: ${error.message}`;
     updateStateAndBroadcast({ connected: false }, errorMessage);
   } finally {
     isUpdateInProgress = false;
@@ -408,6 +399,13 @@ function FindProxyForURL(url, host) {
   // Listener for the new test connection feature from the options page.
   if (request.command === COMMANDS.TEST_CONNECTION) {
     (async () => {
+        const { [STORAGE_KEYS.CONNECTION_TYPE]: connType } = await chrome.storage.sync.get(STORAGE_KEYS.CONNECTION_TYPE);
+
+        if ((connType || 'ssh') === 'openvpn') {
+            sendResponse({ success: false, message: "Test Connection is not yet supported for OpenVPN." });
+            return;
+        }
+
       const { sshCommand, pingHost, webCheckUrl } = request;
       if (!sshCommand) {
         sendResponse({ success: false, message: "SSH Command Identifier cannot be empty." });
@@ -418,11 +416,15 @@ function FindProxyForURL(url, host) {
         return;
       }
       try {
+        // For SSH, the logic remains the same, it calls getStatus with specific params.
         const response = await communicateWithNativeHost({
           command: COMMANDS.GET_STATUS,
-          sshCommandIdentifier: sshCommand, // Map from options page key
-          pingHost,
-          webCheckUrl
+          config: { // We construct a config object to match the new getStatus signature
+            [STORAGE_KEYS.CONNECTION_TYPE]: 'ssh',
+            [STORAGE_KEYS.SSH_COMMAND_ID]: sshCommand,
+            [STORAGE_KEYS.PING_HOST]: pingHost,
+            [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl,
+          }
         });
         let message;
         if (response && response.connected) {
@@ -445,21 +447,18 @@ function FindProxyForURL(url, host) {
     (async () => {
       try {
         let config = null;
-        // Only fetch and send config for the 'start' command
+        // For 'start', we need to fetch all settings.
+        // For 'stop', we only need the connection type to route the command.
         if (request.command === COMMANDS.START_TUNNEL) {
-          const settings = await chrome.storage.sync.get([
-            STORAGE_KEYS.SSH_USER,
-            STORAGE_KEYS.SSH_HOST,
-            STORAGE_KEYS.PORT_FORWARDS,
-            STORAGE_KEYS.SSH_COMMAND_ID,
-            STORAGE_KEYS.WIFI_SSIDS
-          ]);
-          config = settings;
+          config = await chrome.storage.sync.get(null); // Get all settings
+        } else {
+          const { [STORAGE_KEYS.CONNECTION_TYPE]: connType } = await chrome.storage.sync.get(STORAGE_KEYS.CONNECTION_TYPE);
+          config = { [STORAGE_KEYS.CONNECTION_TYPE]: connType || 'ssh' };
         }
 
         const response = await communicateWithNativeHost({
           command: request.command,
-          config: config
+          config: config,
         });
 
         sendResponse(response);

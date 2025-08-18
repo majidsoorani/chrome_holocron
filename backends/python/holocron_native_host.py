@@ -37,9 +37,11 @@ logger.addHandler(handler)
 logging.info("--- Native host script started ---")
 
 # --- Paths ---
-# Path to the shell script for starting/stopping the tunnel
 SCRIPT_DIR = Path(__file__).resolve().parent
-SHELL_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
+SSH_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
+OVPN_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "openvpn_connect.sh"
+TEMP_OVPN_CONFIG_PATH = Path("/tmp/holocron.openvpn.conf")
+TEMP_OVPN_AUTH_PATH = Path("/tmp/holocron.openvpn.auth")
 
 def read_message():
     """Reads a message from stdin, prefixed with a 4-byte length."""
@@ -136,6 +138,31 @@ def perform_web_check(url, socks_port, timeout=10):
             return -1, "Failed (Proxy Error)", "ProxyError"
         return -1, "Failed (Connection Error)", "ConnectionError"
 
+def get_openvpn_status():
+    """
+    Checks for a running OpenVPN process managed by this extension.
+    It looks for a process running with our specific temporary config file.
+
+    Returns:
+        dict: {'connected': bool}
+    """
+    logging.debug("Checking for OpenVPN process.")
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'username']):
+        try:
+            if 'openvpn' in proc.info['name'] and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
+                cmd_str = " ".join(proc.info['cmdline'])
+                # Identify the process by the config file it's using
+                if str(TEMP_OVPN_CONFIG_PATH) in cmd_str:
+                    logging.info(f"Found matching OpenVPN process with PID: {proc.pid}")
+                    # OpenVPN doesn't use a SOCKS proxy in this setup; it creates a tun interface.
+                    # The browser proxy will be configured to use HTTP/HTTPS proxy on a port
+                    # that is forwarded over the VPN, but that's outside the scope of this status check.
+                    return {"connected": True}
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return {"connected": False}
+
+
 def get_tunnel_status(ssh_command_identifier):
     """
     Checks for the SSH process and extracts the SOCKS port.
@@ -172,13 +199,80 @@ def get_tunnel_status(ssh_command_identifier):
 
     return {"connected": False, "socks_port": None}
 
+def execute_openvpn_command(command, config):
+    """Executes the openvpn_connect.sh script with 'start' or 'stop'."""
+    if not OVPN_SCRIPT_PATH.is_file():
+        error_msg = f"OpenVPN script not found at {OVPN_SCRIPT_PATH}"
+        logging.error(error_msg)
+        return {"success": False, "message": error_msg}
+
+    cmd_list = [str(OVPN_SCRIPT_PATH), command]
+
+    if command == "start":
+        # Find the active config from the list of all configs
+        active_config_name = config.get("activeOvpnConfigName")
+        ovpn_configs = config.get("ovpnConfigs", [])
+        active_config = next((c for c in ovpn_configs if c["name"] == active_config_name), None)
+
+        if not active_config:
+            return {"success": False, "message": "Active OpenVPN profile not found."}
+
+        # Write the .ovpn content to a temporary file
+        try:
+            TEMP_OVPN_CONFIG_PATH.write_text(active_config["content"])
+            cmd_list.extend(["--config", str(TEMP_OVPN_CONFIG_PATH)])
+        except IOError as e:
+            logging.error(f"Failed to write temporary OpenVPN config: {e}")
+            return {"success": False, "message": "Failed to write temporary OpenVPN config."}
+
+        # If auth is required, write credentials to a temp file and pass the path
+        if active_config.get("requires_auth"):
+            user = config.get("ovpnUser", "")
+            password = config.get("ovpnPass", "")
+            if not user or not password:
+                return {"success": False, "message": "Username and password are required for this profile."}
+            try:
+                # File content should be username on the first line, password on the second
+                TEMP_OVPN_AUTH_PATH.write_text(f"{user}\n{password}")
+                # Ensure correct permissions (read/write only for user)
+                TEMP_OVPN_AUTH_PATH.chmod(0o600)
+                cmd_list.extend(["--auth-file", str(TEMP_OVPN_AUTH_PATH)])
+            except IOError as e:
+                logging.error(f"Failed to write temporary OpenVPN auth file: {e}")
+                return {"success": False, "message": "Failed to write temporary auth file."}
+
+    try:
+        # This is very similar to the SSH execution logic
+        timeout = 45 if command == "start" else 10
+        result = subprocess.run(
+            cmd_list,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False
+        )
+        logging.info(f"OpenVPN script stdout: {result.stdout.strip()}")
+        if result.returncode != 0:
+            error_output = result.stderr.strip() or result.stdout.strip()
+            logging.error(f"OpenVPN script execution failed. Exit code: {result.returncode}. Output: {error_output}")
+            return {"success": False, "message": f"OpenVPN script failed: {error_output}"}
+        return {"success": True, "message": result.stdout.strip()}
+
+    except subprocess.TimeoutExpired:
+        logging.error(f"OpenVPN script execution timed out for command '{command}'.")
+        return {"success": False, "message": f"Timeout: The command '{command}' took too long to execute."}
+    except Exception as e:
+        logging.error(f"An unexpected error occurred during OpenVPN script execution: {e}", exc_info=True)
+        return {"success": False, "message": f"An unexpected error occurred: {e}"}
+
+
 def execute_tunnel_command(command, config=None):
     """Executes the work_connect.sh script with 'start' or 'stop'."""
     if command not in ["start", "stop"]:
         return {"success": False, "message": f"Invalid command: {command}"}
 
-    if not SHELL_SCRIPT_PATH.is_file():
-        error_msg = f"Shell script not found at {SHELL_SCRIPT_PATH}"
+    if not SSH_SCRIPT_PATH.is_file():
+        error_msg = f"Shell script not found at {SSH_SCRIPT_PATH}"
         logging.error(error_msg)
         return {"success": False, "message": error_msg}
 
@@ -261,6 +355,52 @@ def execute_tunnel_command(command, config=None):
         logging.error(f"An unexpected error occurred during script execution: {e}", exc_info=True)
         return {"success": False, "message": f"An unexpected error occurred: {e}"}
 
+def handle_get_status(config):
+    conn_type = config.get("connectionType", "ssh")
+    if conn_type == "ssh":
+        ssh_command_id = config.get("sshCommandIdentifier")
+        status = get_tunnel_status(ssh_command_id)
+        response = {"connected": status["connected"], "socks_port": status.get("socks_port")}
+        if status["connected"] and status.get("socks_port"):
+            socks_port = status["socks_port"]
+            web_latency, web_status, web_error = perform_web_check(url=config.get("webCheckUrl"), socks_port=socks_port)
+            response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
+            tcp_latency, tcp_ping_error = perform_tcp_ping(host=config.get("pingHost", "youtube.com"), socks_port=socks_port)
+            response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
+        else:
+            tcp_latency, tcp_ping_error = perform_tcp_ping(host=config.get("pingHost", "youtube.com"), socks_port=None)
+            response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
+            response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "web_check_error": None})
+    else: # openvpn
+        status = get_openvpn_status()
+        response = {"connected": status["connected"]}
+        # For OpenVPN, we assume no SOCKS proxy. We could add a web check here that
+        # doesn't use a proxy to confirm internet connectivity.
+        if status["connected"]:
+            web_latency, web_status, web_error = perform_web_check(url=config.get("webCheckUrl"), socks_port=None)
+            response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
+            tcp_latency, tcp_ping_error = perform_tcp_ping(host=config.get("pingHost", "youtube.com"), socks_port=None)
+            response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
+        else:
+            response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "web_check_error": None})
+            response.update({"tcp_ping_ms": -1, "tcp_ping_error": "Tunnel Down"})
+
+    return response
+
+def handle_start_tunnel(config):
+    conn_type = config.get("connectionType", "ssh")
+    if conn_type == "ssh":
+        return execute_tunnel_command("start", config)
+    else:
+        return execute_openvpn_command("start", config)
+
+def handle_stop_tunnel(config):
+    conn_type = config.get("connectionType", "ssh")
+    if conn_type == "ssh":
+        return execute_tunnel_command("stop", config)
+    else:
+        return execute_openvpn_command("stop", config)
+
 def main():
     """Main loop to read commands and send status."""
     while True:
@@ -268,45 +408,24 @@ def main():
             message = read_message()
             logging.debug(f"Received message: {message}")
             command = message.get("command")
+            config = message.get("config")
 
+            response = None
             if command == "getStatus":
-                ssh_command_id = message.get("sshCommandIdentifier")
-                status = get_tunnel_status(ssh_command_id)
-                response = { "connected": status["connected"], "socks_port": status.get("socks_port") }
-
-                if status["connected"] and status.get("socks_port"):
-                    socks_port = status["socks_port"]
-                    web_latency, web_status, web_error = perform_web_check(url=message.get("webCheckUrl"), socks_port=socks_port)
-                    response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
-
-                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=socks_port)
-                    response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
-                else:
-                    logging.info("SSH tunnel not found. Performing direct TCP ping for diagnostics.")
-                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=None)
-                    response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
-                    response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "web_check_error": None})
-
-                logging.debug(f"Sending response: {response}")
-                send_message(response)
-
+                response = handle_get_status(config)
             elif command == "startTunnel":
-                config = message.get("config")
-                response = execute_tunnel_command("start", config)
-                send_message(response)
-
+                response = handle_start_tunnel(config)
             elif command == "stopTunnel":
-                response = execute_tunnel_command("stop")
-                send_message(response)
-
+                response = handle_stop_tunnel(config)
             else:
                 logging.warning(f"Unknown command received: {command}")
 
+            if response:
+                send_message(response)
+
         except Exception as e:
-            # For any error during message processing, log it and continue the loop.
-            # This prevents the entire native host from crashing on a single failed command.
             logging.error(f"An unhandled exception occurred in the main loop: {e}", exc_info=True)
-            continue # Keep the host alive for subsequent requests.
+            continue
 
 if __name__ == '__main__':
     main()

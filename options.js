@@ -1,23 +1,43 @@
 document.addEventListener('DOMContentLoaded', () => {
   // --- DOM Elements ---
-  const commandInput = document.getElementById('ssh-command');
+  // General
+  const connectionTypeSshRadio = document.getElementById('conn-type-ssh');
+  const connectionTypeOvpnRadio = document.getElementById('conn-type-ovpn');
+  const sshSettingsSection = document.getElementById('ssh-settings-section');
+  const openvpnSettingsSection = document.getElementById('openvpn-settings-section');
   const pingHostInput = document.getElementById('ping-host');
   const webCheckUrlInput = document.getElementById('web-check-url');
-  const sshUserInput = document.getElementById('ssh-user');
-  const sshHostInput = document.getElementById('ssh-host');
   const autoReconnectCheckbox = document.getElementById('auto-reconnect-enabled');
   const geoIpBypassCheckbox = document.getElementById('geoip-bypass-enabled');
+  const saveButton = document.getElementById('save-button');
+  const testButton = document.getElementById('test-button');
+  const statusMessage = document.getElementById('status-message');
+
+  // SSH
+  const commandInput = document.getElementById('ssh-command');
+  const sshUserInput = document.getElementById('ssh-user');
+  const sshHostInput = document.getElementById('ssh-host');
   const rulesContainer = document.getElementById('port-forwarding-rules');
   const addRuleButton = document.getElementById('add-rule-button');
   const wifiListContainer = document.getElementById('wifi-networks-list');
   const addWifiButton = document.getElementById('add-wifi-button');
   const ruleTemplate = document.getElementById('port-forward-rule-template');
   const wifiTemplate = document.getElementById('wifi-network-template');
-  const saveButton = document.getElementById('save-button');
-  const testButton = document.getElementById('test-button');
-  const statusMessage = document.getElementById('status-message');
+
+  // OpenVPN
+  const ovpnConfigListContainer = document.getElementById('ovpn-configs-list');
+  const ovpnFileUploadInput = document.getElementById('ovpn-file-upload');
+  const ovpnUserInput = document.getElementById('ovpn-user');
+  const ovpnPassInput = document.getElementById('ovpn-pass');
+  const ovpnConfigTemplate = document.getElementById('ovpn-config-template');
 
   // --- Functions ---
+  function toggleSettingsSections() {
+    const isSsh = connectionTypeSshRadio.checked;
+    sshSettingsSection.style.display = isSsh ? 'block' : 'none';
+    openvpnSettingsSection.style.display = isSsh ? 'none' : 'block';
+  }
+
   // --- Port Forwarding Rule Management ---
 
   function createRuleElement(rule = {}) {
@@ -50,6 +70,37 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleInputs(); // Initial setup
   }
 
+  // --- OpenVPN Config Management ---
+  function createOvpnConfigElement(config, activeConfigName) {
+    const content = ovpnConfigTemplate.content.cloneNode(true);
+    const configElement = content.querySelector('.ovpn-item');
+    const radioInput = configElement.querySelector('input[type="radio"]');
+    const nameSpan = configElement.querySelector('.ovpn-name');
+    const removeButton = configElement.querySelector('.remove-rule-button');
+
+    nameSpan.textContent = config.name;
+    radioInput.value = config.name;
+    radioInput.checked = config.name === activeConfigName;
+
+    removeButton.addEventListener('click', () => {
+        // Find the config in storage and remove it
+        chrome.storage.sync.get(STORAGE_KEYS.OVPN_CONFIGS, (result) => {
+            let configs = result[STORAGE_KEYS.OVPN_CONFIGS] || [];
+            configs = configs.filter(c => c.name !== config.name);
+            chrome.storage.sync.set({ [STORAGE_KEYS.OVPN_CONFIGS]: configs }, () => {
+                configElement.remove();
+                // If the removed config was the active one, clear the active setting
+                if (radioInput.checked) {
+                    chrome.storage.sync.remove(STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME);
+                }
+            });
+        });
+    });
+
+    ovpnConfigListContainer.appendChild(configElement);
+  }
+
+
   // --- Wi-Fi SSID Management ---
 
   function createWifiElement(ssid = '') {
@@ -65,18 +116,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function loadSettings() {
     chrome.storage.sync.get(Object.values(STORAGE_KEYS), (result) => {
-      commandInput.value = result[STORAGE_KEYS.SSH_COMMAND_ID] || 'holocron-tunnel';
+      // General settings
+      const connType = result[STORAGE_KEYS.CONNECTION_TYPE] || 'ssh';
+      if (connType === 'openvpn') {
+        connectionTypeOvpnRadio.checked = true;
+      } else {
+        connectionTypeSshRadio.checked = true;
+      }
+      toggleSettingsSections();
+
       pingHostInput.value = result[STORAGE_KEYS.PING_HOST] || 'youtube.com';
       webCheckUrlInput.value = result[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
-      sshUserInput.value = result[STORAGE_KEYS.SSH_USER] || '';
-      sshHostInput.value = result[STORAGE_KEYS.SSH_HOST] || '';
       autoReconnectCheckbox.checked = result[STORAGE_KEYS.AUTO_RECONNECT_ENABLED] !== false; // Default to true
       geoIpBypassCheckbox.checked = result[STORAGE_KEYS.GEOIP_BYPASS_ENABLED] !== false; // Default to true
+
+      // SSH settings
+      commandInput.value = result[STORAGE_KEYS.SSH_COMMAND_ID] || 'holocron-tunnel';
+      sshUserInput.value = result[STORAGE_KEYS.SSH_USER] || '';
+      sshHostInput.value = result[STORAGE_KEYS.SSH_HOST] || '';
 
       rulesContainer.innerHTML = ''; // Clear existing port forwarding rules
       const portForwards = result[STORAGE_KEYS.PORT_FORWARDS] || [];
       if (portForwards.length === 0) {
-        // Add default rules for a new user
         createRuleElement({ type: 'D', localPort: '1031' });
         createRuleElement({ type: 'L', localPort: '5434', remoteHost: 'database.example.com', remotePort: '5432' });
       } else {
@@ -90,18 +151,37 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         wifiSsids.forEach(createWifiElement);
       }
+
+      // OpenVPN settings
+      ovpnConfigListContainer.innerHTML = '';
+      const ovpnConfigs = result[STORAGE_KEYS.OVPN_CONFIGS] || [];
+      const activeOvpnConfig = result[STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME];
+      ovpnConfigs.forEach(config => createOvpnConfigElement(config, activeOvpnConfig));
+
+      ovpnUserInput.value = result[STORAGE_KEYS.OVPN_USER] || '';
+      ovpnPassInput.value = result[STORAGE_KEYS.OVPN_PASS] || '';
     });
   }
 
   function validateSettings() {
     let isValid = true;
-    const inputsToValidate = [
-      commandInput,
-      pingHostInput,
-      webCheckUrlInput,
-      sshUserInput,
-      sshHostInput,
-    ];
+    let inputsToValidate = [];
+    const connectionType = connectionTypeSshRadio.checked ? 'ssh' : 'openvpn';
+
+    if (connectionType === 'ssh') {
+        inputsToValidate = [
+            commandInput,
+            pingHostInput,
+            webCheckUrlInput,
+            sshUserInput,
+            sshHostInput,
+        ];
+    } else { // openvpn
+        inputsToValidate = [
+            pingHostInput,
+            webCheckUrlInput,
+        ];
+    }
 
     // --- Reset all previous error states ---
     document.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
@@ -166,12 +246,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 4. Validate Wi-Fi SSIDs
-    document.querySelectorAll('#wifi-networks-list .rule-item').forEach((ruleEl) => {
-      const ssidInput = ruleEl.querySelector('.wifi-ssid-input');
-      if (!ssidInput.value.trim()) {
-        showError(ssidInput, 'SSID cannot be empty.');
-      }
-    });
+    if (connectionType === 'ssh') {
+        document.querySelectorAll('#wifi-networks-list .rule-item').forEach((ruleEl) => {
+          const ssidInput = ruleEl.querySelector('.wifi-ssid-input');
+          if (!ssidInput.value.trim()) {
+            showError(ssidInput, 'SSID cannot be empty.');
+          }
+        });
+    }
+
+
+    // 5. Validate OpenVPN settings
+    if (connectionType === 'openvpn') {
+        const activeConfig = document.querySelector('input[name="active-ovpn-config"]:checked');
+        if (!activeConfig) {
+            isValid = false;
+            // Find the container and show an error message
+            const container = document.getElementById('ovpn-configs-list');
+            showError(container, 'Please upload and select a VPN profile.');
+        }
+    }
 
     return isValid;
   }
@@ -210,17 +304,37 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    const connectionType = connectionTypeSshRadio.checked ? 'ssh' : 'openvpn';
+
     const settings = {
-      [STORAGE_KEYS.SSH_COMMAND_ID]: commandInput.value,
+      // General
+      [STORAGE_KEYS.CONNECTION_TYPE]: connectionType,
       [STORAGE_KEYS.PING_HOST]: pingHostInput.value,
       [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrlInput.value,
+      [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: geoIpBypassCheckbox.checked,
+      [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectCheckbox.checked,
+
+      // SSH
+      [STORAGE_KEYS.SSH_COMMAND_ID]: commandInput.value,
       [STORAGE_KEYS.SSH_USER]: sshUserInput.value,
       [STORAGE_KEYS.SSH_HOST]: sshHostInput.value,
       [STORAGE_KEYS.PORT_FORWARDS]: portForwardRules,
       [STORAGE_KEYS.WIFI_SSIDS]: wifiSsids,
-      [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: geoIpBypassCheckbox.checked,
-      [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectCheckbox.checked,
+
+      // OpenVPN
+      [STORAGE_KEYS.OVPN_USER]: ovpnUserInput.value,
+      [STORAGE_KEYS.OVPN_PASS]: ovpnPassInput.value,
+      // OVPN_CONFIGS is saved dynamically on upload/delete
     };
+
+    const activeOvpnConfig = document.querySelector('input[name="active-ovpn-config"]:checked');
+    if (activeOvpnConfig) {
+        settings[STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME] = activeOvpnConfig.value;
+    } else {
+        // Ensure the key is set to null if nothing is selected
+        settings[STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME] = null;
+    }
+
 
     chrome.storage.sync.set(settings, () => {
       statusMessage.textContent = 'Settings saved!';
@@ -233,6 +347,42 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Event Listeners ---
+  ovpnFileUploadInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result;
+      const requiresAuth = /^\s*auth-user-pass\s*$/m.test(content);
+      const newConfig = {
+        name: file.name,
+        content: content,
+        requires_auth: requiresAuth,
+      };
+
+      chrome.storage.sync.get([STORAGE_KEYS.OVPN_CONFIGS, STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME], (result) => {
+        let configs = result[STORAGE_KEYS.OVPN_CONFIGS] || [];
+        // Prevent duplicates
+        if (configs.some(c => c.name === newConfig.name)) {
+            statusMessage.textContent = 'A profile with this name already exists.';
+            statusMessage.className = 'error';
+            return;
+        }
+        configs.push(newConfig);
+        chrome.storage.sync.set({ [STORAGE_KEYS.OVPN_CONFIGS]: configs }, () => {
+          createOvpnConfigElement(newConfig, result[STORAGE_KEYS.ACTIVE_OVPN_CONFIG_NAME]);
+          ovpnFileUploadInput.value = ''; // Reset file input
+        });
+      });
+    };
+    reader.readAsText(file);
+  });
+
+  connectionTypeSshRadio.addEventListener('change', toggleSettingsSections);
+  connectionTypeOvpnRadio.addEventListener('change', toggleSettingsSections);
   addRuleButton.addEventListener('click', () => createRuleElement());
   addWifiButton.addEventListener('click', () => createWifiElement());
   saveButton.addEventListener('click', saveSettings); // This now calls the version with validation
@@ -266,4 +416,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Initial Load ---
   loadSettings();
+  toggleSettingsSections();
 });

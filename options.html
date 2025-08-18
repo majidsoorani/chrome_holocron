@@ -9,65 +9,110 @@
     <h1>Holocron Settings</h1>
 
     <div class="form-section">
-      <h2>Connection Monitoring</h2>
-      <div class="form-group">
-        <label for="ssh-command">SSH Process Identifier</label>
-        <input type="text" id="ssh-command" placeholder="e.g., holocron-tunnel">
-        <small>A unique string used to identify the tunnel process. The script uses this to create a unique tag for the SSH command.</small>
-      </div>
-      <div class="form-group">
-        <label for="ping-host">TCP Ping Host</label>
-        <input type="text" id="ping-host" placeholder="e.g., youtube.com">
-        <small>A reliable host for a low-level TCP connection check.</small>
-      </div>
-      <div class="form-group">
-        <label for="web-check-url">Web Check URL</label>
-        <input type="text" id="web-check-url" placeholder="e.g., https://gemini.google.com/app">
-        <small>A full URL to check for application-level connectivity through the tunnel.</small>
+      <h2>Connection Type</h2>
+      <div class="radio-group">
+        <input type="radio" id="conn-type-ssh" name="connection-type" value="ssh" checked>
+        <label for="conn-type-ssh">SSH Tunnel</label>
+        <input type="radio" id="conn-type-ovpn" name="connection-type" value="openvpn">
+        <label for="conn-type-ovpn">OpenVPN</label>
       </div>
     </div>
 
-    <div class="form-section">
-      <h2>Automatic Connection Networks (Optional)</h2>
-      <small>The tunnel will only auto-connect on these Wi-Fi networks. Leave this section empty to disable the check and allow manual connection from any network.</small>
-      <fieldset class="wifi-networks-section">
-        <legend>Permitted SSIDs</legend>
-        <div id="wifi-networks-list">
-          <!-- SSIDs will be dynamically inserted here -->
+    <!-- ===== SSH Settings ===== -->
+    <div id="ssh-settings-section">
+      <div class="form-section">
+        <h2>Connection Monitoring</h2>
+        <div class="form-group">
+          <label for="ssh-command">SSH Process Identifier</label>
+          <input type="text" id="ssh-command" placeholder="e.g., holocron-tunnel">
+          <small>A unique string used to identify the tunnel process. The script uses this to create a unique tag for the SSH command.</small>
         </div>
-        <button id="add-wifi-button" class="button-secondary">Add Wi-Fi Network</button>
-      </fieldset>
+        <div class="form-group">
+          <label for="ping-host">TCP Ping Host</label>
+          <input type="text" id="ping-host" placeholder="e.g., youtube.com">
+          <small>A reliable host for a low-level TCP connection check.</small>
+        </div>
+        <div class="form-group">
+          <label for="web-check-url">Web Check URL</label>
+          <input type="text" id="web-check-url" placeholder="e.g., https://gemini.google.com/app">
+          <small>A full URL to check for application-level connectivity through the tunnel.</small>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h2>Automatic Connection Networks (Optional)</h2>
+        <small>The tunnel will only auto-connect on these Wi-Fi networks. Leave this section empty to disable the check and allow manual connection from any network.</small>
+        <fieldset class="wifi-networks-section">
+          <legend>Permitted SSIDs</legend>
+          <div id="wifi-networks-list">
+            <!-- SSIDs will be dynamically inserted here -->
+          </div>
+          <button id="add-wifi-button" class="button-secondary">Add Wi-Fi Network</button>
+        </fieldset>
+      </div>
+
+      <div class="form-section">
+        <h2>SSH Tunnel Configuration</h2>
+        <div class="form-group">
+          <label for="ssh-user">SSH User</label>
+          <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
+        </div>
+        <div class="form-group">
+          <label for="ssh-host">SSH Host (Bastion)</label>
+          <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
+        </div>
+        <fieldset class="port-forwarding-section">
+          <legend>Port Forwarding Rules</legend>
+          <div id="port-forwarding-rules">
+            <!-- Rules will be dynamically inserted here -->
+          </div>
+          <button id="add-rule-button" class="button-secondary">Add Rule</button>
+        </fieldset>
+      </div>
     </div>
 
+    <!-- ===== OpenVPN Settings ===== -->
+    <div id="openvpn-settings-section" style="display: none;">
+      <div class="form-section">
+        <h2>OpenVPN Configuration</h2>
+        <fieldset>
+          <legend>VPN Profiles</legend>
+          <div id="ovpn-configs-list">
+            <!-- OpenVPN configs will be dynamically inserted here -->
+          </div>
+          <div class="form-group">
+            <label for="ovpn-file-upload">Upload .ovpn Profile</label>
+            <input type="file" id="ovpn-file-upload" accept=".ovpn">
+          </div>
+        </fieldset>
+      </div>
+      <div class="form-section">
+        <h2>OpenVPN Credentials (if required)</h2>
+        <small>These are only needed if your .ovpn profile uses the <code>auth-user-pass</code> directive without an external file path.</small>
+        <div class="form-group">
+          <label for="ovpn-user">Username</label>
+          <input type="text" id="ovpn-user" placeholder="VPN Username">
+        </div>
+        <div class="form-group">
+          <label for="ovpn-pass">Password</label>
+          <input type="password" id="ovpn-pass" placeholder="VPN Password">
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Shared Settings ===== -->
     <div class="form-section">
-      <h2>SSH Tunnel Configuration</h2>
-      <div class="form-group">
-        <label for="ssh-user">SSH User</label>
-        <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
-      </div>
-      <div class="form-group">
-        <label for="ssh-host">SSH Host (Bastion)</label>
-        <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
-      </div>
-
-      <div class="form-group">
-        <label for="auto-reconnect-enabled">Automatic Reconnect</label>
-        <div class="checkbox-container">
-            <input type="checkbox" id="auto-reconnect-enabled">
-            <label for="auto-reconnect-enabled" class="checkbox-label">
-                Automatically attempt to reconnect the tunnel if it disconnects.
-            </label>
+        <h2>General Settings</h2>
+        <div class="form-group">
+            <label for="auto-reconnect-enabled">Automatic Reconnect</label>
+            <div class="checkbox-container">
+                <input type="checkbox" id="auto-reconnect-enabled">
+                <label for="auto-reconnect-enabled" class="checkbox-label">
+                    Automatically attempt to reconnect the tunnel if it disconnects.
+                </label>
+            </div>
+            <small>If the tunnel process stops unexpectedly, the extension will try to restart it. This respects any Wi-Fi network rules for SSH.</small>
         </div>
-        <small>If the tunnel process stops unexpectedly, the extension will try to restart it. This respects the Wi-Fi network rules.</small>
-      </div>
-
-      <fieldset class="port-forwarding-section">
-        <legend>Port Forwarding Rules</legend>
-        <div id="port-forwarding-rules">
-          <!-- Rules will be dynamically inserted here -->
-        </div>
-        <button id="add-rule-button" class="button-secondary">Add Rule</button>
-      </fieldset>
     </div>
 
     <div class="form-section">
@@ -90,6 +135,14 @@
     </div>
     <div id="status-message"></div>
   </div>
+
+  <template id="ovpn-config-template">
+    <div class="rule-item ovpn-item">
+      <input type="radio" name="active-ovpn-config">
+      <span class="ovpn-name"></span>
+      <button class="remove-rule-button" title="Remove Config">&times;</button>
+    </div>
+  </template>
 
   <template id="port-forward-rule-template">
     <div class="rule-item">
