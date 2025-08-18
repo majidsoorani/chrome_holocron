@@ -162,6 +162,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const ovpnAuthUser = openvpnSettings.querySelector('.ovpn-auth-user');
     const ovpnAuthPass = openvpnSettings.querySelector('.ovpn-auth-pass');
 
+    // V2Ray settings
+    const v2raySettings = details.querySelector('.v2ray-settings');
+    const v2rayUrlInput = v2raySettings.querySelector('.config-input-v2ray-url');
+
     // Live Log viewer
     const liveLogContainer = details.querySelector('.config-live-log-container');
     const liveLogContent = details.querySelector('.config-live-log-content');
@@ -181,12 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Type Switching ---
     const toggleSettingsVisibility = () => {
         const type = typeSelect.value;
+        sshSettings.style.display = 'none';
+        openvpnSettings.style.display = 'none';
+        v2raySettings.style.display = 'none';
+
         if (type === 'ssh') {
             sshSettings.style.display = 'block';
-            openvpnSettings.style.display = 'none';
-        } else { // openvpn
-            sshSettings.style.display = 'none';
+        } else if (type === 'openvpn') {
             openvpnSettings.style.display = 'block';
+        } else if (type === 'v2ray') {
+            v2raySettings.style.display = 'block';
         }
         updateUserHostDisplay(); // Update summary on type change
     };
@@ -215,6 +223,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     checkOvpnForAuth(config.ovpnFileContent); // Check on initial load
 
+    // V2Ray fields
+    v2rayUrlInput.value = config.v2rayUrl || '';
+
     // Listen for changes to the enabled state to update the PAC script preview
     checkbox.addEventListener('change', () => {
       updateAllProxyRuleDropdownsAndPreview();
@@ -232,9 +243,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const user = sshUserInput.value.trim();
             const host = sshHostInput.value.trim();
             summary = (user && host) ? `${user}@${host}` : 'SSH connection details missing';
-        } else {
+        } else if (type === 'openvpn') {
             const profileName = ovpnProfileNameInput.value.trim();
             summary = profileName ? `OpenVPN: ${profileName}` : 'OpenVPN profile details missing';
+        } else if (type === 'v2ray') {
+            const url = v2rayUrlInput.value.trim();
+            // Try to parse out the remark from the URL, e.g., vless://...@...#My-Server
+            const remarkMatch = url.match(/#(.+)$/);
+            if (remarkMatch && remarkMatch[1]) {
+                summary = `V2Ray: ${decodeURIComponent(remarkMatch[1])}`;
+            } else if (url) {
+                summary = 'V2Ray connection';
+            } else {
+                summary = 'V2Ray URL missing';
+            }
         }
       userHostDisplay.textContent = summary;
     };
@@ -271,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sshRemoteCommand: sshRemoteCommandInput.value.trim(),
         ovpnProfileName: ovpnProfileNameInput.value.trim(),
         ovpnFileContent: ovpnFileContent.value,
+        v2rayUrl: v2rayUrlInput.value.trim(),
         // Note: Passwords are not persisted to sync storage for security.
         portForwards: (config.portForwards || []).map(p => ({...p})), // Deep copy
       };
@@ -308,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
     ovpnAuthUser.addEventListener('input', () => setDirty(true));
     ovpnAuthPass.addEventListener('input', () => setDirty(true));
+    v2rayUrlInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
 
 
     connectButton.addEventListener('click', () => {
@@ -369,12 +393,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     return rule;
                 }).filter(Boolean),
             });
-        } else { // openvpn
+        } else if (type === 'openvpn') {
             Object.assign(configPayload, {
                 ovpnProfileName: ovpnProfileNameInput.value.trim(),
                 ovpnFileContent: ovpnFileContent.value,
                 ovpnUser: ovpnAuthUser.value, // Pass credentials
                 ovpnPass: ovpnAuthPass.value,
+            });
+        } else if (type === 'v2ray') {
+            Object.assign(configPayload, {
+                v2rayUrl: v2rayUrlInput.value.trim(),
             });
         }
 
@@ -1200,11 +1228,19 @@ function FindProxyForURL(url, host) {
               }
             }
         });
-      } else { // openvpn
+      } else if (type === 'openvpn') {
         const ovpnProfileNameInput = item.querySelector('.ovpn-profile-name');
         const ovpnFileContent = item.querySelector('.ovpn-file-content');
         if (!ovpnProfileNameInput.value.trim()) showError(ovpnProfileNameInput, 'Profile Name cannot be empty.');
         if (!ovpnFileContent.value.trim()) showError(item.querySelector('.ovpn-file-upload'), 'An .ovpn file must be uploaded.');
+      } else if (type === 'v2ray') {
+        const v2rayUrlInput = item.querySelector('.config-input-v2ray-url');
+        const url = v2rayUrlInput.value.trim();
+        if (!url) {
+            showError(v2rayUrlInput, 'V2Ray URL cannot be empty.');
+        } else if (!url.startsWith('vless://')) {
+            showError(v2rayUrlInput, 'URL must start with vless://');
+        }
       }
     });
 
@@ -1271,7 +1307,7 @@ function FindProxyForURL(url, host) {
               return rule;
             }).filter(Boolean), // Filter out nulls from empty rules
           });
-      } else { // openvpn
+      } else if (type === 'openvpn') {
           Object.assign(config, {
               ovpnProfileName: item.querySelector('.ovpn-profile-name').value.trim(),
               ovpnFileContent: item.querySelector('.ovpn-file-content').value,
@@ -1279,6 +1315,10 @@ function FindProxyForURL(url, host) {
               // in the input fields for the duration of the session.
               ovpnUser: item.querySelector('.ovpn-auth-user').value,
               ovpnPass: item.querySelector('.ovpn-auth-pass').value,
+          });
+      } else if (type === 'v2ray') {
+          Object.assign(config, {
+              v2rayUrl: item.querySelector('.config-input-v2ray-url').value.trim(),
           });
       }
       coreConfigs.push(config);

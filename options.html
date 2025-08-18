@@ -278,6 +278,7 @@
                     <select class="config-type-select">
                         <option value="ssh">SSH Tunnel</option>
                         <option value="openvpn">OpenVPN</option>
+                        <option value="v2ray">V2Ray</option>
                     </select>
                 </div>
 
@@ -321,6 +322,15 @@
                         <input type="text" class="ovpn-auth-user" placeholder="Username" autocomplete="username">
                         <input type="password" class="ovpn-auth-pass" placeholder="Password" autocomplete="current-password">
                         <small>These credentials are required by this .ovpn profile and will be passed securely.</small>
+                    </div>
+                </div>
+
+                <!-- V2Ray Specific Fields -->
+                <div class="v2ray-settings" style="display: none;">
+                    <div class="form-group">
+                        <label>V2Ray URL</label>
+                        <textarea class="config-input-v2ray-url" rows="4" placeholder="Enter your vless://... URL here."></textarea>
+                        <small>Paste the full V2Ray configuration URL.</small>
                     </div>
                 </div>
                 <!-- Live Log Viewer for this specific configuration -->

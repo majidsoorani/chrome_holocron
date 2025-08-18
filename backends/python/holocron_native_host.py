@@ -48,6 +48,7 @@ if is_first_run:
 SCRIPT_DIR = Path(__file__).resolve().parent
 SHELL_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
 OPENVPN_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "openvpn_connect.sh"
+V2RAY_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "v2ray_connect.sh"
 CONN_LOG_DIR = log_dir / "connections"
 CONN_LOG_DIR.mkdir(exist_ok=True)
 
@@ -186,6 +187,18 @@ def get_tunnel_status(config):
                     return {"connected": True, "socks_port": socks_port}
             except (ValueError, psutil.NoSuchProcess):
                 logging.warning(f"Stale lock file found for OpenVPN identifier '{identifier}'.")
+    elif conn_type == "v2ray":
+        lock_file = Path(f"/tmp/holocron_v2ray_{identifier}.lock")
+        if lock_file.is_file():
+            try:
+                pid = int(lock_file.read_text().strip())
+                if psutil.pid_exists(pid) and ('v2ray' in psutil.Process(pid).name() or 'xray' in psutil.Process(pid).name()):
+                    logging.debug(f"Found matching V2Ray process with PID: {pid}")
+                    # This is a simplification. The actual port should be read from the generated config.
+                    # For now, we'll assume a default, which the v2ray_connect.sh script must ensure it uses.
+                    return {"connected": True, "socks_port": 10808}
+            except (ValueError, psutil.NoSuchProcess):
+                logging.warning(f"Stale lock file found for V2Ray identifier '{identifier}'.")
     return {"connected": False, "socks_port": None}
 
 def _cleanup_openvpn_files(identifier):
@@ -455,6 +468,41 @@ def execute_tunnel_command(command, config):
                 # Use the robust helper to clean up all temp files.
                 _cleanup_openvpn_files(identifier)
             return {"success": True, "message": "OpenVPN tunnel stopped."}
+
+    elif conn_type == "v2ray":
+        script_path = V2RAY_SCRIPT_PATH
+        cmd_list = [str(script_path), command, "--identifier", identifier]
+        if command == "start":
+            if not config.get("v2rayUrl"):
+                return {"success": False, "message": "V2Ray URL is missing in the configuration."}
+            cmd_list.extend(["--url", config["v2rayUrl"]])
+
+        if not script_path.is_file() or not os.access(script_path, os.X_OK):
+            error_msg = f"V2Ray script not found or not executable at {script_path}"
+            logging.error(error_msg)
+            return {"success": False, "message": error_msg}
+
+        try:
+            logging.info(f"Executing '{command}' for V2Ray tunnel '{identifier}'...")
+            timeout = 45 if command == "start" else 10
+            result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout, check=False)
+            logging.debug(f"V2Ray script stdout: {result.stdout.strip()}")
+            logging.debug(f"V2Ray script stderr: {result.stderr.strip()}")
+
+            if result.returncode == 3: # Already running
+                return {"success": True, "already_running": True, "message": "V2Ray tunnel is already running."}
+            if result.returncode != 0:
+                error_output = result.stderr.strip() or result.stdout.strip()
+                logging.error(f"V2Ray script failed. Exit code: {result.returncode}. Output: {error_output}")
+                return {"success": False, "message": f"Failed to {command} V2Ray tunnel: {error_output}"}
+
+            return {"success": True, "message": result.stdout.strip() or "V2Ray tunnel command executed successfully."}
+        except subprocess.TimeoutExpired:
+            logging.error(f"Timeout: The command '{command}' for V2Ray tunnel '{identifier}' took too long.")
+            return {"success": False, "message": f"Timeout: The command '{command}' for V2Ray took too long."}
+        except Exception as e:
+            logging.error(f"An unexpected error occurred during V2Ray script execution for '{identifier}': {e}", exc_info=True)
+            return {"success": False, "message": f"An unexpected error occurred with V2Ray: {e}"}
     else:
         return {"success": False, "message": f"Unknown connection type: {conn_type}"}
 
@@ -468,6 +516,8 @@ def get_log_path_for_config(identifier, conn_type):
         return Path(f"/tmp/holocron_ssh_{identifier}.log") # SSH script still uses /tmp
     elif conn_type == "openvpn":
         return get_ovpn_temp_paths(identifier)["log"]
+    elif conn_type == "v2ray":
+        return Path(f"/tmp/holocron_v2ray_{identifier}.log")
     else:
         # Fallback for unknown types
         return log_file
