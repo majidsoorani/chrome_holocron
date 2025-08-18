@@ -30,13 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const revertProxyButton = document.getElementById('revert-proxy-button');
   const webLatencyChartCanvas = document.getElementById('web-latency-chart');
   const tcpPingChartCanvas = document.getElementById('tcp-ping-chart');
+    const refreshWebLatencyChartButton = document.getElementById('refresh-web-latency-chart');
+    const refreshTcpPingChartButton = document.getElementById('refresh-tcp-ping-chart');
   const globalGeoIpBypassCheckbox = document.getElementById('global-geoip-bypass');
   const globalGeoSiteBypassCheckbox = document.getElementById('global-geosite-bypass');
   const proxyBypassRulesList = document.getElementById('proxy-bypass-rules-list');
   const pacScriptPreviewContainer = document.getElementById('pac-script-preview-container');
   const logViewerContent = document.getElementById('log-viewer-content');
   const clearLogButton = document.getElementById('clear-log-button');
-  const openrouterApiKeyInput = document.getElementById('openrouter-api-key');
   const aiSuggestRuleButton = document.getElementById('ai-suggest-rule-button');
   const openrouterModelInput = document.getElementById('openrouter-model');
   const openrouterSystemMessageInput = document.getElementById('openrouter-system-message');
@@ -75,6 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let tcpPingChart = null;
   let coreConfigsForSelect = []; // Cache configs for dropdowns
   const MAX_CHART_POINTS = 60; // Show last 60 data points
+  let configLogPollIntervals = {}; // To hold setInterval IDs for config-specific log polling.
   let logPollInterval = null; // To hold the setInterval ID for log polling
   let mainLogPollInterval = null; // For the main log viewer
 
@@ -156,9 +158,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const ovpnFileUpload = openvpnSettings.querySelector('.ovpn-file-upload');
     const ovpnFileStatus = openvpnSettings.querySelector('.ovpn-file-status');
     const ovpnFileContent = openvpnSettings.querySelector('.ovpn-file-content');
+    const ovpnAuthContainer = openvpnSettings.querySelector('.ovpn-auth-container');
+    const ovpnAuthUser = openvpnSettings.querySelector('.ovpn-auth-user');
+    const ovpnAuthPass = openvpnSettings.querySelector('.ovpn-auth-pass');
+
+    // Live Log viewer
+    const liveLogContainer = details.querySelector('.config-live-log-container');
+    const liveLogContent = details.querySelector('.config-live-log-content');
 
     const configId = config.id || crypto.randomUUID();
     configItem.dataset.id = configId;
+
+    // --- Helper to check if OVPN profile needs auth ---
+    const checkOvpnForAuth = (content) => {
+        // Show auth fields if 'auth-user-pass' is present and *not* followed by a filename,
+        // which implies interactive prompt is needed.
+        const needsAuth = /^\s*auth-user-pass\s*$/m.test(content || '');
+        ovpnAuthContainer.style.display = needsAuth ? 'flex' : 'none';
+        return needsAuth;
+    };
 
     // --- Type Switching ---
     const toggleSettingsVisibility = () => {
@@ -190,9 +208,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // OpenVPN fields
     ovpnProfileNameInput.value = config.ovpnProfileName || '';
     ovpnFileContent.value = config.ovpnFileContent || '';
+    ovpnAuthUser.value = config.ovpnUser || '';
+    ovpnAuthPass.value = config.ovpnPass || '';
     if (config.ovpnFileContent) {
         ovpnFileStatus.textContent = `Saved profile loaded. Upload a new file to replace it.`;
     }
+    checkOvpnForAuth(config.ovpnFileContent); // Check on initial load
 
     // Listen for changes to the enabled state to update the PAC script preview
     checkbox.addEventListener('change', () => {
@@ -250,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sshRemoteCommand: sshRemoteCommandInput.value.trim(),
         ovpnProfileName: ovpnProfileNameInput.value.trim(),
         ovpnFileContent: ovpnFileContent.value,
+        // Note: Passwords are not persisted to sync storage for security.
         portForwards: (config.portForwards || []).map(p => ({...p})), // Deep copy
       };
       const newElement = createConfigElement(newConfig, null, true);
@@ -268,6 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (e) => {
             ovpnFileContent.value = e.target.result;
             ovpnFileStatus.textContent = `File selected: ${file.name}`;
+            checkOvpnForAuth(e.target.result);
             setDirty(true);
         };
         reader.readAsText(file);
@@ -283,11 +306,41 @@ document.addEventListener('DOMContentLoaded', () => {
     sshHostInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
     sshRemoteCommandInput.addEventListener('input', () => setDirty(true));
     ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
+    ovpnAuthUser.addEventListener('input', () => setDirty(true));
+    ovpnAuthPass.addEventListener('input', () => setDirty(true));
 
 
     connectButton.addEventListener('click', () => {
-        // Scrape data from this specific config item's inputs to send to the background script.
         const type = typeSelect.value;
+
+        // --- Live Log ---
+        if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
+        liveLogContainer.style.display = 'block';
+        liveLogContent.textContent = 'Initiating connection...';
+
+        const pollConfigLogs = () => {
+            // Stop polling if the element is no longer in the DOM or visible
+            if (!document.body.contains(configItem) || liveLogContainer.style.display === 'none') {
+                if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
+                delete configLogPollIntervals[configId];
+                return;
+            }
+            chrome.runtime.sendMessage(
+                { command: COMMANDS.GET_LOGS, identifier: configId, conn_type: type },
+                (response) => {
+                    if (!configLogPollIntervals[configId]) return; // Stop if interval has been cleared elsewhere
+                    if (chrome.runtime.lastError) {
+                        liveLogContent.textContent = `Error polling logs: ${chrome.runtime.lastError.message}`;
+                        clearInterval(configLogPollIntervals[configId]);
+                        delete configLogPollIntervals[configId];
+                    } else if (response && response.success) {
+                        liveLogContent.textContent = response.log_content || 'Waiting for log output...';
+                        liveLogContainer.scrollTop = liveLogContainer.scrollHeight;
+                    }
+                }
+            );
+        };
+        // Scrape data from this specific config item's inputs to send to the background script.
         const configPayload = {
             id: configId,
             name: nameInput.value.trim(),
@@ -320,6 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.assign(configPayload, {
                 ovpnProfileName: ovpnProfileNameInput.value.trim(),
                 ovpnFileContent: ovpnFileContent.value,
+                ovpnUser: ovpnAuthUser.value, // Pass credentials
+                ovpnPass: ovpnAuthPass.value,
             });
         }
 
@@ -327,18 +382,34 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = `Connecting with "${configPayload.name}"...`;
         statusMessage.className = 'info';
         connectButton.disabled = true;
+        pollConfigLogs(); // Initial call
+        configLogPollIntervals[configId] = setInterval(pollConfigLogs, 1500);
 
         chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL, config: configPayload }, (response) => {
+            // The main UI update will come from the broadcasted status message.
+            // But if the command fails immediately, we should stop polling.
             if (response && !response.success) {
+                if (configLogPollIntervals[configId]) {
+                    clearInterval(configLogPollIntervals[configId]);
+                    delete configLogPollIntervals[configId];
+                }
                 statusMessage.textContent = `Failed to connect: ${response.message}`;
                 statusMessage.className = 'error';
+                // Keep the log viewer open on failure for debugging.
+                // If it's a clear authentication failure, help the user correct it.
+                if (type === 'openvpn' && response.message.includes("Authentication failed")) {
+                    ovpnAuthPass.value = ''; // Clear password field for re-entry
+                    ovpnAuthPass.focus();
+                }
             }
-            // The main UI update will come from the broadcasted status message.
-            // We don't need to re-enable the button here, as updateConnectionUI will handle it.
+            // On success, the status update broadcast will eventually clear the pollers when the connection state changes.
         });
     });
 
     disconnectButton.addEventListener('click', () => {
+        liveLogContainer.style.display = 'none';
+        if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
+        delete configLogPollIntervals[configId];
         statusMessage.textContent = `Disconnecting...`;
         statusMessage.className = 'info';
         chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL });
@@ -476,6 +547,13 @@ document.addEventListener('DOMContentLoaded', () => {
       applyProxyButton.style.display = 'none';
       revertProxyButton.style.display = 'none';
       reconnectNowContainer.style.display = 'block';
+
+      // Stop all config log polling if disconnected
+      if (Object.keys(configLogPollIntervals).length > 0) {
+        Object.values(configLogPollIntervals).forEach(clearInterval);
+        configLogPollIntervals = {};
+        document.querySelectorAll('.config-live-log-container').forEach(el => el.style.display = 'none');
+      }
     } else {
       // --- CONNECTED STATE ---
       connectionStatusIndicator.className = 'status-indicator good';
@@ -1197,6 +1275,10 @@ function FindProxyForURL(url, host) {
           Object.assign(config, {
               ovpnProfileName: item.querySelector('.ovpn-profile-name').value.trim(),
               ovpnFileContent: item.querySelector('.ovpn-file-content').value,
+              // Do not save credentials to sync storage. They are only held in memory
+              // in the input fields for the duration of the session.
+              ovpnUser: item.querySelector('.ovpn-auth-user').value,
+              ovpnPass: item.querySelector('.ovpn-auth-pass').value,
           });
       }
       coreConfigs.push(config);
@@ -1218,6 +1300,15 @@ function FindProxyForURL(url, host) {
       }
     });
 
+    // Create a copy of settings for storage, omitting sensitive data like passwords.
+    const settingsToStore = JSON.parse(JSON.stringify(coreConfigs));
+    settingsToStore.forEach(config => {
+        if (config.type === 'openvpn') {
+            delete config.ovpnUser;
+            delete config.ovpnPass;
+        }
+    });
+
     const settings = {
       [STORAGE_KEYS.CORE_CONFIGURATIONS]: coreConfigs,
       [STORAGE_KEYS.PING_HOST]: pingHostInput.value,
@@ -1231,6 +1322,9 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.OPENROUTER_MODEL]: openrouterModelInput.value.trim(),
       [STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE]: openrouterSystemMessageInput.value.trim(),
     };
+
+    // Replace coreConfigs with the sanitized version for storage.
+    settings[STORAGE_KEYS.CORE_CONFIGURATIONS] = settingsToStore;
 
     chrome.storage.sync.set(settings, () => {
       statusMessage.textContent = 'Settings saved!';
@@ -1275,6 +1369,12 @@ function FindProxyForURL(url, host) {
       setDirty(true);
   });
 
+  const openrouterApiKeyInput = document.getElementById('openrouter-api-key');
+  const proxyActionsBar = document.querySelector('.proxy-actions-bar');
+
+  proxyActionsBar.insertAdjacentElement('afterend', aiLiveLogContainer);
+  aiLiveLogContainer.style.marginTop = '1em';
+
   aiSuggestRuleButton.addEventListener('click', async () => {
     const apiKey = openrouterApiKeyInput.value.trim();
 
@@ -1297,7 +1397,7 @@ function FindProxyForURL(url, host) {
     statusMessage.className = 'info';
 
     // Start live log
-    aiLiveLogContainer.style.display = 'block';
+    aiLiveLogContainer.style.display = 'none';
     aiLiveLogContent.textContent = 'Initializing live log...';
     pollLogs();
     logPollInterval = setInterval(pollLogs, 1500);
@@ -1308,6 +1408,11 @@ function FindProxyForURL(url, host) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const availableProxies = coreConfigsForSelect.map(c => `ID: ${c.id}, Name: "${c.name}"`).join('; ') || 'None';
+
+         aiLiveLogContent.textContent += `\n\nAttempt ${attempt}: Asking AI for a rule suggestion...`;
+         aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight;
+
+
         const userPrompt = `The user wants a rule for the service: "${serviceName}". The available proxy configurations are: [${availableProxies}].`;
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -1325,7 +1430,7 @@ function FindProxyForURL(url, host) {
               { role: 'user', content: userPrompt }
             ],
             temperature: 0.2,
-            max_tokens: 250, // Increased from 150 to prevent 'length' finish_reason
+            max_tokens: 350, // Increased from 150 to prevent 'length' finish_reason
           })
         });
 
@@ -1338,7 +1443,8 @@ function FindProxyForURL(url, host) {
             const errorMessage = "AI response did not contain any choices.";
             console.error(errorMessage, "Full response object:", data);
             aiLiveLogContent.textContent += `\n\nERROR: ${errorMessage}\n${JSON.stringify(data, null, 2)}`;
-            aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight;
+                         aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight;
+
             throw new Error('Invalid AI response structure. See AI log panel for details.');
           }
 
@@ -1353,7 +1459,7 @@ function FindProxyForURL(url, host) {
               }
               console.error(reasonMessage, "Full response object:", data);
               aiLiveLogContent.textContent += `\n\nERROR: ${reasonMessage}\n${JSON.stringify(data, null, 2)}`;
-              aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight;
+                         aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight;
               throw new Error(reasonMessage); // Throw the more specific message
           }
 
@@ -1364,7 +1470,7 @@ function FindProxyForURL(url, host) {
             const rawResponseForLog = `--- RAW AI RESPONSE ---\n${suggestionText || '(empty response)'}\n\n--- FULL RESPONSE OBJECT ---\n${JSON.stringify(data, null, 2)}`;
             console.error(errorMessage, "Raw response from model:", suggestionText, "Full object:", data);
             aiLiveLogContent.textContent += `\n\nERROR: ${errorMessage}\n${rawResponseForLog}`;
-            aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight; // Auto-scroll to show the error
+                         aiLiveLogContainer.scrollTop = aiLiveLogContainer.scrollHeight; // Auto-scroll to show the error
             throw new Error('Invalid AI response format. See AI log panel for details.');
           }
 
@@ -1393,7 +1499,7 @@ function FindProxyForURL(url, host) {
 
         // Retriable errors
         if ([429, 500, 503].includes(response.status) && attempt < maxRetries) {
-          const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
+          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
           statusMessage.textContent = `Model is busy. Retrying in ${delay / 1000}s... (Attempt ${attempt}/${maxRetries})`;
           await new Promise(resolve => setTimeout(resolve, delay));
           continue; // Try again
@@ -1435,8 +1541,8 @@ function FindProxyForURL(url, host) {
       clearInterval(logPollInterval);
       logPollInterval = null;
     }
-    setTimeout(() => {
-      aiLiveLogContainer.style.display = 'none';
+        setTimeout(() => {
+      aiLiveLogContainer.style.display = 'block'; // Show log after delay
     }, 8000); // Keep log visible for 8 seconds to see final output
   });
   saveButton.addEventListener('click', saveSettings); // This now calls the version with validation
@@ -1542,6 +1648,20 @@ function FindProxyForURL(url, host) {
       });
     })();
   });
+
+    const refreshChartData = () => {
+        requestStatusUpdate();
+    };
+
+    if (refreshWebLatencyChartButton) {
+        refreshWebLatencyChartButton.addEventListener('click', refreshChartData);
+    }
+
+    if (refreshTcpPingChartButton) {
+        refreshTcpPingChartButton.addEventListener('click', refreshChartData);
+    }
+
+
 
   // --- Connection Control Event Listeners ---
   reconnectNowButton.addEventListener('click', () => {

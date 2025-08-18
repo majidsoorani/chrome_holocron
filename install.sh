@@ -33,6 +33,58 @@ if [ -z "$PYTHON_EXEC" ] || [ ! -x "$PYTHON_EXEC" ]; then
 fi
 echo "✅ Found system Python 3 at: $PYTHON_EXEC"
 
+echo "🔎 Checking for OpenVPN client (optional)..."
+if ! command -v openvpn &> /dev/null; then
+    echo "⚠️  Warning: The 'openvpn' command-line tool was not found in your PATH."
+    echo "   To use OpenVPN configurations, you must install the official client."
+    echo "   On macOS, the recommended way is via Homebrew: brew install openvpn"
+else
+    echo "✅ Found OpenVPN client."
+fi
+
+echo "🔎 Checking for required passwordless sudo configuration..."
+
+missing_sudo_rules=()
+required_paths=()
+
+# Check for wdutil (for Wi-Fi based auto-connect)
+if ! sudo -n -l /usr/bin/wdutil &> /dev/null; then
+    missing_sudo_rules+=("wdutil (for automatic connection on Wi-Fi change)")
+    required_paths+=("/usr/bin/wdutil")
+fi
+
+# Check for openvpn
+OPENVPN_EXEC=$(which openvpn)
+if [ -n "$OPENVPN_EXEC" ]; then
+    if ! sudo -n -l "$OPENVPN_EXEC" &> /dev/null; then
+        missing_sudo_rules+=("openvpn (for starting VPN connections)")
+        required_paths+=("$OPENVPN_EXEC")
+    fi
+fi
+
+if [ ${#missing_sudo_rules[@]} -gt 0 ]; then
+    echo "
+🔴 ACTION REQUIRED: Passwordless Sudo Configuration
+
+The extension needs permission to run certain commands without a password prompt.
+This is required for:
+"
+    for rule_desc in "${missing_sudo_rules[@]}"; do
+        echo "  - ${rule_desc}"
+    done
+    echo "
+Please open a new terminal and run 'sudo visudo' to edit the sudoers file.
+Add the following line to the VERY END of the file, then save and exit.
+
+    $(whoami) ALL=(ALL) NOPASSWD: $(IFS=,; echo "${required_paths[*]}")
+
+"
+    read -r -p "Press [Enter] after you have saved the sudoers file to continue the installation..."
+    echo "✅ Continuing installation. Thank you."
+else
+    echo "✅ Passwordless sudo configuration is correct."
+fi
+
 # --- Step 1: Setup Python Virtual Environment ---
 echo "🔧 Setting up Python virtual environment..."
 VENV_DIR="$PROJECT_ROOT/.venv"

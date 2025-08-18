@@ -237,38 +237,38 @@ async function getCurrentlyConnectedConfig() {
 /**
  * Generates a stable, filesystem-safe identifier from a configuration object.
  * This is used for lock files and process identification.
- * @param {object} config The configuration object, must contain `id`.
+ * @param {object} config The configuration object.
  * @returns {string|null} A safe identifier or null.
  */
 function getIdentifierForConfig(config) {
-    if (!config || !config.id) return null;
-    // Use the config's UUID, which is stable and filesystem-safe for all types.
+    // The config.id is a UUID and is guaranteed to be unique and safe for
+    // use as an identifier for any connection type (SSH, OpenVPN, etc.).
+    // We no longer need to derive it from hostnames or other properties.
+    if (!config || !config.id) {
+        return null;
+    }
     return config.id;
 }
 /**
  * Attempts to start a tunnel for a single, specific configuration.
  * @param {object} config The configuration object to connect with.
- * @param {Array<string>} [wifiSsidList=[]] Optional list of SSIDs for condition check.
  * @returns {Promise<object>} A promise that resolves with the response from the native host.
  */
-async function attemptConnection(config, wifiSsidList = []) {
+async function attemptConnection(config) {
     console.log(`Attempting to connect with configuration: "${config.name}" of type ${config.type}`);
 
-    // The native host now understands the full config object.
-    const configPayload = {
-        ...config,
-        sshCommandIdentifier: getIdentifierForConfig(config), // For native host to find process
-        wifiSsidList: wifiSsidList, // Add the dynamic wifi list
-    };
+    const identifier = getIdentifierForConfig(config);
 
-    // The identifier check is now implicitly handled by getIdentifierForConfig.
-    if (!configPayload.sshCommandIdentifier) {
-        const message = `Skipping configuration "${config.name}" because it has no ID.`;
+    if (!identifier) {
+        // This message is now generic and correct for any config type.
+        // It correctly identifies that the problem is a missing ID, not a missing SSH host.
+        const message = `Skipping configuration "${config.name}" because it is missing a required ID.`;
         console.warn(message);
         return { success: false, message: message };
     }
-
-    const response = await communicateWithNativeHost({ command: COMMANDS.START_TUNNEL, config: configPayload });
+    // The native host now understands the full config object.
+    // The 'sshCommandIdentifier' key is used by the native host for any identifier.
+    const response = await communicateWithNativeHost({ command: COMMANDS.START_TUNNEL, config: { ...config, sshCommandIdentifier: identifier } });
     if (response.success) {
         console.log(`Successfully connected with configuration: "${config.name}"`);
         await chrome.storage.local.set({ [STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID]: config.id });
@@ -276,14 +276,19 @@ async function attemptConnection(config, wifiSsidList = []) {
     return response;
 }
 
-
 /**
  * Iterates through enabled configurations and attempts to start a tunnel,
  * stopping at the first successful connection.
  * @returns {Promise<object>} A promise that resolves with the response from the native host.
  */
 async function tryToConnectToEnabledConfigs() {
-    const { [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs } = await chrome.storage.sync.get(STORAGE_KEYS.CORE_CONFIGURATIONS);
+    const {
+        [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs,
+        [STORAGE_KEYS.WIFI_SSIDS]: wifiSsidList = []
+    } = await chrome.storage.sync.get([
+        STORAGE_KEYS.CORE_CONFIGURATIONS,
+        STORAGE_KEYS.WIFI_SSIDS
+    ]);
     if (!configs || configs.length === 0) {
         return { success: false, message: "No configurations defined." };
     }
@@ -293,10 +298,9 @@ async function tryToConnectToEnabledConfigs() {
         return { success: false, message: "No configurations are enabled." };
     }
 
-    const { [STORAGE_KEYS.WIFI_SSIDS]: wifiSsidList } = await chrome.storage.sync.get(STORAGE_KEYS.WIFI_SSIDS);
-
     for (const config of enabledConfigs) {
-        const response = await attemptConnection(config, wifiSsidList);
+        // Pass wifi list to the config object for the native host
+        const response = await attemptConnection({ ...config, wifiSsidList });
         if (response.success) {
             return response; // Return the first successful response
         }
@@ -306,6 +310,7 @@ async function tryToConnectToEnabledConfigs() {
     // If the loop finishes, no connection was successful
     return { success: false, message: "Failed to connect using any of the enabled configurations." };
 }
+
 
 /**
  * Attempts to automatically restart the SSH tunnel.
@@ -375,6 +380,7 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
   const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
   if (wasConnected && !newStatus.connected) {
     console.log("Tunnel has disconnected. Initiating disconnect sequence.");
+    console.warn("Tunnel disconnected. Last status:", lastStatus); // Log the last status for debugging
 
     // 1. First, clear the browser proxy if we were managing it.
     // This is critical to restore the user's internet access immediately.
@@ -796,8 +802,8 @@ function FindProxyForURL(url, host) {
         if (request.command === COMMANDS.START_TUNNEL) {
             if (request.config) { // A specific config is being targeted from options page
                 // For a specific connection attempt, we don't care about the saved Wi-Fi SSIDs.
-                // The user is forcing it, so we pass an empty list.
-                response = await attemptConnection(request.config, []);
+                // The user is forcing it, so we pass an empty list for wifiSsidList.
+                response = await attemptConnection({ ...request.config, wifiSsidList: [] });
             } else { // No specific config, use the enabled ones (from popup or auto-reconnect)
                 response = await tryToConnectToEnabledConfigs();
             }
@@ -837,7 +843,11 @@ function FindProxyForURL(url, host) {
     (async () => {
       try {
         // This command is a simple pass-through to the native host
-        const response = await communicateWithNativeHost({ command: COMMANDS.GET_LOGS });
+        const response = await communicateWithNativeHost({
+            command: COMMANDS.GET_LOGS,
+            identifier: request.identifier,
+            conn_type: request.conn_type,
+        });
         sendResponse(response);
       } catch (error) {
         sendResponse({ success: false, message: `Failed to get logs: ${error.message}` });

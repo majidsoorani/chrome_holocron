@@ -93,11 +93,21 @@
                         </section>
                         <section class="card full-width">
                             <h2>Connection Health History</h2>
-                            <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
+                                <button id="refresh-web-latency-chart" class="icon-button" title="Refresh chart">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/></svg>
+                                </button>
+                            </div>
                             <div class="chart-wrapper">
                                 <canvas id="web-latency-chart"></canvas>
                             </div>
-                            <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
+                                <button id="refresh-tcp-ping-chart" class="icon-button" title="Refresh chart">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/></svg>
+                                </button>
+                            </div>
                             <div class="chart-wrapper">
                                 <canvas id="tcp-ping-chart"></canvas>
                             </div>
@@ -306,6 +316,16 @@
                         <!-- Hidden input to store the file content -->
                         <textarea class="ovpn-file-content" name="ovpn-file-content" style="display:none;"></textarea>
                     </div>
+                    <div class="form-group ovpn-auth-container" style="display: none; flex-direction: column; gap: 5px;">
+                        <label>Profile Authentication</label>
+                        <input type="text" class="ovpn-auth-user" placeholder="Username" autocomplete="username">
+                        <input type="password" class="ovpn-auth-pass" placeholder="Password" autocomplete="current-password">
+                        <small>These credentials are required by this .ovpn profile and will be passed securely.</small>
+                    </div>
+                </div>
+                <!-- Live Log Viewer for this specific configuration -->
+                <div class="config-live-log-container log-viewer-container" style="display: none; margin-top: 1em; height: 200px;">
+                    <pre class="config-live-log-content">Waiting for connection logs...</pre>
                 </div>
             </div>
         </div>

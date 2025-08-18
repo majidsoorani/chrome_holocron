@@ -11,27 +11,47 @@ import re
 import socks
 import socket
 import logging
+import shutil
+import os
 import logging.handlers
 import getpass
 import platform
 from pathlib import Path
 
+POSIX = os.name == 'posix'
+
 # --- Setup Logging ---
 log_dir = Path(__file__).resolve().parent.parent / "log"
 log_dir.mkdir(parents=True, exist_ok=True)
 log_file = log_dir / "holocron_native_host.log"
+
+# Set a persistent flag to check if this is the first run
+# A simple way is to check for the existence of the log file at startup.
+# Note: This means logs are only re-initialized if the main log file is deleted.
+is_first_run = not log_file.exists()
+
 handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1_048_576, backupCount=3)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(funcName)s] - %(message)s')
 handler.setFormatter(formatter)
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+
+# --- Key Change 1: Set a higher default logging level ---
+# Set the default level to INFO. We'll use DEBUG for verbose, frequent messages.
+logger.setLevel(logging.INFO)
 logger.addHandler(handler)
-logging.info("--- Native host script started ---")
+
+# --- Key Change 2: Log the startup message only once ---
+if is_first_run:
+    logging.info("--- Native host script started for the first time ---")
 
 # --- Paths ---
 SCRIPT_DIR = Path(__file__).resolve().parent
 SHELL_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "work_connect.sh"
 OPENVPN_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "openvpn_connect.sh"
+CONN_LOG_DIR = log_dir / "connections"
+CONN_LOG_DIR.mkdir(exist_ok=True)
+
+
 
 def read_message():
     """Reads a message from stdin, prefixed with a 4-byte length."""
@@ -103,10 +123,34 @@ def get_ovpn_socks_port(ovpn_content):
     match = re.search(r'^\s*socks-proxy\s+127\.0\.0\.1\s+(\d+)', ovpn_content, re.MULTILINE)
     if match:
         port = int(match.group(1))
-        logging.info(f"Found SOCKS proxy port {port} in OVPN config.")
+        logging.debug(f"Found SOCKS proxy port {port} in OVPN config.")
         return port
-    logging.info("No SOCKS proxy port found in OVPN config.")
+    logging.debug("No SOCKS proxy port found in OVPN config.")
     return None
+
+def find_openvpn_executable():
+    """Finds the openvpn executable in common locations or PATH."""
+    common_paths = [
+        "/usr/local/sbin/openvpn",       # Homebrew on macOS (Intel)
+        "/opt/homebrew/sbin/openvpn",    # Homebrew on macOS (Apple Silicon)
+        "/usr/sbin/openvpn",             # Debian/Ubuntu, CentOS
+    ]
+    for path in common_paths:
+        if os.access(path, os.X_OK):
+            return path
+    # Fallback to searching in PATH using shutil.which
+    return shutil.which("openvpn")
+
+def get_ovpn_temp_paths(identifier):
+    """Returns a dictionary of all temporary file paths for an OpenVPN connection."""
+    base = CONN_LOG_DIR / f"holocron_openvpn_{identifier}"
+    return {
+        "lock": base.with_suffix(".lock"),
+        "config": base.with_suffix(".ovpn"),
+        "log": base.with_suffix(".log"),
+        "auth": base.with_suffix(".auth"),
+        "stderr": base.with_suffix(".stderr.log"),
+    }
 
 def get_tunnel_status(config):
     """Checks for the tunnel process (SSH or OpenVPN) and extracts the SOCKS port."""
@@ -124,24 +168,49 @@ def get_tunnel_status(config):
                 if proc.info['name'] == 'ssh' and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
                     cmd_str = " ".join(proc.info['cmdline'])
                     if f"ControlPath=/tmp/holocron.ssh.socket.{identifier}" in cmd_str:
-                        logging.info(f"Found matching SSH process with PID: {proc.pid}")
+                        logging.debug(f"Found matching SSH process with PID: {proc.pid}")
                         match = re.search(r'-D\s*(\d+)', cmd_str)
                         socks_port = int(match.group(1)) if match else None
                         return {"connected": True, "socks_port": socks_port}
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
     elif conn_type == "openvpn":
-        lock_file = Path(f"/tmp/holocron_openvpn_{identifier}.lock")
+        paths = get_ovpn_temp_paths(identifier)
+        lock_file = paths["lock"]
         if lock_file.is_file():
             try:
                 pid = int(lock_file.read_text().strip())
                 if psutil.pid_exists(pid) and 'openvpn' in psutil.Process(pid).name():
-                    logging.info(f"Found matching OpenVPN process with PID: {pid}")
+                    logging.debug(f"Found matching OpenVPN process with PID: {pid}")
                     socks_port = get_ovpn_socks_port(config.get('ovpnFileContent'))
                     return {"connected": True, "socks_port": socks_port}
             except (ValueError, psutil.NoSuchProcess):
                 logging.warning(f"Stale lock file found for OpenVPN identifier '{identifier}'.")
     return {"connected": False, "socks_port": None}
+
+def _cleanup_openvpn_files(identifier):
+    """
+    Cleans up all temporary files for a given OpenVPN connection identifier.
+    This is crucial because OpenVPN runs with sudo, creating root-owned files
+    that the user-level script cannot otherwise remove.
+    """
+    if not identifier:
+        return
+
+    paths = get_ovpn_temp_paths(identifier)
+    files_to_clean = list(paths.values())
+
+    if POSIX:
+        # Use sudo to remove all potentially root-owned files at once.
+        existing_files = [str(f) for f in files_to_clean if f.is_file()]
+        if existing_files:
+            rm_cmd = ["/usr/bin/sudo", "/bin/rm", "-f"] + existing_files
+            logging.info(f"Cleaning up temp files with command: {' '.join(rm_cmd)}")
+            subprocess.run(rm_cmd, check=False, timeout=10, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        # On non-POSIX systems, we assume no sudo was used.
+        for f in files_to_clean:
+            f.unlink(missing_ok=True)
 
 def execute_tunnel_command(command, config):
     """Executes the appropriate connection script (SSH or OpenVPN)."""
@@ -154,13 +223,15 @@ def execute_tunnel_command(command, config):
     identifier = config.get("sshCommandIdentifier") or config.get("id")
     if not identifier:
         return {"success": False, "message": "Identifier could not be determined from config."}
-
+    
     if conn_type == "ssh":
         script_path = SHELL_SCRIPT_PATH
         cmd_list = [str(script_path), command, "--identifier", identifier]
         if command == "start":
             if config.get("sshUser"): cmd_list.extend(["--user", config.get("sshUser")])
             if config.get("sshHost"): cmd_list.extend(["--host", config.get("sshHost")])
+            if config.get("sshRemoteCommand"):
+                cmd_list.extend(["--remote-command", config.get("sshRemoteCommand")])
             for ssid in config.get("wifiSsidList", []):
                 if ssid: cmd_list.extend(["--ssid", ssid])
             for rule in config.get("portForwards", []):
@@ -170,58 +241,256 @@ def execute_tunnel_command(command, config):
                     cmd_list.extend(["-L", f"{rule['localPort']}:{rule['remoteHost']}:{rule['remotePort']}"])
                 elif rule.get("type") == "R" and all(k in rule for k in ["localPort", "remoteHost", "remotePort"]):
                     cmd_list.extend(["-R", f"{rule['localPort']}:{rule['remoteHost']}:{rule['remotePort']}"])
+        
+        if not script_path.is_file() or not os.access(script_path, os.X_OK):
+            error_msg = f"Shell script not found or not executable at {script_path}"
+            logging.error(error_msg)
+            return {"success": False, "message": error_msg}
+
+        try:
+            logging.info(f"Executing '{command}' for SSH tunnel '{identifier}'...")
+            timeout = 45 if command == "start" else 10
+            result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout, check=False)
+            logging.debug(f"Script stdout: {result.stdout.strip()}")
+            logging.debug(f"Script stderr: {result.stderr.strip()}")
+            if result.returncode == 3:
+                logging.debug(result.stdout.strip() or "Tunnel is already running.")
+                return {"success": True, "already_running": True, "message": result.stdout.strip() or "Tunnel is already running."}
+            if result.returncode != 0:
+                if result.returncode == 2:
+                    return {"success": False, "message": result.stdout.strip() or result.stderr.strip()}
+                error_output = result.stderr.strip() or result.stdout.strip()
+                logging.error(f"Script execution failed. Exit code: {result.returncode}. Output: {error_output}")
+                return {"success": False, "message": f"Failed to {command} tunnel: {error_output}"}
+
+            logging.info(f"Successfully executed '{command}' for tunnel '{identifier}'.")
+            return {"success": True, "message": result.stdout.strip()}
+        except subprocess.TimeoutExpired:
+            logging.error(f"Timeout: The command '{command}' for tunnel '{identifier}' took too long.")
+            return {"success": False, "message": f"Timeout: The command '{command}' took too long."}
+        except Exception as e:
+            logging.error(f"An unexpected error occurred during script execution for '{identifier}': {e}", exc_info=True)
+            return {"success": False, "message": f"An unexpected error occurred: {e}"}
+
     elif conn_type == "openvpn":
-        script_path = OPENVPN_SCRIPT_PATH
-        cmd_list = [str(script_path), command, "--identifier", identifier]
+        openvpn_exec = find_openvpn_executable()
+        if not openvpn_exec:
+            return {"success": False, "message": "❌ Error: 'openvpn' executable not found. Please install OpenVPN."}
+
+        paths = get_ovpn_temp_paths(identifier)
+        lock_file = paths["lock"]
+        config_file = paths["config"]
+        log_file = paths["log"]
+        auth_file = paths["auth"]
+        stderr_log_file = paths["stderr"]
+
         if command == "start":
+            # Proactively clean up any stale files from previous runs. This is critical
+            # to prevent permission errors if root-owned files were left behind from
+            # a previous failed or improperly stopped session.
+            _cleanup_openvpn_files(identifier)
+            
             ovpn_content = config.get("ovpnFileContent")
             if not ovpn_content:
                 return {"success": False, "message": "OpenVPN content is missing."}
-            cmd_list.extend(["--ovpn-content", ovpn_content])
+            
+            # Sanitize OVPN content to remove directives that could interfere with our script's
+            # management of logs, status files, daemonization, and PID files.
+            # Also remove deprecated/insecure compression directives that can cause connection failures.
+            lines = ovpn_content.splitlines()
+            # The \b ensures we match whole words (e.g. 'log' but not 'log-file').
+            directives_to_remove = re.compile(r"^\s*(log|log-append|status|daemon|writepid|comp-lzo|compress)\b", re.IGNORECASE)
+            sanitized_lines = [line for line in lines if not directives_to_remove.match(line)]
+            # Add directives for robust connections to address warnings and potential restart failures.
+            sanitized_lines.append("persist-tun")
+            sanitized_lines.append("persist-key")
+            sanitized_ovpn_content = "\n".join(sanitized_lines)
+            
+            config_file.write_text(sanitized_ovpn_content)
+            
+            # On POSIX systems, creating a TUN/TAP interface requires root privileges.
+            # We prepend 'sudo' to the command. The user must have configured passwordless
+            # sudo for the openvpn executable for this to work seamlessly.
+            # We run OpenVPN in the foreground relative to this script (no --daemon) and manage
+            # the process directly. This provides reliable control over logging and process state,
+            # avoiding issues where --daemon redirects logs to syslog.
+            cmd_list = [openvpn_exec, "--config", str(config_file)]
+            if POSIX:
+                username = getpass.getuser()
+                # Determine the correct group name for privilege dropping.
+                # On macOS, the primary group is 'staff'. On many Linux distros,
+                # the primary group name matches the username.
+                if platform.system() == "Darwin":
+                    groupname = "staff"
+                else:
+                    try:
+                        groupname = os.getgrgid(os.getgid()).gr_name
+                    except (KeyError, AttributeError):
+                        # Fallback to username, which is a common convention.
+                        groupname = username
+                
+                # This is the key change: Instruct OpenVPN to drop root privileges
+                # to the current user after initialization. This ensures that the
+                # log and pid files it creates are owned by the user, preventing
+                # permission errors on subsequent reads or cleanup operations.
+                cmd_list.extend(["--user", username, "--group", groupname])
+                cmd_list.insert(0, "/usr/bin/sudo")
+            # Handle username/password authentication
+            ovpn_user = config.get("ovpnUser")
+            ovpn_pass = config.get("ovpnPass")
+            if ovpn_user is not None and ovpn_pass is not None:
+                try:
+                    # Write credentials to a temporary file
+                    auth_file.write_text(f"{ovpn_user}\n{ovpn_pass}")
+                    # Set secure permissions (read/write for owner only)
+                    os.chmod(auth_file, 0o600)
+                except Exception as e:
+                    logging.error(f"Failed to write credentials to auth file: {e}", exc_info=True)
+                    return {"success": False, "message": f"Failed to write credentials to auth file: {e}"}
+                cmd_list.extend(["--auth-user-pass", str(auth_file)])
+
+            logging.info(f"Starting OpenVPN with command: {' '.join(cmd_list)}")
+            
+            try:
+                # The Python script creates and owns the log files. We redirect the
+                # process's stdout/stderr to these files.
+                # Open files in line-buffered text mode. This ensures that complete lines
+                # written by OpenVPN are flushed to the file immediately, making them
+                # visible to our real-time monitoring loop. Binary unbuffered mode
+                # (`buffering=0`) can sometimes cause issues with `sudo`'s I/O handling.
+                with open(log_file, 'w', buffering=1, encoding='utf-8', errors='ignore') as stdout_f, \
+                     open(stderr_log_file, 'w', buffering=1, encoding='utf-8', errors='ignore') as stderr_f:
+                    process = subprocess.Popen(cmd_list, stdout=stdout_f, stderr=stderr_f)
+
+                # Actively monitor the log file for success or failure, with a timeout.
+                timeout_seconds = 20
+                poll_interval_seconds = 0.5
+                start_time = time.time()
+                
+                success_pattern = re.compile(r"Initialization Sequence Completed")
+                failure_patterns = re.compile(r"AUTH_FAILED|Cannot resolve host|Exiting due to fatal error|TLS Error|route_gateway_iface", re.IGNORECASE)
+
+                # Use a 'tail -f' like approach to read the log file in real-time.
+                # This is more robust than re-reading the entire file in a loop.
+                with open(log_file, 'r', encoding='utf-8', errors='ignore') as log_reader:
+                    while time.time() - start_time < timeout_seconds:
+                        # Check if the process has already exited
+                        if process.poll() is not None:
+                            logging.warning(f"OpenVPN process exited prematurely with code {process.returncode}.")
+                            break # Exit loop to report failure
+
+                        line = log_reader.readline()
+                        if not line:
+                            # No new line yet, wait a bit before checking again.
+                            time.sleep(poll_interval_seconds)
+                            continue
+
+                        # We have a new line, check it for success or failure patterns.
+                        logging.debug(f"Read from OVPN log: {line.strip()}")
+                        if success_pattern.search(line):
+                            logging.info("OpenVPN 'Initialization Sequence Completed' found in log.")
+                            lock_file.write_text(str(process.pid))
+                            stderr_log_file.unlink(missing_ok=True) # Clean up on success
+                            return {"success": True, "message": f"OpenVPN tunnel started with PID {process.pid}."}
+                        
+                        if failure_patterns.search(line):
+                            logging.error(f"OpenVPN failure pattern found in log: {line.strip()}")
+                            process.terminate()
+                            try:
+                                process.wait(timeout=2)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                            break # Exit loop to report failure
+                
+                # If we get here, the loop ended without success (timeout or premature exit)
+                if process.poll() is None:
+                    logging.error(f"OpenVPN connection timed out after {timeout_seconds} seconds.")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+
+                # Construct the final error message
+                launch_error = stderr_log_file.read_text().strip() if stderr_log_file.is_file() else ""
+                log_content = log_file.read_text().strip() if log_file.is_file() else "No log file found or log was empty."
+                
+                final_error = "OpenVPN failed to start."
+                if "connection timed out" in log_content.lower():
+                     final_error = "OpenVPN connection timed out. Check server address and network."
+                elif "AUTH_FAILED" in log_content:
+                     final_error = "Authentication failed. Please check your username and password."
+
+                if launch_error:
+                    final_error += f"\n\nLaunch Error:\n---\n{launch_error}\n---"
+                final_error += f"\n\nConnection Log:\n---\n{log_content}\n---"
+                
+                _cleanup_openvpn_files(identifier)
+                return {"success": False, "message": final_error}
+                
+            except Exception as e:
+                logging.error(f"An unexpected exception occurred during OpenVPN start: {e}", exc_info=True)
+                _cleanup_openvpn_files(identifier)
+                return {"success": False, "message": f"A critical error occurred while starting OpenVPN: {e}"}
+
+        elif command == "stop":
+            if not lock_file.is_file():
+                return {"success": True, "message": "Tunnel already stopped."}
+            try:
+                pid = int(lock_file.read_text().strip())
+                if psutil.pid_exists(pid):
+                    # On POSIX, if we started the process with sudo, we must stop it with sudo.
+                    if POSIX:
+                        kill_cmd = ["/usr/bin/sudo", "/bin/kill", str(pid)]
+                        logging.info(f"Stopping OpenVPN with command: {' '.join(kill_cmd)}")
+                        subprocess.run(kill_cmd, check=False, timeout=5)
+                    else:
+                        # On non-POSIX systems (e.g., Windows), psutil is fine.
+                        p = psutil.Process(pid)
+                        p.terminate()
+                        p.wait(timeout=2)
+            except (psutil.Error, ValueError, IOError, subprocess.TimeoutExpired) as e:
+                logging.warning(f"An error occurred while trying to stop OpenVPN process (PID {pid if 'pid' in locals() else 'unknown'}): {e}")
+            finally:
+                # Use the robust helper to clean up all temp files.
+                _cleanup_openvpn_files(identifier)
+            return {"success": True, "message": "OpenVPN tunnel stopped."}
     else:
         return {"success": False, "message": f"Unknown connection type: {conn_type}"}
 
-    if not script_path.is_file() or not os.access(script_path, os.X_OK):
-        error_msg = f"Shell script not found or not executable at {script_path}"
-        logging.error(error_msg)
-        return {"success": False, "message": error_msg}
+def get_log_path_for_config(identifier, conn_type):
+    """Determines the log file path for a given configuration."""
+    if not identifier or not conn_type:
+        return log_file # Default to the main native host log
 
-    try:
-        logging.info(f"Executing command: {' '.join(cmd_list)}")
-        timeout = 45 if command == "start" else 10
-        result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout, check=False)
-        logging.info(f"Script stdout: {result.stdout.strip()}")
-        if result.returncode == 3:
-            return {"success": True, "already_running": True, "message": result.stdout.strip() or "Tunnel is already running."}
-        if result.returncode != 0:
-            if result.returncode == 2:
-                return {"success": False, "message": result.stdout.strip() or result.stderr.strip()}
-            error_output = result.stderr.strip() or result.stdout.strip()
-            logging.error(f"Script execution failed. Exit code: {result.returncode}. Output: {error_output}")
-            return {"success": False, "message": f"Failed to {command} tunnel: {error_output}"}
-        return {"success": True, "message": result.stdout.strip()}
-    except subprocess.TimeoutExpired:
-        return {"success": False, "message": f"Timeout: The command '{command}' took too long."}
-    except Exception as e:
-        logging.error(f"An unexpected error occurred during script execution: {e}", exc_info=True)
-        return {"success": False, "message": f"An unexpected error occurred: {e}"}
+    # This assumes work_connect.sh will log to a file with this naming convention.
+    if conn_type == "ssh":
+        return Path(f"/tmp/holocron_ssh_{identifier}.log") # SSH script still uses /tmp
+    elif conn_type == "openvpn":
+        return get_ovpn_temp_paths(identifier)["log"]
+    else:
+        # Fallback for unknown types
+        return log_file
 
-def get_logs():
+def get_logs(identifier=None, conn_type=None):
     """Reads the last part of the log file and returns it."""
+    log_to_read = get_log_path_for_config(identifier, conn_type)
     try:
-        if not log_file.is_file():
+        if not log_to_read.is_file():
+            if identifier:
+                return {"success": True, "log_content": "Waiting for log output..."}
             return {"success": True, "log_content": "Log file does not exist yet."}
-        file_size = log_file.stat().st_size
-        read_size = min(file_size, 20 * 1024)
-        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-            if file_size > read_size:
+        file_size = log_to_read.stat().st_size
+        read_size = file_size if identifier else min(file_size, 20 * 1024)
+        with open(log_to_read, 'r', encoding='utf-8', errors='ignore') as f:
+            if file_size > read_size and not identifier:
                 f.seek(file_size - read_size)
                 f.readline()
             content = f.read()
         return {"success": True, "log_content": content}
     except Exception as e:
-        logging.error(f"Error reading log file: {e}", exc_info=True)
-        return {"success": False, "message": f"Error reading log file: {e}"}
+        logging.error(f"Error reading log file {log_to_read}: {e}", exc_info=True)
+        return {"success": False, "message": f"Error reading log file {log_to_read}: {e}"}
 
 def clear_logs():
     """Clears the content of the log file."""
@@ -238,10 +507,10 @@ def clear_logs():
 
 def main():
     """Main loop to read commands and send status."""
-    import os
     while True:
         try:
             message = read_message()
+            # --- Key Change 5: Demote frequent, routine messages to DEBUG ---
             logging.debug(f"Received message: {message}")
             command = message.get("command")
             response = {}
@@ -275,7 +544,9 @@ def main():
                     ssh_ping_latency, ssh_ping_error = perform_tcp_ping(host=ssh_host, port=22, timeout=5)
                     response.update({"ssh_host_name": ssh_host, "ssh_host_ping_ms": ssh_ping_latency, "ssh_host_ping_error": ssh_ping_error})
             elif command == "getLogs":
-                response = get_logs()
+                identifier = message.get("identifier")
+                conn_type = message.get("conn_type")
+                response = get_logs(identifier=identifier, conn_type=conn_type)
             elif command == "clearLogs":
                 response = clear_logs()
             else:
@@ -295,6 +566,4 @@ def main():
             continue
 
 if __name__ == '__main__':
-    # Add os import here to avoid it at the top level for non-main execution
-    import os
     main()

@@ -53,6 +53,7 @@ Control Script (work_connect.sh)
 - **Google Chrome** (or other Chromium-based browsers, with path adjustments).
 - **Python 3.x**.
 - **SSH client** and configured SSH keys for your target host.
+- **OpenVPN client** (if you plan to use OpenVPN configurations). The command-line tool must be installed and available in your system's PATH. The recommended way to install it on macOS is via [Homebrew](https://brew.sh/): `brew install openvpn`.
 
 ## Installation
 
@@ -84,25 +85,26 @@ An installation script is provided to automate the setup process.
     - The script will automatically configure the connection.
     - **Restart Chrome completely** for the changes to take effect.
 
+4.  **Enable Passwordless Sudo (Required for macOS)**
+    On macOS, the extension needs `sudo` for two operations:
+    - To check your Wi-Fi network with `wdutil` (for automatic connection).
+    - To create a network interface for OpenVPN connections.
+
+    To avoid being prompted for a password, you must add rules to the `sudoers` file.
+    - Run `sudo visudo` in your terminal.
+    - Add the following line at the end of the file, replacing `your_username` with your actual macOS username and `/path/to/openvpn` with the output of `which openvpn`:
+    ```
+    your_username ALL=(ALL) NOPASSWD: /usr/bin/wdutil, /path/to/openvpn
+    ```
+    - **Example**: For a standard Homebrew installation on Apple Silicon, this would be `/opt/homebrew/sbin/openvpn`.
+    - Save the file (in `vi`, press `Esc` then type `:wq!` and `Enter`).
+
 ## Configuration
 
 1.  **Configure Extension Options**
     - Right-click the Holocron icon in your Chrome toolbar and select **Options**.
-    - Fill in all the required fields:
-        - **Automatic Connection Networks (Optional)**: Add the SSIDs of Wi-Fi networks where the tunnel should auto-connect. If you leave this list empty, the automatic connection feature is disabled, and you can manually start the tunnel from any network.
-        - **SSH Details**: Your username and the server's hostname.
-        - **Health Checks**: The host to ping and the URL for the web check.
-        - **Port Forwarding**: Define your local, remote, or dynamic (`-D`) port forwards. A default SOCKS proxy on port 1031 is included.
+    - Fill in the required fields for your desired connection types (SSH, OpenVPN, etc.).
     - Click **Save Settings**.
-
-2.  **Enable Passwordless Sudo (Recommended for macOS)**
-    On macOS, the script needs `sudo` to check your Wi-Fi network with `wdutil`. To avoid being prompted for a password, you can add a `sudoers` rule. The application will guide you if this is needed, but you can do it proactively.
-    - Run `sudo visudo` in your terminal.
-    - Add the following line at the end of the file, replacing `your_username` with your actual macOS username:
-    ```
-    your_username ALL=(ALL) NOPASSWD: /usr/bin/wdutil
-    ```
-    - Save the file (in `vi`, press `Esc` then type `:wq!` and `Enter`).
 
 ## Security Considerations
 

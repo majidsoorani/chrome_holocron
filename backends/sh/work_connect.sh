@@ -13,9 +13,6 @@
 # privileges. For passwordless use, see the "Passwordless Sudo" section.
 # ==============================================================================
 
-# --- Configuration ---
-SSH_LOG_FILE="/tmp/holocron_ssh_output.log" # Temporary log for SSH connection errors
-
 # --- Full paths for reliability ---
 SSH_PATH="/usr/bin/ssh"
 WDUTIL_PATH="/usr/bin/wdutil"
@@ -59,6 +56,7 @@ start_tunnels() {
     local socks_port=""
     local identifier=""
     local work_ssids=()
+    local remote_command=""
 
     while (( "$#" )); do
       case "$1" in
@@ -72,6 +70,10 @@ start_tunnels() {
           ;;
         --identifier)
           identifier="$2"
+          shift 2
+          ;;
+        --remote-command)
+          remote_command="$2"
           shift 2
           ;;
         --ssid)
@@ -138,10 +140,15 @@ start_tunnels() {
         echo "ℹ️ No work Wi-Fi networks configured. Skipping SSID check."
     fi
 
+    # Define a per-connection log file for live logging in the UI
+    local log_file="/tmp/holocron_ssh_${identifier}.log"
+    # Clear previous log for this identifier to ensure a fresh log for each attempt.
+    >"$log_file"
+
     # --- Start Tunnel ---
-    echo "🚀 Starting SSH tunnel on work network '$CURRENT_SSID'..."
+    echo "🚀 Starting SSH tunnel..."
     local final_ssh_args=(
-        -N # Do not execute a remote command.
+        -v # Use verbose output for better logging in the UI
         -o "ServerAliveInterval=60"
         -o "ExitOnForwardFailure=yes"
     )
@@ -154,6 +161,11 @@ start_tunnels() {
         final_ssh_args+=(-o "ControlPath=/tmp/holocron.ssh.socket.$identifier")
     fi
 
+    # If no remote command is specified, use -N to prevent shell allocation.
+    if [ -z "$remote_command" ]; then
+        final_ssh_args+=(-N)
+    fi
+
     # Add dynamic forwards
     for ((i=0; i<${#forwards[@]}; i+=2)); do
         final_ssh_args+=("${forwards[i]}" "${forwards[i+1]}")
@@ -161,8 +173,13 @@ start_tunnels() {
     final_ssh_args+=("${ssh_user}@${ssh_host}")
 
     # Start SSH in the background, redirecting its output to /dev/null
-    # Capture SSH output to a log file for debugging in case of failure.
-    "${SSH_PATH}" "${final_ssh_args[@]}" > "$SSH_LOG_FILE" 2>&1 &
+    # Capture all SSH output to the per-connection log file for live viewing.
+    if [ -n "$remote_command" ]; then
+        # If a remote command exists, it must be the last argument.
+        "${SSH_PATH}" "${final_ssh_args[@]}" "$remote_command" > "$log_file" 2>&1 &
+    else
+        "${SSH_PATH}" "${final_ssh_args[@]}" > "$log_file" 2>&1 &
+    fi
     SSH_PID=$!
 
     # Ensure the directory for the lock file exists before writing to it.
@@ -171,7 +188,6 @@ start_tunnels() {
 
     # Wait for the SOCKS port to become available before declaring success.
     if [ -z "$socks_port" ]; then
-        rm -f "$SSH_LOG_FILE" # Clean up log on success
         echo "✅ Tunnel process started with PID $SSH_PID (no SOCKS port to check)."
         return 0
     fi
@@ -180,7 +196,6 @@ start_tunnels() {
     for i in {1..10}; do # Wait for up to 10 seconds
         # Use nc (netcat) to check the port. -z is for zero-I/O mode (port scanning)
         if nc -z 127.0.0.1 "$socks_port" 2>/dev/null; then
-            rm -f "$SSH_LOG_FILE" # Clean up log on success
             echo "✅ Tunnel established successfully with PID $SSH_PID."
             # List all forwards for user confirmation
             for ((i=0; i<${#forwards[@]}; i+=2)); do
@@ -194,13 +209,10 @@ start_tunnels() {
         # Check if the ssh process died prematurely
         if ! ps -p "$SSH_PID" > /dev/null; then
             echo "❌ Error: SSH process with PID $SSH_PID failed to start or exited unexpectedly." >&2
-            if [ -f "$SSH_LOG_FILE" ]; then
-                echo "   --- SSH Connection Log ---" >&2
-                # Indent the output for readability
-                sed 's/^/   | /' "$SSH_LOG_FILE" >&2
-                echo "   --------------------------" >&2
-                rm -f "$SSH_LOG_FILE"
-            fi
+            echo "   --- SSH Connection Log (from ${log_file}) ---" >&2
+            # Indent the output for readability
+            sed 's/^/   | /' "$log_file" >&2
+            echo "   --------------------------" >&2
             rm -f "$lock_file"
             return 1
         fi
@@ -210,10 +222,7 @@ start_tunnels() {
     # If the loop finishes, the port never became available. Capture the error.
     echo "❌ Error: Timed out waiting for the SOCKS proxy on port $socks_port." >&2
     echo "   The SSH process (PID $SSH_PID) is running, but the port is not responding." >&2
-    if [ -f "$SSH_LOG_FILE" ]; then
-        echo "   The SSH process may have printed errors. Check its log for details." >&2
-        # Don't remove the log file in this case, so it can be inspected manually.
-    fi
+    echo "   The SSH process may have printed errors. Check its log at ${log_file} for details." >&2
     echo "   Stopping the new SSH process to clean up." >&2
     kill "$SSH_PID"
     rm -f "$lock_file"
