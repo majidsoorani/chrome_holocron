@@ -237,13 +237,13 @@ async function getCurrentlyConnectedConfig() {
 /**
  * Generates a stable, filesystem-safe identifier from a configuration object.
  * This is used for lock files and process identification.
- * @param {object} config The configuration object, must contain `sshHost`.
+ * @param {object} config The configuration object, must contain `id`.
  * @returns {string|null} A safe identifier or null.
  */
 function getIdentifierForConfig(config) {
-  if (!config || !config.sshHost) return null;
-  // Use the SSH host as the basis for a unique, stable identifier.
-  return config.sshHost.replace(/[^a-zA-Z0-9.-]/g, '_');
+    if (!config || !config.id) return null;
+    // Use the config's UUID, which is stable and filesystem-safe for all types.
+    return config.id;
 }
 /**
  * Attempts to start a tunnel for a single, specific configuration.
@@ -252,25 +252,21 @@ function getIdentifierForConfig(config) {
  * @returns {Promise<object>} A promise that resolves with the response from the native host.
  */
 async function attemptConnection(config, wifiSsidList = []) {
-    console.log(`Attempting to connect with configuration: "${config.name}"`);
-    const identifier = getIdentifierForConfig(config);
+    console.log(`Attempting to connect with configuration: "${config.name}" of type ${config.type}`);
 
-    if (!identifier) {
-        const message = `Skipping configuration "${config.name}" because it has an invalid or empty SSH Host.`;
+    // The native host now understands the full config object.
+    const configPayload = {
+        ...config,
+        sshCommandIdentifier: getIdentifierForConfig(config), // For native host to find process
+        wifiSsidList: wifiSsidList, // Add the dynamic wifi list
+    };
+
+    // The identifier check is now implicitly handled by getIdentifierForConfig.
+    if (!configPayload.sshCommandIdentifier) {
+        const message = `Skipping configuration "${config.name}" because it has no ID.`;
         console.warn(message);
         return { success: false, message: message };
     }
-
-    const configPayload = {
-        // Use legacy keys because the python script expects them.
-        id: config.id, // Pass the ID for state management
-        sshUser: config.sshUser,
-        sshHost: config.sshHost,
-        sshCommandIdentifier: identifier,
-        sshRemoteCommand: config.sshRemoteCommand,
-        portForwards: config.portForwards || [],
-        wifiSsidList: wifiSsidList,
-    };
 
     const response = await communicateWithNativeHost({ command: COMMANDS.START_TUNNEL, config: configPayload });
     if (response.success) {
@@ -453,8 +449,6 @@ async function updateStatus() {
     const connectedConfig = await getCurrentlyConnectedConfig();
     if (!connectedConfig) {
       // If we think we are disconnected, report it.
-      // The updateStateAndBroadcast function will handle the transition and trigger an auto-reconnect if needed.
-      // Pass null for the activeConfigId.
       updateStateAndBroadcast({ connected: false, activeConfigId: null });
       return; // The 'finally' block will still execute.
     }
@@ -468,10 +462,10 @@ async function updateStatus() {
     });
 
     try {
+      // The native host now expects the full configuration object to determine status.
       const response = await communicateWithNativeHost({
         command: COMMANDS.GET_STATUS,
-        // Pass the identifier from the active configuration
-        sshCommandIdentifier: getIdentifierForConfig(connectedConfig),
+        config: connectedConfig,
         pingHost,
         webCheckUrl
       });
@@ -482,7 +476,6 @@ async function updateStatus() {
         // The currently "active" config is no longer connected.
         console.log(`Configuration "${connectedConfig.name}" is no longer connected.`);
         await chrome.storage.local.remove(STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID);
-        // The updateStateAndBroadcast will see the state change from connected to disconnected and trigger auto-reconnect if enabled
         updateStateAndBroadcast({ connected: false, activeConfigId: null });
       }
     } catch (error) {
@@ -751,41 +744,46 @@ function FindProxyForURL(url, host) {
     })();
     return true;
   }
-  // Listener for the new test connection feature from the options page.
+
   if (request.command === COMMANDS.TEST_CONNECTION) {
     (async () => {
-      const { sshCommand, pingHost, webCheckUrl, sshHost } = request;
-      if (!pingHost) {
-        sendResponse({ success: false, message: "Ping Host cannot be empty." });
-        return;
-      }
-      if (!sshHost) {
-        sendResponse({ success: false, message: "SSH Host cannot be empty." });
-        return; // sshCommand from options.js is the same as sshHost, so this check is sufficient.
-      }
-      try {
-        const response = await communicateWithNativeHost({
-          command: COMMANDS.TEST_CONNECTION,
-          sshCommandIdentifier: sshHost, // The identifier is the host.
-          sshHost: sshHost, // The host itself is also needed for the direct ping test.
-          pingHost,
-          webCheckUrl
-        });
-        let message;
-        if (response && response.connected) {
-          message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
-        } else if (response && response.ssh_host_ping_ms !== undefined) {
-          const hostStatus = response.ssh_host_ping_ms > -1
-            ? `Host '${response.ssh_host_name}' is reachable (ping: ${response.ssh_host_ping_ms}ms).`
-            : `Host '${response.ssh_host_name}' is UNREACHABLE (${response.ssh_host_ping_error || 'Error'}).`;
-          message = `Tunnel is down. Diagnostic: ${hostStatus}`;
-        } else {
-          message = "Could not get a detailed status. Check native host logs for errors.";
+        const { config, pingHost, webCheckUrl } = request; // Expect a full config object now
+        if (!config) {
+            sendResponse({ success: false, message: "No configuration provided to test." });
+            return;
         }
-        sendResponse({ success: response.success, message: message });
-      } catch (error) {
-        sendResponse({ success: false, message: error.message });
-      }
+        if (!pingHost) {
+            sendResponse({ success: false, message: "Ping Host cannot be empty." });
+            return;
+        }
+
+        try {
+            const response = await communicateWithNativeHost({
+                command: COMMANDS.TEST_CONNECTION,
+                config: config,
+                pingHost,
+                webCheckUrl
+            });
+
+            let message;
+            if (response && response.connected) {
+                message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
+            } else if (response && response.ssh_host_ping_ms !== undefined) {
+                const hostStatus = response.ssh_host_ping_ms > -1
+                    ? `Host '${response.ssh_host_name}' is reachable (ping: ${response.ssh_host_ping_ms}ms).`
+                    : `Host '${response.ssh_host_name}' is UNREACHABLE (${response.ssh_host_ping_error || 'Error'}).`;
+                message = `Tunnel is down. Diagnostic: ${hostStatus}`;
+            } else if (response) {
+                // Generic message for OpenVPN or other types that don't have a host ping
+                message = "Tunnel is down. Could not get a detailed status. Check native host logs for errors.";
+            } else {
+                message = "Did not receive a valid response from the native host.";
+            }
+
+            sendResponse({ success: response.success, message: message });
+        } catch (error) {
+            sendResponse({ success: false, message: error.message });
+        }
     })();
     return true; // Indicate async response.
   }
@@ -809,9 +807,10 @@ function FindProxyForURL(url, host) {
             sendResponse({ success: true, message: "No active tunnel to stop." });
             return;
           }
+          // Pass the entire config object to the native host
           response = await communicateWithNativeHost({
             command: request.command,
-            config: { sshCommandIdentifier: getIdentifierForConfig(connectedConfig) }
+            config: connectedConfig
           });
           if (response.success) {
             await chrome.storage.local.remove(STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID);

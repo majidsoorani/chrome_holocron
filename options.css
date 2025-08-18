@@ -355,6 +355,44 @@ button.button-info:hover {
     white-space: pre-wrap; /* Allow long lines to wrap */
 }
 
+/* --- Tabbed Interface --- */
+.tabs-nav {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 2em;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-color-secondary);
+    margin-bottom: -2px; /* Align with the nav border */
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.tab-button:hover {
+    color: var(--primary-color);
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-panel {
+    display: none; /* Hide all panels by default */
+}
+
+.tab-panel.active {
+    display: block; /* Show only the active panel */
+}
+
+
 /* --- Dark Mode --- */
 @media (prefers-color-scheme: dark) {
     :root {
