@@ -165,6 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // V2Ray settings
     const v2raySettings = details.querySelector('.v2ray-settings');
     const v2rayUrlInput = v2raySettings.querySelector('.config-input-v2ray-url');
+    const v2rayDetectedParams = v2raySettings.querySelector('.v2ray-detected-params');
+    const v2rayParamsList = v2raySettings.querySelector('.v2ray-params-list');
 
     // Live Log viewer
     const liveLogContainer = details.querySelector('.config-live-log-container');
@@ -331,7 +333,52 @@ document.addEventListener('DOMContentLoaded', () => {
     ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
     ovpnAuthUser.addEventListener('input', () => setDirty(true));
     ovpnAuthPass.addEventListener('input', () => setDirty(true));
-    v2rayUrlInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
+    v2rayUrlInput.addEventListener('input', () => {
+        updateUserHostDisplay();
+        parseAndDisplayV2RayUrl(v2rayUrlInput.value);
+        setDirty(true);
+    });
+
+    const parseAndDisplayV2RayUrl = (url) => {
+        if (!url || !url.startsWith('vless://')) {
+            v2rayDetectedParams.style.display = 'none';
+            return;
+        }
+
+        try {
+            const urlObject = new URL(url);
+            v2rayParamsList.innerHTML = ''; // Clear previous
+            let hasParams = false;
+
+            const remark = urlObject.hash.substring(1);
+            if (remark) {
+                const li = document.createElement('li');
+                li.innerHTML = `• <strong>Remark:</strong> ${decodeURIComponent(remark)}`;
+                v2rayParamsList.appendChild(li);
+                hasParams = true;
+            }
+
+            const address = `${urlObject.hostname}:${urlObject.port}`;
+            if (address) {
+                const li = document.createElement('li');
+                li.innerHTML = `• <strong>Address:</strong> ${address}`;
+                v2rayParamsList.appendChild(li);
+                hasParams = true;
+            }
+
+            const protocol = urlObject.protocol.replace(':', '');
+            if (protocol) {
+                const li = document.createElement('li');
+                li.innerHTML = `• <strong>Protocol:</strong> ${protocol}`;
+                v2rayParamsList.appendChild(li);
+                hasParams = true;
+            }
+
+            v2rayDetectedParams.style.display = hasParams ? 'block' : 'none';
+        } catch (e) {
+            v2rayDetectedParams.style.display = 'none';
+        }
+    };
 
 
     connectButton.addEventListener('click', () => {
