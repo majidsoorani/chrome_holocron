@@ -1,6 +1,6 @@
 // Data from https://github.com/Ilia-Abolhasani/iran-geo-ip/blob/main/ir-ip.txt
 // Last updated: 2024-05-10
-const IRAN_IP_RANGES_CIDR = [
+export const IRAN_IP_RANGES_CIDR = [
     "2.176.0.0/13",
     "2.184.0.0/13",
     "5.52.192.0/20",
@@ -167,7 +167,7 @@ const IRAN_IP_RANGES_CIDR = [
  * Pre-calculates IP ranges with their netmasks for use in a PAC script.
  * @type {Array<[string, string]>}
  */
-const IRAN_IP_RANGES_NETMASK = IRAN_IP_RANGES_CIDR.map(cidr => {
+export const IRAN_IP_RANGES_NETMASK = IRAN_IP_RANGES_CIDR.map(cidr => {
     const [ip, maskStr] = cidr.split('/');
     const mask = parseInt(maskStr, 10);
     // This should not happen with valid data, but as a safeguard:

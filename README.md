@@ -116,7 +116,6 @@ An installation script is provided to automate the setup process.
 
 - **"Native host has exited" or "Failed to connect to native host"**: This usually means the Python script failed. The first step is to check the log file for errors at `backends/log/holocron_native_host.log`. The last few lines will usually contain a detailed Python error message (a "traceback") that explains why the script stopped. The log file is automatically rotated when it reaches 1MB in size, so it will not grow indefinitely.
 - **Extension icon is always red**:
-    - Ensure the SSH Command Identifier in the options matches what's used in your scripts.
     - Use the "Test Connection" button in the options page to get a detailed status.
     - Verify you can manually `ssh` to the host from your terminal.
 - **Popup is stuck on "Connecting..." but the tunnel is already running**: This could happen if the extension's state gets out of sync. The periodic status check (every minute) or clicking the connect button again will force a refresh. The changes implemented in this version make this scenario much less likely by handling the "already running" state more intelligently.

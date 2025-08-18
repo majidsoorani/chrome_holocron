@@ -203,6 +203,10 @@ def execute_tunnel_command(command, config=None):
                 elif rule.get("type") == "L" and all(k in rule for k in ["localPort", "remoteHost", "remotePort"]):
                     forward_str = f"{rule['localPort']}:{rule['remoteHost']}:{rule['remotePort']}"
                     cmd_list.extend(["-L", forward_str])
+                elif rule.get("type") == "R" and all(k in rule for k in ["localPort", "remoteHost", "remotePort"]):
+                    # For -R, the UI maps to remote_port:local_host:local_port
+                    forward_str = f"{rule['localPort']}:{rule['remoteHost']}:{rule['remotePort']}"
+                    cmd_list.extend(["-R", forward_str])
 
         logging.info(f"Executing command: {' '.join(cmd_list)}")
 
@@ -261,6 +265,44 @@ def execute_tunnel_command(command, config=None):
         logging.error(f"An unexpected error occurred during script execution: {e}", exc_info=True)
         return {"success": False, "message": f"An unexpected error occurred: {e}"}
 
+def get_logs():
+    """Reads the last part of the log file and returns it."""
+    try:
+        if not log_file.is_file():
+            return {"success": True, "log_content": "Log file does not exist yet."}
+
+        # Read the last 20KB of the log file to avoid sending huge amounts of data.
+        file_size = log_file.stat().st_size
+        read_size = min(file_size, 20 * 1024)
+
+        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            if file_size > read_size:
+                f.seek(file_size - read_size)
+                # Read and discard the first (potentially partial) line
+                f.readline()
+            content = f.read()
+
+        return {"success": True, "log_content": content}
+
+    except Exception as e:
+        logging.error(f"Error reading log file: {e}", exc_info=True)
+        return {"success": False, "message": f"An unexpected error occurred while reading the log file: {e}"}
+
+def clear_logs():
+    """Clears the content of the log file."""
+    try:
+        if log_file.is_file():
+            # Open in write mode to truncate the file.
+            with open(log_file, 'w') as f:
+                pass
+            logging.info("--- Log file cleared by user request ---")
+            return {"success": True, "message": "Log file cleared successfully."}
+        else:
+            return {"success": True, "message": "Log file does not exist, nothing to clear."}
+    except Exception as e:
+        logging.error(f"Error clearing log file: {e}", exc_info=True)
+        return {"success": False, "message": f"An unexpected error occurred while clearing the log file: {e}"}
+
 def main():
     """Main loop to read commands and send status."""
     while True:
@@ -297,6 +339,50 @@ def main():
 
             elif command == "stopTunnel":
                 response = execute_tunnel_command("stop")
+                send_message(response)
+
+            elif command == "testConnection":
+                ssh_command_id = message.get("sshCommandIdentifier")
+                ssh_host = message.get("sshHost")
+                ping_host = message.get("pingHost")
+                web_check_url = message.get("webCheckUrl")
+
+                # First, get the standard tunnel status
+                status = get_tunnel_status(ssh_command_id)
+                response = {
+                    "success": True, # The test command itself succeeded
+                    "connected": status["connected"],
+                    "socks_port": status.get("socks_port")
+                }
+
+                if status["connected"] and status.get("socks_port"):
+                    # If connected, perform the usual latency checks through the tunnel
+                    socks_port = status["socks_port"]
+                    web_latency, web_status, web_error = perform_web_check(url=web_check_url, socks_port=socks_port)
+                    response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "web_check_error": web_error})
+
+                    tcp_latency, tcp_ping_error = perform_tcp_ping(host=ping_host, socks_port=socks_port)
+                    response.update({"tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_ping_error})
+                else:
+                    # If not connected, perform the new diagnostic check
+                    logging.info(f"Tunnel not found. Performing direct TCP ping to SSH host '{ssh_host}' for diagnostics.")
+                    # Ping the SSH host on port 22
+                    ssh_ping_latency, ssh_ping_error = perform_tcp_ping(host=ssh_host, port=22, timeout=5, socks_port=None)
+                    response.update({
+                        "ssh_host_name": ssh_host,
+                        "ssh_host_ping_ms": ssh_ping_latency,
+                        "ssh_host_ping_error": ssh_ping_error
+                    })
+
+                logging.debug(f"Sending test connection response: {response}")
+                send_message(response)
+
+            elif command == "getLogs":
+                response = get_logs()
+                send_message(response)
+
+            elif command == "clearLogs":
+                response = clear_logs()
                 send_message(response)
 
             else:

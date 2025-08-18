@@ -14,7 +14,6 @@
 # ==============================================================================
 
 # --- Configuration ---
-LOCK_FILE="$HOME/.ssh/holocron_tunnel.lock"
 SSH_LOG_FILE="/tmp/holocron_ssh_output.log" # Temporary log for SSH connection errors
 
 # --- Full paths for reliability ---
@@ -23,15 +22,22 @@ WDUTIL_PATH="/usr/bin/wdutil"
 
 # --- Helper Functions ---
 status_tunnels() {
-    if [ ! -f "$LOCK_FILE" ]; then
+    local identifier="$2"
+    if [ -z "$identifier" ]; then
+        echo "Error: Identifier must be provided for status check." >&2
+        return 1
+    fi
+    local lock_file="$HOME/.ssh/holocron_tunnel_${identifier}.lock"
+
+    if [ ! -f "$lock_file" ]; then
         echo "Tunnel status: 🔴 Stopped (No lock file found)."
         return 1
     fi
 
-    PID=$(cat "$LOCK_FILE")
+    PID=$(cat "$lock_file")
     if [ -z "$PID" ]; then
         echo "Tunnel status: 🔴 Stopped (Lock file is empty). Cleaning up."
-        rm -f "$LOCK_FILE"
+        rm -f "$lock_file"
         return 1
     fi
 
@@ -40,23 +46,12 @@ status_tunnels() {
         echo "Tunnel status: 🟢 Running with PID $PID."
     else
         echo "Tunnel status: 🔴 Stopped (Stale lock file for non-existent PID $PID). Cleaning up."
-        rm -f "$LOCK_FILE"
+        rm -f "$lock_file"
     fi
 }
 
 start_tunnels() {
     # --- Pre-flight Checks ---
-    if [ -f "$LOCK_FILE" ]; then
-        PID=$(cat "$LOCK_FILE")
-        if ps -p "$PID" > /dev/null; then
-            echo "✅ Tunnel is already running with PID $PID. No action needed."
-            return 3 # Special exit code for "already running"
-        else
-            echo "⚠️ Found stale lock file for PID $PID. Removing it."
-            rm -f "$LOCK_FILE"
-        fi
-    fi
-
     # --- Argument Parsing ---
     local ssh_user=""
     local ssh_host=""
@@ -83,7 +78,7 @@ start_tunnels() {
           work_ssids+=("$2")
           shift 2
           ;;
-        -L|-D)
+        -L|-D|-R)
           forwards+=("$1" "$2")
           if [ "$1" == "-D" ]; then
             socks_port="$2"
@@ -95,6 +90,23 @@ start_tunnels() {
           ;;
       esac
     done
+
+    # --- Pre-flight Checks ---
+    if [ -z "$identifier" ]; then
+        echo "Error: An identifier must be provided to start a tunnel." >&2
+        return 1
+    fi
+    local lock_file="$HOME/.ssh/holocron_tunnel_${identifier}.lock"
+    if [ -f "$lock_file" ]; then
+        PID=$(cat "$lock_file")
+        if ps -p "$PID" > /dev/null; then
+            echo "✅ Tunnel for '$identifier' is already running with PID $PID. No action needed."
+            return 3 # Special exit code for "already running"
+        else
+            echo "⚠️ Found stale lock file for PID $PID. Removing it."
+            rm -f "$lock_file"
+        fi
+    fi
 
     # --- SSID Detection (Optional) ---
     # If work SSIDs are configured, check if we are on one of them.
@@ -155,7 +167,7 @@ start_tunnels() {
 
     # Ensure the directory for the lock file exists before writing to it.
     mkdir -p "$(dirname "$LOCK_FILE")"
-    echo "$SSH_PID" > "$LOCK_FILE"
+    echo "$SSH_PID" > "$lock_file"
 
     # Wait for the SOCKS port to become available before declaring success.
     if [ -z "$socks_port" ]; then
@@ -189,7 +201,7 @@ start_tunnels() {
                 echo "   --------------------------" >&2
                 rm -f "$SSH_LOG_FILE"
             fi
-            rm -f "$LOCK_FILE"
+            rm -f "$lock_file"
             return 1
         fi
         sleep 1
@@ -204,31 +216,50 @@ start_tunnels() {
     fi
     echo "   Stopping the new SSH process to clean up." >&2
     kill "$SSH_PID"
-    rm -f "$LOCK_FILE"
+    rm -f "$lock_file"
     return 1
 }
 
 stop_tunnels() {
-    if [ ! -f "$LOCK_FILE" ]; then
-        echo "ℹ️ Tunnel appears to be stopped already."
+    local identifier=""
+    while (( "$#" )); do
+      case "$1" in
+        --identifier)
+          identifier="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+
+    if [ -z "$identifier" ]; then
+        echo "Error: Identifier must be provided to stop a specific tunnel." >&2
+        return 1
+    fi
+    local lock_file="$HOME/.ssh/holocron_tunnel_${identifier}.lock"
+
+    if [ ! -f "$lock_file" ]; then
+        echo "ℹ️ Tunnel for '$identifier' appears to be stopped already."
         return 0
     fi
 
-    PID_TO_KILL=$(cat "$LOCK_FILE")
+    PID_TO_KILL=$(cat "$lock_file")
     if [ -z "$PID_TO_KILL" ]; then
         echo "⚠️ Lock file is empty. Removing it."
-        rm -f "$LOCK_FILE"
+        rm -f "$lock_file"
         return 1
     fi
 
     if ps -p "$PID_TO_KILL" -o comm= | grep -q "ssh"; then
         echo "🛑 Stopping tunnel process with PID $PID_TO_KILL..."
         kill "$PID_TO_KILL"
-        rm -f "$LOCK_FILE"
+        rm -f "$lock_file"
         echo "✅ Tunnel stopped."
     else
         echo "⚠️ PID $PID_TO_KILL from lock file is not a running SSH process. Removing stale lock file."
-        rm -f "$LOCK_FILE"
+        rm -f "$lock_file"
     fi
 }
 
@@ -242,11 +273,10 @@ restart_tunnels() {
 # --- Main Logic ---
 case "$1" in
     start) start_tunnels "${@:2}" ;;
-    stop) stop_tunnels ;;
+    stop) stop_tunnels "${@:2}" ;;
     restart) restart_tunnels "${@:2}" ;;
-    status) status_tunnels ;;
     *)
-      echo "Usage: $0 {start|stop|restart|status}"
+      echo "Usage: $0 {start|stop|restart} --identifier <id> ..."
       exit 1
       ;;
 esac

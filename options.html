@@ -1,115 +1,306 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Holocron Settings</title>
-  <link rel="stylesheet" href="options.css">
+    <meta charset="UTF-8">
+    <title>Holocron Options</title>
+    <link rel="stylesheet" href="options.css">
+    <style>
+        @keyframes pulse-animation {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+        .button-bar button.pulse {
+            animation: pulse-animation 2s infinite;
+        }
+        .button-bar button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Holocron Settings</h1>
+    <div class="container">
+        <header>
+            <h1>Holocron Settings</h1>
+            <p>Configure the SSH tunnel and proxy behavior.</p>
+        </header>
 
-    <div class="form-section">
-      <h2>Connection Monitoring</h2>
-      <div class="form-group">
-        <label for="ssh-command">SSH Process Identifier</label>
-        <input type="text" id="ssh-command" placeholder="e.g., holocron-tunnel">
-        <small>A unique string used to identify the tunnel process. The script uses this to create a unique tag for the SSH command.</small>
-      </div>
-      <div class="form-group">
-        <label for="ping-host">TCP Ping Host</label>
-        <input type="text" id="ping-host" placeholder="e.g., youtube.com">
-        <small>A reliable host for a low-level TCP connection check.</small>
-      </div>
-      <div class="form-group">
-        <label for="web-check-url">Web Check URL</label>
-        <input type="text" id="web-check-url" placeholder="e.g., https://gemini.google.com/app">
-        <small>A full URL to check for application-level connectivity through the tunnel.</small>
-      </div>
-    </div>
-
-    <div class="form-section">
-      <h2>Automatic Connection Networks (Optional)</h2>
-      <small>The tunnel will only auto-connect on these Wi-Fi networks. Leave this section empty to disable the check and allow manual connection from any network.</small>
-      <fieldset class="wifi-networks-section">
-        <legend>Permitted SSIDs</legend>
-        <div id="wifi-networks-list">
-          <!-- SSIDs will be dynamically inserted here -->
+        <div class="button-bar">
+            <div class="action-buttons">
+                <button id="save-button" class="primary">Save Settings</button>
+                <button id="discard-button" class="button-secondary" style="display: none;">Discard Changes</button>
+                <button id="test-button">Test Connection</button>
+                <div id="status-message"></div>
+            </div>
+            <div class="connection-controls">
+                <div id="connection-status-indicator" class="status-indicator"></div>
+                <span id="connection-status-text">Loading...</span>
+                <button id="disconnect-tunnel-button" class="button-warn" style="display: none;">Disconnect</button>
+            </div>
         </div>
-        <button id="add-wifi-button" class="button-secondary">Add Wi-Fi Network</button>
-      </fieldset>
-    </div>
 
-    <div class="form-section">
-      <h2>SSH Tunnel Configuration</h2>
-      <div class="form-group">
-        <label for="ssh-user">SSH User</label>
-        <input type="text" id="ssh-user" placeholder="e.g., ubuntu">
-      </div>
-      <div class="form-group">
-        <label for="ssh-host">SSH Host (Bastion)</label>
-        <input type="text" id="ssh-host" placeholder="e.g., bastion.example.com">
-      </div>
+        <div class="settings-grid">
+            <section class="card">
+                <h2>Core Configurations</h2>
+                <div id="core-configurations-list">
+                    <!-- Configurations will be dynamically inserted here -->
+                </div>
+                <button id="add-config-button" class="add-button">+ Add Configuration</button>
+            </section>
 
-      <div class="form-group">
-        <label for="auto-reconnect-enabled">Automatic Reconnect</label>
-        <div class="checkbox-container">
-            <input type="checkbox" id="auto-reconnect-enabled">
-            <label for="auto-reconnect-enabled" class="checkbox-label">
-                Automatically attempt to reconnect the tunnel if it disconnects.
-            </label>
+            <section class="card">
+                <h2>Connection Health Checks</h2>
+                <div class="form-group">
+                    <label for="ping-host">Ping Host</label>
+                    <input type="text" id="ping-host" name="ping-host">
+                    <small>A reliable host for TCP ping checks (e.g., youtube.com).</small>
+                </div>
+                <div class="form-group">
+                    <label for="web-check-url">Web Check URL</label>
+                    <input type="url" id="web-check-url" name="web-check-url">
+                    <small>A URL for full HTTP/S connectivity checks.</small>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>AI Assistant (Powered by OpenRouter)</h2>
+                <div class="form-group">
+                    <label for="openrouter-api-key">OpenRouter API Key</label>
+                    <input type="password" id="openrouter-api-key" name="openrouter-api-key" placeholder="sk-or-...">
+                    <small>Your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter.ai</a>. Required for AI-powered suggestions.</small>
+                </div>
+                <div class="form-group">
+                    <label for="openrouter-model">AI Model</label>
+                    <input type="text" id="openrouter-model" name="openrouter-model">
+                    <small>The model to use for suggestions (e.g., z-ai/glm-4.5-air:free, google/gemini-flash-1.5).</small>
+                </div>
+                <div class="form-group">
+                    <label for="openrouter-system-message">AI System Message</label>
+                    <textarea id="openrouter-system-message" name="openrouter-system-message" rows="6"></textarea>
+                    <small>The system prompt used to instruct the AI. Modify with caution.</small>
+                </div>
+                <div id="ai-live-log-container" class="log-viewer-container" style="display: none; margin-top: 1em; height: 150px;">
+                    <pre id="ai-live-log-content"></pre>
+                </div>
+            </section>
+
+            <section class="card full-width">
+                <h2>Proxy Bypass Rules</h2>
+                <p>Define global rules for when to bypass the active proxy tunnel. The generated PAC script on the right will update as you make changes.</p>
+                <div class="proxy-actions-bar form-group">
+                    <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
+                    <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
+                    <small>Apply the PAC script to your browser's settings to route traffic.</small>
+                </div>
+                <div class="settings-grid two-column">
+                    <div class="settings-column">
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="global-geoip-bypass">
+                            <label for="global-geoip-bypass">Bypass proxy for Iranian IPs (GeoIP)</label>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="global-geosite-bypass">
+                            <label for="global-geosite-bypass">Bypass proxy for Iranian sites (GeoSite)</label>
+                        </div>
+                        <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
+                        <div id="proxy-bypass-rules-list">
+                            <!-- Custom rules will be inserted here -->
+                        </div>
+                        <div class="rule-actions" style="display: flex; gap: 10px; align-items: center; margin-top: 1em;">
+                            <button id="add-proxy-rule-button" class="add-button" style="margin-top: 0;">+ Add Rule</button>
+                            <button id="ai-suggest-rule-button" class="button-info" style="margin-top: 0;">Get AI Suggestion</button>
+                        </div>
+                        <small>Define domains and choose whether to send them DIRECT (bypass) or through a specific active tunnel.</small>
+                    </div>
+                    <div class="settings-column">
+                        <h3 class="sub-heading">Generated PAC Script Preview</h3>
+                        <pre id="pac-script-preview-container"><code>// PAC script will be generated here...</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card full-width">
+                <h2>Connection Health History</h2>
+                <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
+                <div class="chart-wrapper">
+                    <canvas id="web-latency-chart"></canvas>
+                </div>
+                <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
+                <div class="chart-wrapper">
+                    <canvas id="tcp-ping-chart"></canvas>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Automatic Connection</h2>
+                <div class="form-group">
+                    <!-- Changed from a <label> to a <p> tag to fix accessibility error, as a label should not point to a div. -->
+                    <p><strong>Connect only on these Wi-Fi SSIDs</strong></p>
+                    <div id="wifi-networks-list">
+                        <!-- Wi-Fi SSIDs will be inserted here -->
+                    </div>
+                    <button id="add-wifi-button" class="add-button">+ Add Wi-Fi Network</button>
+                </div>
+                <div class="form-group checkbox-group">
+                    <input type="checkbox" id="auto-reconnect-enabled" name="auto-reconnect-enabled">
+                    <label for="auto-reconnect-enabled">Enable Auto-Reconnect</label>
+                    <small>Automatically try to restart the tunnel if it disconnects.</small>
+                </div>
+                <div class="form-group" id="manual-reconnect-container" style="display: none;">
+                    <label for="reconnect-now-button">Manual Reconnect</label>
+                    <button id="reconnect-now-button" class="button-success">Reconnect Now</button>
+                    <small>If the tunnel is disconnected, you can force a reconnection attempt.</small>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Native Host Live Log</h2>
+                <p><small>Shows a live feed of the most recent entries from the native host log file.</small></p>
+                <div class="log-viewer-container">
+                    <pre id="log-viewer-content">Waiting for log entries...</pre>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                    <button id="clear-log-button" class="button-warn">Clear Log</button>
+                    <small>This is useful for debugging connection issues.</small>
+                </div>
+            </section>
+
         </div>
-        <small>If the tunnel process stops unexpectedly, the extension will try to restart it. This respects the Wi-Fi network rules.</small>
-      </div>
+        <section class="card" style="display: none;">
+            <h2>Proxy Bypass Rules</h2>
+            <p>Define global rules for when to bypass the active proxy tunnel. The generated PAC script on the right will update as you make changes.</p>
+            <div class="proxy-actions-bar form-group">
+                <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
+                <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
+                <small>Apply the PAC script to your browser's settings to route traffic.</small>
+            </div>
+            <div class="settings-grid two-column">
+                <div class="settings-column">
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="global-geoip-bypass">
+                        <label for="global-geoip-bypass">Bypass proxy for Iranian IPs (GeoIP)</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="global-geosite-bypass">
+                        <label for="global-geosite-bypass">Bypass proxy for Iranian sites (GeoSite)</label>
+                    </div>
+                    <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
+                    <div id="proxy-bypass-rules-list">
+                        <!-- Custom rules will be inserted here -->
+                    </div>
+                    <button id="add-proxy-rule-button" class="add-button">+ Add Rule</button>
+                    <small>Define domains and choose whether to send them DIRECT (bypass) or through a specific active tunnel.</small>
+                </div>
+                <div class="settings-column">
+                    <h3 class="sub-heading">Generated PAC Script Preview</h3>
+                    <pre id="pac-script-preview-container"><code>// PAC script will be generated here...</code></pre>
+                </div>
+            </div>
+        </section>
 
-      <fieldset class="port-forwarding-section">
-        <legend>Port Forwarding Rules</legend>
-        <div id="port-forwarding-rules">
-          <!-- Rules will be dynamically inserted here -->
+    <!-- Templates for dynamic elements -->
+    <template id="port-forward-rule-template">
+        <div class="rule-item">
+            <select class="rule-type" name="rule-type" aria-label="Forwarding Type">
+                <option value="L">Local (-L)</option>
+                <option value="R">Remote (-R)</option>
+                <option value="D">Dynamic (-D)</option>
+            </select>
+            <input type="number" class="rule-local-port" name="rule-local-port" placeholder="Local Port" min="1" max="65535" aria-label="Local Port">
+            <span class="rule-colon">:</span>
+            <input type="text" class="rule-remote-host" name="rule-remote-host" placeholder="Remote Host" aria-label="Remote Host">
+            <span class="rule-colon">:</span>
+            <input type="number" class="rule-remote-port" name="rule-remote-port" placeholder="Remote Port" min="1" max="65535" aria-label="Remote Port">
+            <button class="remove-rule-button" title="Remove rule">&times;</button>
         </div>
-        <button id="add-rule-button" class="button-secondary">Add Rule</button>
-      </fieldset>
-    </div>
+    </template>
 
-    <div class="form-section">
-      <h2>Proxy &amp; Routing</h2>
-      <div class="form-group">
-        <label for="geoip-bypass-enabled">GeoIP Bypass</label>
-        <div class="checkbox-container">
-            <input type="checkbox" id="geoip-bypass-enabled">
-            <label for="geoip-bypass-enabled" class="checkbox-label">
-                Enable proxy bypass for traffic to Iran (GeoIP).
-            </label>
+    <template id="wifi-network-template">
+        <div class="rule-item">
+            <input type="text" class="wifi-ssid-input" name="wifi-ssid" placeholder="Wi-Fi SSID" aria-label="Wi-Fi SSID">
+            <button class="remove-rule-button" title="Remove SSID">&times;</button>
         </div>
-        <small>When enabled, the browser proxy will not be used for sites hosted on Iranian IP ranges. This setting takes effect the next time you apply the proxy.</small>
-      </div>
-    </div>
+    </template>
 
-    <div class="actions">
-      <button id="save-button" class="button-primary">Save Settings</button>
-      <button id="test-button" class="button-secondary">Test Connection</button>
-    </div>
-    <div id="status-message"></div>
-  </div>
+    <template id="proxy-bypass-rule-template">
+        <div class="rule-item proxy-rule-item">
+            <input type="text" class="bypass-domain-input" placeholder="e.g., *.example.com" aria-label="Bypass Domain">
+            <span style="margin: 0 8px;">-></span>
+            <select class="bypass-target-select" aria-label="Bypass Target">
+                <option value="DIRECT">DIRECT (Bypass Proxy)</option>
+                <!-- Core configurations will be dynamically added here -->
+            </select>
+            <button class="remove-rule-button" title="Remove rule">&times;</button>
+        </div>
+    </template>
 
-  <template id="port-forward-rule-template">
-    <div class="rule-item">
-      <select class="rule-type"><option value="L">Local (-L)</option><option value="D">Dynamic (-D)</option></select>
-      <input type="text" class="rule-local-port" placeholder="Local Port">
-      <span class="rule-colon">:</span>
-      <input type="text" class="rule-remote-host" placeholder="Remote Host">
-      <span class="rule-colon">:</span>
-      <input type="text" class="rule-remote-port" placeholder="Remote Port">
-      <button class="remove-rule-button" title="Remove Rule">&times;</button>
-    </div>
-  </template>
+    <template id="core-configuration-template">
+        <div class="config-item rule-item" data-id="">
+            <div class="config-header">
+                <span class="config-icon" style="margin-right: 8px; display: inline-flex; align-items: center; color: var(--text-color-secondary, #555);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                </span>
+                <input type="checkbox" name="config-enabled-checkbox" class="config-enabled-checkbox" title="Enable this configuration for connection attempts">
+                <div class="config-summary" style="flex-grow: 1;">
+                    <strong class="config-name">New Configuration</strong>
+                    <small class="config-user-host" style="color: var(--text-color-secondary, #666); font-size: 0.9em;"></small>
+                </div>
+                <div class="config-controls">
+                    <button class="connect-config-button icon-button" title="Connect using this configuration">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    </button>
+                    <button class="disconnect-config-button icon-button button-warn" title="Disconnect this tunnel" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                    </button>
+                    <button class="duplicate-config-button icon-button" title="Duplicate this configuration">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    </button>
+                    <button class="edit-config-button icon-button" title="Edit configuration">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                    </button>
+                    <button class="remove-rule-button delete-config-button icon-button" title="Delete configuration">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="config-details" style="display: none;">
+                <div class="form-group">
+                    <label>Configuration Name</label>
+                    <input type="text" class="config-input-name" placeholder="e.g., Work Bastion">
+                </div>
+                <div class="form-group">
+                    <label>SSH User</label>
+                    <input type="text" class="config-input-ssh-user" placeholder="user">
+                </div>
+                <div class="form-group">
+                    <label>SSH Host</label>
+                    <input type="text" class="config-input-ssh-host" placeholder="bastion.example.com">
+                </div>
+                <div class="form-group">
+                    <label>Remote Command on Connect</label>
+                    <textarea class="config-input-ssh-remote-command" rows="3" placeholder="e.g., export MY_VAR=123;"></textarea>
+                </div>
+                <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Port Forwarding Rules</h3>
+                <div class="port-forwarding-rules-list">
+                    <!-- Rules will be dynamically inserted here -->
+                </div>
+                <button type="button" class="add-port-forward-rule-button add-button">+ Add Rule</button>
+            </div>
+        </div>
+    </template>
 
-  <template id="wifi-network-template">
-    <div class="rule-item">
-      <input type="text" class="wifi-ssid-input" placeholder="e.g., MyWorkWifi-5G">
-      <button class="remove-rule-button" title="Remove SSID">&times;</button>
-    </div>
-  </template>
-
-  <script src="constants.js"></script>
-  <script src="options.js"></script>
+    <script src="vendor/chart.js"></script>
+    <script type="module" src="options.js"></script>
+    <footer style="margin-top: 2em;">
+        <section class="card full-width">
+            <h2>Geo-Database Status</h2>
+            <div class="database-status" style="border-top: none; margin-top: 0; padding-top: 0;">
+                <div id="geoip-status">GeoIP: Loading...</div>
+                <div id="geosite-status">GeoSite: Loading...</div>
+                <button id="update-db-button">Update Databases Now</button>
+            </div>
+        </section>
+    </footer>
 </body>
+</html>

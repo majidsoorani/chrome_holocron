@@ -1,3 +1,5 @@
+import { COMMANDS, STORAGE_KEYS } from './constants.js';
+
 document.addEventListener('DOMContentLoaded', () => {
   const statusEl = document.getElementById('connection_status');
   const statusIndicator = document.getElementById('status_indicator');
@@ -175,6 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage({ command: COMMANDS.SET_BROWSER_PROXY, socksPort: currentStatus.socks_port }, (response) => {
         if (response && response.success) {
           requestStatusUpdate(); // Refresh UI to show the new state
+        } else {
+          // Display an error message to the user if setting the proxy failed.
+          const errorMessage = response ? response.message : 'An unknown error occurred.';
+          proxyMessage.textContent = `Error: ${errorMessage}`;
+          console.error("Holocron: Failed to apply proxy.", response);
         }
       });
     } else {
@@ -187,6 +194,11 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ command: COMMANDS.CLEAR_BROWSER_PROXY }, (response) => {
       if (response && response.success) {
         requestStatusUpdate(); // Refresh UI
+      } else {
+        // Display an error message to the user if reverting the proxy failed.
+        const errorMessage = response ? response.message : 'An unknown error occurred.';
+        proxyMessage.textContent = `Error: ${errorMessage}`;
+        console.error("Holocron: Failed to revert proxy.", response);
       }
     });
   });

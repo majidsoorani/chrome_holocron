@@ -1,28 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "Holocron Status",
-  "version": "1.1",
-  "description": "Monitors and controls an SSH tunnel, providing status, latency checks, and browser proxy management.",
-  "permissions": ["nativeMessaging", "alarms", "storage", "proxy"],
+  "name": "Holocron",
+  "description": "Manages an SSH tunnel and browser proxy settings for secure and geo-unrestricted browsing.",
+  "version": "1.0",
+  "permissions": [
+    "storage",
+    "proxy",
+    "alarms",
+    "nativeMessaging",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://cdn.jsdelivr.net/",
+    "https://openrouter.ai/"
+  ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Holocron Status",
     "default_icon": {
-      "16": "images/icon16.png",
-      "32": "images/icon32.png",
-      "48": "images/icon48.png"
-    }
+      "16": "images/icon16-bad.png",
+      "32": "images/icon32-bad.png",
+      "48": "images/icon48-bad.png"
+    },
+    "default_title": "Holocron Tunnel"
   },
   "options_ui": {
     "page": "options.html",
-    "open_in_tab": false
+    "open_in_tab": true
   },
   "icons": {
     "16": "images/icon16.png",
-    "32": "images/icon32.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   }

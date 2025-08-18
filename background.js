@@ -1,10 +1,17 @@
 // This is a background service worker for the extension.
 
-importScripts('constants.js', 'iran_ip_ranges.js');
+import { COMMANDS, STORAGE_KEYS } from './constants.js';
+import { IRAN_IP_RANGES_NETMASK } from './iran_ip_ranges.js';
+
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
 // --- State Variables ---
 let lastStatus = { connected: false }; // Store the last known status
+const GEOIP_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@release/direct/iran.txt'; // For IP ranges (CIDR)
+const GEOSITE_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@release/direct/iran/iran.txt'; // For domains
+const GEOIP_UPDATE_COOLDOWN_HOURS = 24;
+
+// --- State Variables ---
 let isUpdateInProgress = false; // A flag to prevent concurrent updates.
 let lastReconnectAttemptTimestamp = 0; // For throttling auto-reconnect attempts.
 const RECONNECT_COOLDOWN_MS = 10000; // 10 seconds
@@ -124,6 +131,187 @@ function setActionIcon(status) {
 }
 
 /**
+ * Converts a CIDR string to an [IP, Netmask] pair for use with isInNet().
+ * @param {string} cidr The CIDR string (e.g., "192.168.1.0/24").
+ * @returns {Array<string>|null} An array [ip, netmask] or null if invalid.
+ */
+function cidrToIpNetmask(cidr) {
+  try {
+    const [ip, prefixStr] = cidr.split('/');
+    const prefix = parseInt(prefixStr, 10);
+    if (isNaN(prefix) || prefix < 0 || prefix > 32) {
+      return null;
+    }
+    let mask = [];
+    for (let i = 0; i < 4; i++) {
+      let n = Math.min(prefix - (i * 8), 8);
+      n = Math.max(n, 0);
+      mask.push(256 - Math.pow(2, 8 - n));
+    }
+    const netmask = mask.join('.');
+    // Basic validation for the IP part
+    if (ip.split('.').length !== 4) return null;
+    return [ip, netmask];
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Fetches the latest GeoIP database for Iran, processes it, and stores it.
+ * Includes a cooldown mechanism to avoid fetching too frequently.
+ * @param {boolean} force - If true, ignores the cooldown and forces an update.
+ */
+async function updateGeoIpDatabase(force = false) {
+  const { [STORAGE_KEYS.GEOIP_LAST_UPDATE]: lastUpdate } = await chrome.storage.local.get(STORAGE_KEYS.GEOIP_LAST_UPDATE);
+  const now = Date.now();
+
+  if (!force && lastUpdate && (now - lastUpdate < GEOIP_UPDATE_COOLDOWN_HOURS * 60 * 60 * 1000)) {
+    console.log(`GeoIP database update skipped. Last update was less than ${GEOIP_UPDATE_COOLDOWN_HOURS} hours ago.`);
+    return;
+  }
+
+  console.log("Fetching updated GeoIP database for Iran from:", GEOIP_URL);
+  try {
+    const response = await fetch(GEOIP_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const text = await response.text();
+    const cidrList = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const ranges = cidrList.map(cidrToIpNetmask).filter(Boolean);
+
+    await chrome.storage.local.set({ [STORAGE_KEYS.GEOIP_RANGES]: ranges, [STORAGE_KEYS.GEOIP_LAST_UPDATE]: now });
+    console.log(`Successfully updated and cached GeoIP database with ${ranges.length} ranges.`);
+  } catch (error) {
+    console.error("Failed to update GeoIP database:", error.message);
+  }
+}
+
+/**
+ * Fetches the latest GeoSite database for Iran (list of domains) and stores it.
+ * @param {boolean} force - If true, ignores the cooldown and forces an update.
+ */
+async function updateGeoSiteDatabase(force = false) {
+  const { [STORAGE_KEYS.GEOSITE_LAST_UPDATE]: lastUpdate } = await chrome.storage.local.get(STORAGE_KEYS.GEOSITE_LAST_UPDATE);
+  const now = Date.now();
+
+  if (!force && lastUpdate && (now - lastUpdate < GEOIP_UPDATE_COOLDOWN_HOURS * 60 * 60 * 1000)) {
+    console.log(`GeoSite database update skipped. Last update was less than ${GEOIP_UPDATE_COOLDOWN_HOURS} hours ago.`);
+    return;
+  }
+
+  console.log("Fetching updated GeoSite database for Iran from:", GEOSITE_URL);
+  try {
+    const response = await fetch(GEOSITE_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const text = await response.text();
+    const domains = text.split('\n').map(line => line.trim()).filter(Boolean);
+
+    await chrome.storage.local.set({ [STORAGE_KEYS.GEOSITE_DOMAINS]: domains, [STORAGE_KEYS.GEOSITE_LAST_UPDATE]: now });
+    console.log(`Successfully updated and cached GeoSite database with ${domains.length} domains.`);
+  } catch (error) {
+    console.error("Failed to update GeoSite database:", error.message);
+  }
+}
+
+/**
+ * Retrieves the currently connected core SSH configuration from storage.
+ * @returns {Promise<object|null>} A promise that resolves with the active configuration object, or null if not found.
+ */
+async function getCurrentlyConnectedConfig() {
+  const {
+    [STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID]: activeId
+  } = await chrome.storage.local.get(STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID);
+  if (!activeId) return null;
+
+  const {
+    [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs
+  } = await chrome.storage.sync.get(STORAGE_KEYS.CORE_CONFIGURATIONS);
+  if (!configs || configs.length === 0) {
+    return null;
+  }
+  return configs.find(c => c.id === activeId) || null;
+}
+
+/**
+ * Generates a stable, filesystem-safe identifier from a configuration object.
+ * This is used for lock files and process identification.
+ * @param {object} config The configuration object, must contain `sshHost`.
+ * @returns {string|null} A safe identifier or null.
+ */
+function getIdentifierForConfig(config) {
+  if (!config || !config.sshHost) return null;
+  // Use the SSH host as the basis for a unique, stable identifier.
+  return config.sshHost.replace(/[^a-zA-Z0-9.-]/g, '_');
+}
+/**
+ * Attempts to start a tunnel for a single, specific configuration.
+ * @param {object} config The configuration object to connect with.
+ * @param {Array<string>} [wifiSsidList=[]] Optional list of SSIDs for condition check.
+ * @returns {Promise<object>} A promise that resolves with the response from the native host.
+ */
+async function attemptConnection(config, wifiSsidList = []) {
+    console.log(`Attempting to connect with configuration: "${config.name}"`);
+    const identifier = getIdentifierForConfig(config);
+
+    if (!identifier) {
+        const message = `Skipping configuration "${config.name}" because it has an invalid or empty SSH Host.`;
+        console.warn(message);
+        return { success: false, message: message };
+    }
+
+    const configPayload = {
+        // Use legacy keys because the python script expects them.
+        id: config.id, // Pass the ID for state management
+        sshUser: config.sshUser,
+        sshHost: config.sshHost,
+        sshCommandIdentifier: identifier,
+        sshRemoteCommand: config.sshRemoteCommand,
+        portForwards: config.portForwards || [],
+        wifiSsidList: wifiSsidList,
+    };
+
+    const response = await communicateWithNativeHost({ command: COMMANDS.START_TUNNEL, config: configPayload });
+    if (response.success) {
+        console.log(`Successfully connected with configuration: "${config.name}"`);
+        await chrome.storage.local.set({ [STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID]: config.id });
+    }
+    return response;
+}
+
+
+/**
+ * Iterates through enabled configurations and attempts to start a tunnel,
+ * stopping at the first successful connection.
+ * @returns {Promise<object>} A promise that resolves with the response from the native host.
+ */
+async function tryToConnectToEnabledConfigs() {
+    const { [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs } = await chrome.storage.sync.get(STORAGE_KEYS.CORE_CONFIGURATIONS);
+    if (!configs || configs.length === 0) {
+        return { success: false, message: "No configurations defined." };
+    }
+
+    const enabledConfigs = configs.filter(c => c.enabled);
+    if (enabledConfigs.length === 0) {
+        return { success: false, message: "No configurations are enabled." };
+    }
+
+    const { [STORAGE_KEYS.WIFI_SSIDS]: wifiSsidList } = await chrome.storage.sync.get(STORAGE_KEYS.WIFI_SSIDS);
+
+    for (const config of enabledConfigs) {
+        const response = await attemptConnection(config, wifiSsidList);
+        if (response.success) {
+            return response; // Return the first successful response
+        }
+        console.warn(`Failed to connect with "${config.name}": ${response.message}. Trying next configuration.`);
+    }
+
+    // If the loop finishes, no connection was successful
+    return { success: false, message: "Failed to connect using any of the enabled configurations." };
+}
+
+/**
  * Attempts to automatically restart the SSH tunnel.
  * This is triggered when the connection drops and the user has enabled the feature.
  * It includes a cooldown mechanism to prevent rapid-fire reconnection attempts.
@@ -138,20 +326,7 @@ async function attemptAutoReconnect() {
 
   console.log("Attempting to automatically reconnect the tunnel...");
   try {
-    // This logic is similar to the START_TUNNEL message handler.
-    const settings = await chrome.storage.sync.get([
-      STORAGE_KEYS.SSH_USER,
-      STORAGE_KEYS.SSH_HOST,
-      STORAGE_KEYS.PORT_FORWARDS,
-      STORAGE_KEYS.SSH_COMMAND_ID,
-      STORAGE_KEYS.WIFI_SSIDS
-    ]);
-
-    const response = await communicateWithNativeHost({
-      command: COMMANDS.START_TUNNEL,
-      config: settings
-    });
-
+    const response = await tryToConnectToEnabledConfigs();
     if (response.success) {
       console.log("Auto-reconnect command sent successfully.");
       // A small delay gives the SSH process time to start before we check.
@@ -178,6 +353,27 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
   const wasConnected = lastStatus.connected;
   lastStatus = newStatus;
 
+  // --- Store latency history if connected ---
+  if (newStatus.connected && typeof newStatus.web_check_latency_ms !== 'undefined' && typeof newStatus.tcp_ping_ms !== 'undefined') {
+    // Only store valid readings (greater than -1)
+    if (newStatus.web_check_latency_ms > -1 && newStatus.tcp_ping_ms > -1) {
+      const newHistoryPoint = {
+        timestamp: Date.now(),
+        web: newStatus.web_check_latency_ms,
+        tcp: newStatus.tcp_ping_ms,
+      };
+      // Use an async IIFE to avoid holding up the broadcast
+      (async () => {
+        const { [STORAGE_KEYS.LATENCY_HISTORY]: history = [] } = await chrome.storage.local.get(STORAGE_KEYS.LATENCY_HISTORY);
+        history.push(newHistoryPoint);
+        // Keep the history to a reasonable size, e.g., last 200 points
+        if (history.length > 200) {
+          history.shift();
+        }
+        await chrome.storage.local.set({ [STORAGE_KEYS.LATENCY_HISTORY]: history });
+      })();
+    }
+  }
   // --- Handle state transitions ---
   // Check if the tunnel has just disconnected.
   const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
@@ -253,58 +449,80 @@ async function updateStatus() {
     return;
   }
   isUpdateInProgress = true;
-
-  const {
-    [STORAGE_KEYS.SSH_COMMAND_ID]: sshCommandIdentifier,
-    [STORAGE_KEYS.PING_HOST]: pingHost,
-    [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl
-  } = await chrome.storage.sync.get({
-    [STORAGE_KEYS.SSH_COMMAND_ID]: '',
-    [STORAGE_KEYS.PING_HOST]: 'youtube.com', // Default value
-    [STORAGE_KEYS.WEB_CHECK_URL]: 'https://gemini.google.com/app'
-  });
-
-  if (!sshCommandIdentifier) {
-    console.log("SSH command identifier not set. Please configure it in the options.");
-    updateStateAndBroadcast({ connected: false });
-    isUpdateInProgress = false;
-    return;
-  }
-
   try {
-    const response = await communicateWithNativeHost({
-      command: COMMANDS.GET_STATUS,
-      sshCommandIdentifier,
-      pingHost,
-      webCheckUrl
+    const connectedConfig = await getCurrentlyConnectedConfig();
+    if (!connectedConfig) {
+      // If we think we are disconnected, report it.
+      // The updateStateAndBroadcast function will handle the transition and trigger an auto-reconnect if needed.
+      // Pass null for the activeConfigId.
+      updateStateAndBroadcast({ connected: false, activeConfigId: null });
+      return; // The 'finally' block will still execute.
+    }
+
+    const {
+      [STORAGE_KEYS.PING_HOST]: pingHost,
+      [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl
+    } = await chrome.storage.sync.get({
+      [STORAGE_KEYS.PING_HOST]: 'youtube.com', // Default value
+      [STORAGE_KEYS.WEB_CHECK_URL]: 'https://gemini.google.com/app'
     });
-    updateStateAndBroadcast(response && response.connected ? response : { connected: false });
-  } catch (error) {
-    const errorMessage = `Error during status update for command "${sshCommandIdentifier}": ${error.message}`;
-    updateStateAndBroadcast({ connected: false }, errorMessage);
+
+    try {
+      const response = await communicateWithNativeHost({
+        command: COMMANDS.GET_STATUS,
+        // Pass the identifier from the active configuration
+        sshCommandIdentifier: getIdentifierForConfig(connectedConfig),
+        pingHost,
+        webCheckUrl
+      });
+      response.activeConfigId = connectedConfig.id; // Add the active ID to the status object
+      if (response && response.connected) {
+        updateStateAndBroadcast(response);
+      } else {
+        // The currently "active" config is no longer connected.
+        console.log(`Configuration "${connectedConfig.name}" is no longer connected.`);
+        await chrome.storage.local.remove(STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID);
+        // The updateStateAndBroadcast will see the state change from connected to disconnected and trigger auto-reconnect if enabled
+        updateStateAndBroadcast({ connected: false, activeConfigId: null });
+      }
+    } catch (error) {
+      const errorMessage = `Error during status update for config "${connectedConfig.name}": ${error.message}`;
+      updateStateAndBroadcast({ connected: false, activeConfigId: null }, errorMessage);
+    }
   } finally {
     isUpdateInProgress = false;
   }
 }
 
 // Perform an initial check on browser startup.
-chrome.runtime.onStartup.addListener(updateStatus);
+chrome.runtime.onStartup.addListener(() => {
+  updateStatus();
+  updateGeoIpDatabase();
+  updateGeoSiteDatabase();
+});
 
 // Set up the alarm and perform an initial check when the extension is installed.
 chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('status-check', { periodInMinutes: 1 });
+  // Add a new alarm for daily GeoIP updates.
+  chrome.alarms.create('database-update', { periodInMinutes: 60 * 24 }); // 24 hours
 
   // On first install, open the options page to prompt the user for configuration.
   if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
     chrome.runtime.openOptionsPage();
   }
   updateStatus();
+  updateGeoIpDatabase();
+  updateGeoSiteDatabase();
 });
 
 // Listen for the alarm to trigger subsequent checks.
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'status-check') {
     updateStatus();
+  } else if (alarm.name === 'database-update') {
+    updateGeoIpDatabase();
+    updateGeoSiteDatabase();
   }
 });
 
@@ -324,52 +542,163 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return;
       }
       try {
-        // Get user setting for GeoIP bypass
-        const { [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: geoIpBypassEnabled } = await chrome.storage.sync.get({
-          [STORAGE_KEYS.GEOIP_BYPASS_ENABLED]: true // Default to enabled
-        });
+        // --- Get all necessary data from storage ---
+        const {
+            [STORAGE_KEYS.CORE_CONFIGURATIONS]: coreConfigs = [],
+            [STORAGE_KEYS.PROXY_BYPASS_RULES]: customRules = [],
+            [STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED]: geoIpBypassEnabled = true,
+            [STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED]: geoSiteBypassEnabled = true,
+        } = await chrome.storage.sync.get([
+            STORAGE_KEYS.CORE_CONFIGURATIONS,
+            STORAGE_KEYS.PROXY_BYPASS_RULES,
+            STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED,
+            STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED,
+        ]);
+
+        const {
+          [STORAGE_KEYS.GEOIP_RANGES]: storedRanges,
+          [STORAGE_KEYS.GEOSITE_DOMAINS]: storedDomains,
+          [STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID]: activeConfigId,
+        } = await chrome.storage.local.get([
+            STORAGE_KEYS.GEOIP_RANGES,
+            STORAGE_KEYS.GEOSITE_DOMAINS,
+            STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID
+        ]);
+
+        if (!activeConfigId) {
+            sendResponse({ success: false, message: "Cannot apply proxy, no active configuration is set." });
+            return;
+        }
 
         // Store original settings before changing them.
         const originalSettings = await chrome.proxy.settings.get({ incognito: false });
 
         // --- Create a PAC script for advanced routing ---
-        // This allows for conditional proxying, such as bypassing specific domains.
-        let pacScript = `
+        let pacScript = `/**
+ * Holocron PAC (Proxy Auto-Configuration) Script
+ * Generated: ${new Date().toISOString()}
+ * Active Configuration ID: ${activeConfigId}
+ */
 function FindProxyForURL(url, host) {
-  // 1. Bypass requests to Iranian top-level domains (.ir)
-  if (shExpMatch(host, "*.ir")) {
-    return "DIRECT";
-  }
+    // --- Proxy Definitions ---
+    // These are defined based on your Core Configurations that have a Dynamic (-D) port forward.
+`;
+        const proxyDefinitions = [];
+        coreConfigs.forEach(config => {
+            if (config.portForwards && config.portForwards.length > 0) {
+                config.portForwards.forEach(rule => {
+                    if (rule.type === 'D' && rule.localPort) {
+                        const proxyVar = `PROXY_${config.id.replace(/-/g, '_')}`;
+                        pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${rule.localPort}"; // For "${config.name}"\n`;
+                        proxyDefinitions.push({ id: config.id, variable: proxyVar });
+                    }
+                });
+            }
+        });
 
-  // 2. Bypass localhost and other local addresses
-  if (isPlainHostName(host) || shExpMatch(host, "localhost") || shExpMatch(host, "127.0.0.1")) {
-    return "DIRECT";
-  }
+        pacScript += `
+    const DIRECT = "DIRECT";
+
+    // Determine the default proxy to use. This will be the proxy of the
+    // currently active configuration.
+`;
+        let activeProxyVar = 'DIRECT'; // Fallback
+        const activeProxyDef = proxyDefinitions.find(p => p.id === activeConfigId);
+        if (activeProxyDef) {
+            activeProxyVar = activeProxyDef.variable;
+        } else {
+            // If the active config has no SOCKS proxy, but one was passed (e.g. from a legacy setup), create a generic one.
+            // This maintains backward compatibility.
+            pacScript += `    // NOTE: Active config has no SOCKS proxy defined. Using generic port.\n`;
+            activeProxyVar = `"SOCKS5 127.0.0.1:${socksPort}"`;
+        }
+        pacScript += `    const PROXY = ${activeProxyVar};\n`;
+
+        pacScript += `
+    // --- Standard Bypasses (always active) ---
+    // Bypass for local, non-qualified, and common internal domains.
+    if (isPlainHostName(host) ||
+      shExpMatch(host, "localhost") ||
+      shExpMatch(host, "*.local") ||
+      shExpMatch(host, "*.ir")) {
+    return DIRECT;
+    }
+    try {
+        const ip = dnsResolve(host);
+        if (ip && (isInNet(ip, "10.0.0.0", "255.0.0.0") ||
+                   isInNet(ip, "172.16.0.0", "255.240.0.0") ||
+                   isInNet(ip, "192.168.0.0", "255.255.0.0") ||
+                   isInNet(ip, "127.0.0.0", "255.0.0.0"))) {
+            return DIRECT;
+        }
+    } catch (e) { /* dnsResolve can fail, fall through */ }
 `;
 
-        if (geoIpBypassEnabled) {
-          // Inject the GeoIP check logic and the IP ranges into the PAC script
-          pacScript += `
-  // 3. GeoIP check for Iran. This may introduce a small latency for DNS resolution.
-  try {
-    const ip = dnsResolve(host);
-    if (ip) {
-      const ranges = ${JSON.stringify(IRAN_IP_RANGES_NETMASK)};
-      for (let i = 0; i < ranges.length; i++) {
-        if (isInNet(ip, ranges[i][0], ranges[i][1])) {
-          return "DIRECT";
+        // --- Custom User-Defined Rules ---
+        if (customRules.length > 0) {
+            pacScript += `
+    // --- Custom Bypass & Routing Rules ---
+    // Rules you have defined to route specific domains.
+    const customRules = ${JSON.stringify(customRules, null, 4)};
+
+    for (let i = 0; i < customRules.length; i++) {
+        const rule = customRules[i];
+        if (shExpMatch(host, rule.domain)) {
+            // Rule target is "DIRECT" -> bypass the proxy.
+            if (rule.target === "DIRECT") {
+                return DIRECT;
+            }
+            // Find the proxy variable for the targeted configuration.
+`;
+            proxyDefinitions.forEach(def => {
+                pacScript += `            if (rule.target === "${def.id}") { return ${def.variable}; }\n`;
+            });
+            pacScript += `
+            // If the rule targets a configuration that doesn't have a SOCKS proxy
+            // or is otherwise unhandled, bypass it for safety.
+            return DIRECT;
         }
-      }
     }
-  } catch (e) {
-    // dnsResolve can fail for some hosts, fall through to proxy.
-  }
+`;
+        }
+
+        // --- GeoSite Bypass ---
+        if (geoSiteBypassEnabled && storedDomains && storedDomains.length > 0) {
+          pacScript += `
+    // --- GeoSite Bypass for Iran (domain list) ---
+    const domains = ${JSON.stringify(storedDomains)};
+    for (let i = 0; i < domains.length; i++) {
+        if (shExpMatch(host, domains[i])) {
+            return DIRECT;
+        }
+    }
+`;
+        }
+
+        // --- GeoIP Bypass ---
+        if (geoIpBypassEnabled) {
+          // Use dynamically fetched ranges if available, otherwise fall back to the hardcoded list.
+          const rangesToUse = (storedRanges && storedRanges.length > 0) ? storedRanges : IRAN_IP_RANGES_NETMASK;
+          pacScript += `
+    // --- GeoIP Bypass for Iran (IP ranges) ---
+    try {
+        const ip = dnsResolve(host);
+        if (ip) {
+            const ranges = ${JSON.stringify(rangesToUse)};
+            for (let i = 0; i < ranges.length; i++) {
+                if (isInNet(ip, ranges[i][0], ranges[i][1])) {
+                    return DIRECT;
+                }
+            }
+        }
+    } catch (e) { /* dnsResolve can fail, fall through */ }
 `;
         }
 
         pacScript += `
-  // Final step: For all other traffic, use the SOCKS proxy.
-  return "SOCKS5 127.0.0.1:${socksPort}";
+    // --- Default Action ---
+    // If no specific rules matched, use the default active proxy.
+    return PROXY;
 }`;
 
         const config = {
@@ -383,7 +712,7 @@ function FindProxyForURL(url, host) {
           [STORAGE_KEYS.IS_PROXY_MANAGED]: true,
           [STORAGE_KEYS.ORIGINAL_PROXY]: originalSettings.value
         });
-        sendResponse({ success: true, message: "Browser proxy set." });
+        sendResponse({ success: true, message: "Browser proxy set with advanced PAC script." });
       } catch (e) {
         sendResponse({ success: false, message: `Failed to set proxy: ${e.message}` });
       }
@@ -405,34 +734,55 @@ function FindProxyForURL(url, host) {
     return true;
   }
 
+  if (request.command === COMMANDS.MANUAL_DB_UPDATE) {
+    (async () => {
+      try {
+        console.log("Manual database update triggered.");
+        await Promise.all([
+          updateGeoIpDatabase(true), // force update
+          updateGeoSiteDatabase(true) // force update
+        ]);
+        console.log("Manual database update complete.");
+        sendResponse({ success: true, message: "Databases updated successfully." });
+      } catch (error) {
+        console.error("Manual database update failed:", error);
+        sendResponse({ success: false, message: `Update failed: ${error.message}` });
+      }
+    })();
+    return true;
+  }
   // Listener for the new test connection feature from the options page.
   if (request.command === COMMANDS.TEST_CONNECTION) {
     (async () => {
-      const { sshCommand, pingHost, webCheckUrl } = request;
-      if (!sshCommand) {
-        sendResponse({ success: false, message: "SSH Command Identifier cannot be empty." });
-        return;
-      }
+      const { sshCommand, pingHost, webCheckUrl, sshHost } = request;
       if (!pingHost) {
         sendResponse({ success: false, message: "Ping Host cannot be empty." });
         return;
       }
+      if (!sshHost) {
+        sendResponse({ success: false, message: "SSH Host cannot be empty." });
+        return; // sshCommand from options.js is the same as sshHost, so this check is sufficient.
+      }
       try {
         const response = await communicateWithNativeHost({
-          command: COMMANDS.GET_STATUS,
-          sshCommandIdentifier: sshCommand, // Map from options page key
+          command: COMMANDS.TEST_CONNECTION,
+          sshCommandIdentifier: sshHost, // The identifier is the host.
+          sshHost: sshHost, // The host itself is also needed for the direct ping test.
           pingHost,
           webCheckUrl
         });
         let message;
         if (response && response.connected) {
           message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
-        } else if (response) {
-          message = `Host connected, but tunnel is down. Direct TCP Ping: ${response.tcp_ping_ms}ms.`;
+        } else if (response && response.ssh_host_ping_ms !== undefined) {
+          const hostStatus = response.ssh_host_ping_ms > -1
+            ? `Host '${response.ssh_host_name}' is reachable (ping: ${response.ssh_host_ping_ms}ms).`
+            : `Host '${response.ssh_host_name}' is UNREACHABLE (${response.ssh_host_ping_error || 'Error'}).`;
+          message = `Tunnel is down. Diagnostic: ${hostStatus}`;
         } else {
-          message = "Host connected, but reports tunnel is down.";
+          message = "Could not get a detailed status. Check native host logs for errors.";
         }
-        sendResponse({ success: true, message: message });
+        sendResponse({ success: response.success, message: message });
       } catch (error) {
         sendResponse({ success: false, message: error.message });
       }
@@ -444,24 +794,29 @@ function FindProxyForURL(url, host) {
   if (request.command === COMMANDS.START_TUNNEL || request.command === COMMANDS.STOP_TUNNEL) {
     (async () => {
       try {
-        let config = null;
-        // Only fetch and send config for the 'start' command
+        let response;
         if (request.command === COMMANDS.START_TUNNEL) {
-          const settings = await chrome.storage.sync.get([
-            STORAGE_KEYS.SSH_USER,
-            STORAGE_KEYS.SSH_HOST,
-            STORAGE_KEYS.PORT_FORWARDS,
-            STORAGE_KEYS.SSH_COMMAND_ID,
-            STORAGE_KEYS.WIFI_SSIDS
-          ]);
-          config = settings;
+            if (request.config) { // A specific config is being targeted from options page
+                // For a specific connection attempt, we don't care about the saved Wi-Fi SSIDs.
+                // The user is forcing it, so we pass an empty list.
+                response = await attemptConnection(request.config, []);
+            } else { // No specific config, use the enabled ones (from popup or auto-reconnect)
+                response = await tryToConnectToEnabledConfigs();
+            }
+        } else { // STOP_TUNNEL
+          const connectedConfig = await getCurrentlyConnectedConfig();
+          if (!connectedConfig) {
+            sendResponse({ success: true, message: "No active tunnel to stop." });
+            return;
+          }
+          response = await communicateWithNativeHost({
+            command: request.command,
+            config: { sshCommandIdentifier: getIdentifierForConfig(connectedConfig) }
+          });
+          if (response.success) {
+            await chrome.storage.local.remove(STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID);
+          }
         }
-
-        const response = await communicateWithNativeHost({
-          command: request.command,
-          config: config
-        });
-
         sendResponse(response);
 
         // After a start/stop attempt, trigger a status update to refresh the UI.
@@ -477,6 +832,31 @@ function FindProxyForURL(url, host) {
       }
     })();
     return true; // Indicate async response.
+  }
+
+  if (request.command === COMMANDS.GET_LOGS) {
+    (async () => {
+      try {
+        // This command is a simple pass-through to the native host
+        const response = await communicateWithNativeHost({ command: COMMANDS.GET_LOGS });
+        sendResponse(response);
+      } catch (error) {
+        sendResponse({ success: false, message: `Failed to get logs: ${error.message}` });
+      }
+    })();
+    return true; // Indicate async response
+  }
+
+  if (request.command === COMMANDS.CLEAR_LOGS) {
+    (async () => {
+      try {
+        const response = await communicateWithNativeHost({ command: COMMANDS.CLEAR_LOGS });
+        sendResponse(response);
+      } catch (error) {
+        sendResponse({ success: false, message: `Failed to clear logs: ${error.message}` });
+      }
+    })();
+    return true; // Indicate async response
   }
   return false; // Explicitly return false for other messages.
 });
