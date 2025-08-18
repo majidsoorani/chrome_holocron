@@ -267,25 +267,52 @@
             <div class="config-details" style="display: none;">
                 <div class="form-group">
                     <label>Configuration Name</label>
-                    <input type="text" class="config-input-name" placeholder="e.g., Work Bastion">
+                    <input type="text" class="config-input-name" placeholder="e.g., Work Bastion, University VPN">
                 </div>
                 <div class="form-group">
-                    <label>SSH User</label>
-                    <input type="text" class="config-input-ssh-user" placeholder="user">
+                    <label for="config-type-select">Connection Type</label>
+                    <select class="config-type-select">
+                        <option value="ssh">SSH Tunnel</option>
+                        <option value="openvpn">OpenVPN</option>
+                    </select>
                 </div>
-                <div class="form-group">
-                    <label>SSH Host</label>
-                    <input type="text" class="config-input-ssh-host" placeholder="bastion.example.com">
+
+                <!-- SSH Specific Fields -->
+                <div class="ssh-settings">
+                    <div class="form-group">
+                        <label>SSH User</label>
+                        <input type="text" class="config-input-ssh-user" placeholder="user">
+                    </div>
+                    <div class="form-group">
+                        <label>SSH Host</label>
+                        <input type="text" class="config-input-ssh-host" placeholder="bastion.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Remote Command on Connect</label>
+                        <textarea class="config-input-ssh-remote-command" rows="3" placeholder="e.g., export MY_VAR=123;"></textarea>
+                    </div>
+                    <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Port Forwarding Rules</h3>
+                    <div class="port-forwarding-rules-list">
+                        <!-- Rules will be dynamically inserted here -->
+                    </div>
+                    <button type="button" class="add-port-forward-rule-button add-button">+ Add Rule</button>
                 </div>
-                <div class="form-group">
-                    <label>Remote Command on Connect</label>
-                    <textarea class="config-input-ssh-remote-command" rows="3" placeholder="e.g., export MY_VAR=123;"></textarea>
+
+                <!-- OpenVPN Specific Fields -->
+                <div class="openvpn-settings" style="display: none;">
+                    <div class="form-group">
+                        <label for="ovpn-profile-name">Profile Name</label>
+                        <input type="text" class="ovpn-profile-name" name="ovpn-profile-name" placeholder="e.g., 'University VPN' or 'Work Gateway'">
+                        <small>A unique name to identify this OpenVPN profile.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="ovpn-file-upload">Upload .ovpn File</label>
+                        <input type="file" class="ovpn-file-upload" name="ovpn-file-upload" accept=".ovpn">
+                        <small class="ovpn-file-status">No file selected.</small>
+                        <!-- Hidden input to store the file content -->
+                        <textarea class="ovpn-file-content" name="ovpn-file-content" style="display:none;"></textarea>
+                    </div>
                 </div>
-                <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Port Forwarding Rules</h3>
-                <div class="port-forwarding-rules-list">
-                    <!-- Rules will be dynamically inserted here -->
-                </div>
-                <button type="button" class="add-port-forward-rule-button add-button">+ Add Rule</button>
             </div>
         </div>
     </template>

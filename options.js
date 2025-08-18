@@ -115,20 +115,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Inputs inside details
     const nameInput = details.querySelector('.config-input-name');
-    const sshUserInput = details.querySelector('.config-input-ssh-user');
-    const sshHostInput = details.querySelector('.config-input-ssh-host');
-    const sshRemoteCommandInput = details.querySelector('.config-input-ssh-remote-command');
-    const portForwardingList = details.querySelector('.port-forwarding-rules-list');
-    const addPortForwardRuleButton = details.querySelector('.add-port-forward-rule-button');
+    const typeSelect = details.querySelector('.config-type-select');
+
+    // SSH settings
+    const sshSettings = details.querySelector('.ssh-settings');
+    const sshUserInput = sshSettings.querySelector('.config-input-ssh-user');
+    const sshHostInput = sshSettings.querySelector('.config-input-ssh-host');
+    const sshRemoteCommandInput = sshSettings.querySelector('.config-input-ssh-remote-command');
+    const portForwardingList = sshSettings.querySelector('.port-forwarding-rules-list');
+    const addPortForwardRuleButton = sshSettings.querySelector('.add-port-forward-rule-button');
+
+    // OpenVPN settings
+    const openvpnSettings = details.querySelector('.openvpn-settings');
+    const ovpnProfileNameInput = openvpnSettings.querySelector('.ovpn-profile-name');
+    const ovpnFileUpload = openvpnSettings.querySelector('.ovpn-file-upload');
+    const ovpnFileStatus = openvpnSettings.querySelector('.ovpn-file-status');
+    const ovpnFileContent = openvpnSettings.querySelector('.ovpn-file-content');
 
     const configId = config.id || crypto.randomUUID();
     configItem.dataset.id = configId;
 
+    // --- Type Switching ---
+    const toggleSettingsVisibility = () => {
+        const type = typeSelect.value;
+        if (type === 'ssh') {
+            sshSettings.style.display = 'block';
+            openvpnSettings.style.display = 'none';
+        } else { // openvpn
+            sshSettings.style.display = 'none';
+            openvpnSettings.style.display = 'block';
+        }
+        updateUserHostDisplay(); // Update summary on type change
+    };
+
+    typeSelect.addEventListener('change', () => {
+        toggleSettingsVisibility();
+        setDirty(true);
+    });
+
     // Populate fields
     nameInput.value = config.name || '';
+    typeSelect.value = config.type || 'ssh';
+
+    // SSH fields
     sshUserInput.value = config.sshUser || '';
     sshHostInput.value = config.sshHost || '';
     sshRemoteCommandInput.value = config.sshRemoteCommand || '';
+
+    // OpenVPN fields
+    ovpnProfileNameInput.value = config.ovpnProfileName || '';
+    ovpnFileContent.value = config.ovpnFileContent || '';
+    if (config.ovpnFileContent) {
+        ovpnFileStatus.textContent = `Saved profile loaded. Upload a new file to replace it.`;
+    }
+
     // Listen for changes to the enabled state to update the PAC script preview
     checkbox.addEventListener('change', () => {
       updateAllProxyRuleDropdownsAndPreview();
@@ -140,11 +180,22 @@ document.addEventListener('DOMContentLoaded', () => {
     nameDisplay.textContent = config.name || 'New Configuration';
 
     const updateUserHostDisplay = () => {
-      const user = sshUserInput.value.trim();
-      const host = sshHostInput.value.trim();
-      userHostDisplay.textContent = (user && host) ? `${user}@${host}` : '';
+        const type = typeSelect.value;
+        let summary = '';
+        if (type === 'ssh') {
+            const user = sshUserInput.value.trim();
+            const host = sshHostInput.value.trim();
+            summary = (user && host) ? `${user}@${host}` : 'SSH connection details missing';
+        } else {
+            const profileName = ovpnProfileNameInput.value.trim();
+            summary = profileName ? `OpenVPN: ${profileName}` : 'OpenVPN profile details missing';
+        }
+      userHostDisplay.textContent = summary;
     };
+
+    // Initial population
     updateUserHostDisplay();
+    toggleSettingsVisibility(); // Set initial visibility based on loaded config
 
     // Event Listeners
     editButton.addEventListener('click', () => {
@@ -167,15 +218,36 @@ document.addEventListener('DOMContentLoaded', () => {
       const newConfig = {
         id: crypto.randomUUID(),
         name: `${nameInput.value.trim()} (copy)`,
+        type: typeSelect.value,
+        enabled: checkbox.checked,
         sshUser: sshUserInput.value.trim(),
         sshHost: sshHostInput.value.trim(),
         sshRemoteCommand: sshRemoteCommandInput.value.trim(),
+        ovpnProfileName: ovpnProfileNameInput.value.trim(),
+        ovpnFileContent: ovpnFileContent.value,
+        portForwards: (config.portForwards || []).map(p => ({...p})), // Deep copy
       };
       const newElement = createConfigElement(newConfig, null, true);
       configItem.after(newElement);
       updateAllProxyRuleDropdownsAndPreview();
       setDirty(true);
     });
+
+    // OVPN File handling
+    ovpnFileUpload.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            ovpnFileContent.value = e.target.result;
+            ovpnFileStatus.textContent = `File selected: ${file.name}`;
+            setDirty(true);
+        };
+        reader.readAsText(file);
+    });
+
 
     nameInput.addEventListener('input', () => {
       nameDisplay.textContent = nameInput.value || 'New Configuration';
@@ -185,31 +257,47 @@ document.addEventListener('DOMContentLoaded', () => {
     sshUserInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
     sshHostInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
     sshRemoteCommandInput.addEventListener('input', () => setDirty(true));
+    ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
+
 
     connectButton.addEventListener('click', () => {
         // Scrape data from this specific config item's inputs to send to the background script.
+        const type = typeSelect.value;
         const configPayload = {
             id: configId,
             name: nameInput.value.trim(),
-            sshUser: sshUserInput.value.trim(),
-            sshHost: sshHostInput.value.trim(),
-            sshRemoteCommand: sshRemoteCommandInput.value.trim(),
-            portForwards: Array.from(
-                portForwardingList.querySelectorAll('.rule-item')
-            ).map(el => {
-                const type = el.querySelector('.rule-type').value;
-                const localPort = el.querySelector('.rule-local-port').value;
-                const remoteHost = el.querySelector('.rule-remote-host').value;
-                const remotePort = el.querySelector('.rule-remote-port').value;
-                if (!localPort) return null;
-                const rule = { type, localPort };
-                if (type === 'L' || type === 'R') {
-                    rule.remoteHost = remoteHost;
-                    rule.remotePort = remotePort;
-                }
-                return rule;
-            }).filter(Boolean),
+            enabled: checkbox.checked,
+            type: type,
         };
+
+        if (type === 'ssh') {
+            Object.assign(configPayload, {
+                sshUser: sshUserInput.value.trim(),
+                sshHost: sshHostInput.value.trim(),
+                sshRemoteCommand: sshRemoteCommandInput.value.trim(),
+                portForwards: Array.from(
+                    portForwardingList.querySelectorAll('.rule-item')
+                ).map(el => {
+                    const type = el.querySelector('.rule-type').value;
+                    const localPort = el.querySelector('.rule-local-port').value;
+                    const remoteHost = el.querySelector('.rule-remote-host').value;
+                    const remotePort = el.querySelector('.rule-remote-port').value;
+                    if (!localPort) return null;
+                    const rule = { type, localPort };
+                    if (type === 'L' || type === 'R') {
+                        rule.remoteHost = remoteHost;
+                        rule.remotePort = remotePort;
+                    }
+                    return rule;
+                }).filter(Boolean),
+            });
+        } else { // openvpn
+            Object.assign(configPayload, {
+                ovpnProfileName: ovpnProfileNameInput.value.trim(),
+                ovpnFileContent: ovpnFileContent.value,
+            });
+        }
+
 
         statusMessage.textContent = `Connecting with "${configPayload.name}"...`;
         statusMessage.className = 'info';
@@ -971,15 +1059,50 @@ function FindProxyForURL(url, host) {
       }
     }
 
-    // 3. Validate Core Configurations (only if they are open for editing)
+    // 3. Validate Core Configurations
     document.querySelectorAll('#core-configurations-list .config-item').forEach((item) => {
       const nameInput = item.querySelector('.config-input-name');
-      const sshUserInput = item.querySelector('.config-input-ssh-user');
-      const sshHostInput = item.querySelector('.config-input-ssh-host');
-
       if (!nameInput.value.trim()) showError(nameInput, 'Configuration name cannot be empty.');
-      if (!sshUserInput.value.trim()) showError(sshUserInput, 'SSH User cannot be empty.');
-      if (!sshHostInput.value.trim()) showError(sshHostInput, 'SSH Host cannot be empty.');
+
+      const type = item.querySelector('.config-type-select').value;
+      if (type === 'ssh') {
+        const sshUserInput = item.querySelector('.config-input-ssh-user');
+        const sshHostInput = item.querySelector('.config-input-ssh-host');
+        if (!sshUserInput.value.trim()) showError(sshUserInput, 'SSH User cannot be empty.');
+        if (!sshHostInput.value.trim()) showError(sshHostInput, 'SSH Host cannot be empty.');
+
+        // Validate port forwarding rules
+        item.querySelectorAll('.port-forwarding-rules-list .rule-item').forEach((ruleEl) => {
+            const type = ruleEl.querySelector('.rule-type').value;
+            const localPortInput = ruleEl.querySelector('.rule-local-port');
+            const remoteHostInput = ruleEl.querySelector('.rule-remote-host');
+            const remotePortInput = ruleEl.querySelector('.rule-remote-port');
+
+            const localPort = localPortInput.value.trim();
+            if (!localPort) {
+              showError(localPortInput, 'Local port is required.');
+            } else if (!/^\d+$/.test(localPort) || +localPort < 1 || +localPort > 65535) {
+              showError(localPortInput, 'Port must be a number from 1-65535.');
+            }
+
+            if (type === 'L' || type === 'R') {
+              if (!remoteHostInput.value.trim()) {
+                showError(remoteHostInput, 'This field is required for this forward type.');
+              }
+              const remotePort = remotePortInput.value.trim();
+              if (!remotePort) {
+                showError(remotePortInput, 'Remote port is required.');
+              } else if (!/^\d+$/.test(remotePort) || +remotePort < 1 || +remotePort > 65535) {
+                showError(remotePortInput, 'Port must be a number from 1-65535.');
+              }
+            }
+        });
+      } else { // openvpn
+        const ovpnProfileNameInput = item.querySelector('.ovpn-profile-name');
+        const ovpnFileContent = item.querySelector('.ovpn-file-content');
+        if (!ovpnProfileNameInput.value.trim()) showError(ovpnProfileNameInput, 'Profile Name cannot be empty.');
+        if (!ovpnFileContent.value.trim()) showError(item.querySelector('.ovpn-file-upload'), 'An .ovpn file must be uploaded.');
+      }
     });
 
     // Validate new proxy bypass rules
@@ -988,34 +1111,6 @@ function FindProxyForURL(url, host) {
         if (!domainInput.value.trim()) {
             showError(domainInput, 'Domain pattern cannot be empty.');
         }
-    });
-    // 4. Validate port forwarding rules (per-configuration)
-    document.querySelectorAll('#core-configurations-list .config-item').forEach((item) => {
-      item.querySelectorAll('.port-forwarding-rules-list .rule-item').forEach((ruleEl) => {
-        const type = ruleEl.querySelector('.rule-type').value;
-        const localPortInput = ruleEl.querySelector('.rule-local-port');
-        const remoteHostInput = ruleEl.querySelector('.rule-remote-host');
-        const remotePortInput = ruleEl.querySelector('.rule-remote-port');
-
-        const localPort = localPortInput.value.trim();
-        if (!localPort) {
-          showError(localPortInput, 'Local port is required.');
-        } else if (!/^\d+$/.test(localPort) || +localPort < 1 || +localPort > 65535) {
-          showError(localPortInput, 'Port must be a number from 1-65535.');
-        }
-
-        if (type === 'L' || type === 'R') {
-          if (!remoteHostInput.value.trim()) {
-            showError(remoteHostInput, 'This field is required for this forward type.');
-          }
-          const remotePort = remotePortInput.value.trim();
-          if (!remotePort) {
-            showError(remotePortInput, 'Remote port is required.');
-          } else if (!/^\d+$/.test(remotePort) || +remotePort < 1 || +remotePort > 65535) {
-            showError(remotePortInput, 'Port must be a number from 1-65535.');
-          }
-        }
-      });
     });
 
     // 5. Validate Wi-Fi SSIDs
@@ -1043,29 +1138,43 @@ function FindProxyForURL(url, host) {
 
     document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
       const id = item.dataset.id;
-      coreConfigs.push({
+      const type = item.querySelector('.config-type-select').value;
+
+      const config = {
         id: id,
         enabled: item.querySelector('.config-enabled-checkbox').checked,
         name: item.querySelector('.config-input-name').value.trim(),
-        sshUser: item.querySelector('.config-input-ssh-user').value.trim(),
-        sshHost: item.querySelector('.config-input-ssh-host').value.trim(),
-        sshRemoteCommand: item.querySelector('.config-input-ssh-remote-command').value.trim(),
-        portForwards: Array.from(
-          item.querySelectorAll('.port-forwarding-rules-list .rule-item')
-        ).map(el => {
-          const type = el.querySelector('.rule-type').value;
-          const localPort = el.querySelector('.rule-local-port').value;
-          const remoteHost = el.querySelector('.rule-remote-host').value;
-          const remotePort = el.querySelector('.rule-remote-port').value;
-          if (!localPort) return null;
-          const rule = { type, localPort };
-          if (type === 'L' || type === 'R') {
-            rule.remoteHost = remoteHost;
-            rule.remotePort = remotePort;
-          }
-          return rule;
-        }).filter(Boolean), // Filter out nulls from empty rules
-      });
+        type: type,
+      };
+
+      if (type === 'ssh') {
+          Object.assign(config, {
+            sshUser: item.querySelector('.config-input-ssh-user').value.trim(),
+            sshHost: item.querySelector('.config-input-ssh-host').value.trim(),
+            sshRemoteCommand: item.querySelector('.config-input-ssh-remote-command').value.trim(),
+            portForwards: Array.from(
+              item.querySelectorAll('.port-forwarding-rules-list .rule-item')
+            ).map(el => {
+              const type = el.querySelector('.rule-type').value;
+              const localPort = el.querySelector('.rule-local-port').value;
+              const remoteHost = el.querySelector('.rule-remote-host').value;
+              const remotePort = el.querySelector('.rule-remote-port').value;
+              if (!localPort) return null;
+              const rule = { type, localPort };
+              if (type === 'L' || type === 'R') {
+                rule.remoteHost = remoteHost;
+                rule.remotePort = remotePort;
+              }
+              return rule;
+            }).filter(Boolean), // Filter out nulls from empty rules
+          });
+      } else { // openvpn
+          Object.assign(config, {
+              ovpnProfileName: item.querySelector('.ovpn-profile-name').value.trim(),
+              ovpnFileContent: item.querySelector('.ovpn-file-content').value,
+          });
+      }
+      coreConfigs.push(config);
     });
 
     const proxyBypassRules = Array.from(
@@ -1391,8 +1500,7 @@ function FindProxyForURL(url, host) {
 
       const request = {
         command: COMMANDS.TEST_CONNECTION,
-        sshCommand: configToTest.sshHost, // The identifier is now the host
-        sshHost: configToTest.sshHost,
+        config: configToTest,
         pingHost: pingHost,
         webCheckUrl: webCheckUrl
       };
