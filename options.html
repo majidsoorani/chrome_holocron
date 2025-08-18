@@ -40,164 +40,158 @@
             </div>
         </div>
 
-        <div class="settings-grid">
-            <section class="card">
-                <h2>Core Configurations</h2>
-                <div id="core-configurations-list">
-                    <!-- Configurations will be dynamically inserted here -->
-                </div>
-                <button id="add-config-button" class="add-button">+ Add Configuration</button>
-            </section>
+        <div class="tabs-container">
+            <nav class="tabs-nav">
+                <button class="tab-button active" data-tab="connections">Connections & Health</button>
+                <button class="tab-button" data-tab="proxy">Proxy & Routing</button>
+                <button class="tab-button" data-tab="settings">Settings & Logs</button>
+            </nav>
 
-            <section class="card">
-                <h2>Connection Health Checks</h2>
-                <div class="form-group">
-                    <label for="ping-host">Ping Host</label>
-                    <input type="text" id="ping-host" name="ping-host">
-                    <small>A reliable host for TCP ping checks (e.g., youtube.com).</small>
-                </div>
-                <div class="form-group">
-                    <label for="web-check-url">Web Check URL</label>
-                    <input type="url" id="web-check-url" name="web-check-url">
-                    <small>A URL for full HTTP/S connectivity checks.</small>
-                </div>
-            </section>
-
-            <section class="card">
-                <h2>AI Assistant (Powered by OpenRouter)</h2>
-                <div class="form-group">
-                    <label for="openrouter-api-key">OpenRouter API Key</label>
-                    <input type="password" id="openrouter-api-key" name="openrouter-api-key" placeholder="sk-or-...">
-                    <small>Your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter.ai</a>. Required for AI-powered suggestions.</small>
-                </div>
-                <div class="form-group">
-                    <label for="openrouter-model">AI Model</label>
-                    <input type="text" id="openrouter-model" name="openrouter-model">
-                    <small>The model to use for suggestions (e.g., z-ai/glm-4.5-air:free, google/gemini-flash-1.5).</small>
-                </div>
-                <div class="form-group">
-                    <label for="openrouter-system-message">AI System Message</label>
-                    <textarea id="openrouter-system-message" name="openrouter-system-message" rows="6"></textarea>
-                    <small>The system prompt used to instruct the AI. Modify with caution.</small>
-                </div>
-                <div id="ai-live-log-container" class="log-viewer-container" style="display: none; margin-top: 1em; height: 150px;">
-                    <pre id="ai-live-log-content"></pre>
-                </div>
-            </section>
-
-            <section class="card full-width">
-                <h2>Proxy Bypass Rules</h2>
-                <p>Define global rules for when to bypass the active proxy tunnel. The generated PAC script on the right will update as you make changes.</p>
-                <div class="proxy-actions-bar form-group">
-                    <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
-                    <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
-                    <small>Apply the PAC script to your browser's settings to route traffic.</small>
-                </div>
-                <div class="settings-grid two-column">
-                    <div class="settings-column">
-                        <div class="form-group checkbox-group">
-                            <input type="checkbox" id="global-geoip-bypass">
-                            <label for="global-geoip-bypass">Bypass proxy for Iranian IPs (GeoIP)</label>
-                        </div>
-                        <div class="form-group checkbox-group">
-                            <input type="checkbox" id="global-geosite-bypass">
-                            <label for="global-geosite-bypass">Bypass proxy for Iranian sites (GeoSite)</label>
-                        </div>
-                        <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
-                        <div id="proxy-bypass-rules-list">
-                            <!-- Custom rules will be inserted here -->
-                        </div>
-                        <div class="rule-actions" style="display: flex; gap: 10px; align-items: center; margin-top: 1em;">
-                            <button id="add-proxy-rule-button" class="add-button" style="margin-top: 0;">+ Add Rule</button>
-                            <button id="ai-suggest-rule-button" class="button-info" style="margin-top: 0;">Get AI Suggestion</button>
-                        </div>
-                        <small>Define domains and choose whether to send them DIRECT (bypass) or through a specific active tunnel.</small>
-                    </div>
-                    <div class="settings-column">
-                        <h3 class="sub-heading">Generated PAC Script Preview</h3>
-                        <pre id="pac-script-preview-container"><code>// PAC script will be generated here...</code></pre>
+            <div class="tabs-content">
+                <!-- Connections & Health Panel -->
+                <div class="tab-panel active" id="panel-connections">
+                    <div class="settings-grid">
+                        <section class="card">
+                            <h2>Core Configurations</h2>
+                            <div id="core-configurations-list">
+                                <!-- Configurations will be dynamically inserted here -->
+                            </div>
+                            <button id="add-config-button" class="add-button">+ Add Configuration</button>
+                        </section>
+                        <section class="card">
+                            <h2>Automatic Connection</h2>
+                            <div class="form-group">
+                                <p><strong>Connect only on these Wi-Fi SSIDs</strong></p>
+                                <div id="wifi-networks-list">
+                                    <!-- Wi-Fi SSIDs will be inserted here -->
+                                </div>
+                                <button id="add-wifi-button" class="add-button">+ Add Wi-Fi Network</button>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="auto-reconnect-enabled" name="auto-reconnect-enabled">
+                                <label for="auto-reconnect-enabled">Enable Auto-Reconnect</label>
+                                <small>Automatically try to restart the tunnel if it disconnects.</small>
+                            </div>
+                            <div class="form-group" id="manual-reconnect-container" style="display: none;">
+                                <label for="reconnect-now-button">Manual Reconnect</label>
+                                <button id="reconnect-now-button" class="button-success">Reconnect Now</button>
+                                <small>If the tunnel is disconnected, you can force a reconnection attempt.</small>
+                            </div>
+                        </section>
+                        <section class="card">
+                            <h2>Connection Health Checks</h2>
+                            <div class="form-group">
+                                <label for="ping-host">Ping Host</label>
+                                <input type="text" id="ping-host" name="ping-host">
+                                <small>A reliable host for TCP ping checks (e.g., youtube.com).</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="web-check-url">Web Check URL</label>
+                                <input type="url" id="web-check-url" name="web-check-url">
+                                <small>A URL for full HTTP/S connectivity checks.</small>
+                            </div>
+                        </section>
+                        <section class="card full-width">
+                            <h2>Connection Health History</h2>
+                            <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
+                            <div class="chart-wrapper">
+                                <canvas id="web-latency-chart"></canvas>
+                            </div>
+                            <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
+                            <div class="chart-wrapper">
+                                <canvas id="tcp-ping-chart"></canvas>
+                            </div>
+                        </section>
                     </div>
                 </div>
-            </section>
 
-            <section class="card full-width">
-                <h2>Connection Health History</h2>
-                <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
-                <div class="chart-wrapper">
-                    <canvas id="web-latency-chart"></canvas>
-                </div>
-                <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
-                <div class="chart-wrapper">
-                    <canvas id="tcp-ping-chart"></canvas>
-                </div>
-            </section>
-
-            <section class="card">
-                <h2>Automatic Connection</h2>
-                <div class="form-group">
-                    <!-- Changed from a <label> to a <p> tag to fix accessibility error, as a label should not point to a div. -->
-                    <p><strong>Connect only on these Wi-Fi SSIDs</strong></p>
-                    <div id="wifi-networks-list">
-                        <!-- Wi-Fi SSIDs will be inserted here -->
+                <!-- Proxy & Routing Panel -->
+                <div class="tab-panel" id="panel-proxy">
+                    <div class="settings-grid">
+                        <section class="card full-width">
+                            <h2>Proxy Bypass Rules</h2>
+                            <p>Define global rules for when to bypass the active proxy tunnel. The generated PAC script on the right will update as you make changes.</p>
+                            <div class="proxy-actions-bar form-group">
+                                <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
+                                <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
+                                <small>Apply the PAC script to your browser's settings to route traffic.</small>
+                            </div>
+                            <div class="settings-grid two-column">
+                                <div class="settings-column">
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="global-geoip-bypass">
+                                        <label for="global-geoip-bypass">Bypass proxy for Iranian IPs (GeoIP)</label>
+                                    </div>
+                                    <div class="form-group checkbox-group">
+                                        <input type="checkbox" id="global-geosite-bypass">
+                                        <label for="global-geosite-bypass">Bypass proxy for Iranian sites (GeoSite)</label>
+                                    </div>
+                                    <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
+                                    <div id="proxy-bypass-rules-list">
+                                        <!-- Custom rules will be inserted here -->
+                                    </div>
+                                    <div class="rule-actions" style="display: flex; gap: 10px; align-items: center; margin-top: 1em;">
+                                        <button id="add-proxy-rule-button" class="add-button" style="margin-top: 0;">+ Add Rule</button>
+                                        <button id="ai-suggest-rule-button" class="button-info" style="margin-top: 0;">Get AI Suggestion</button>
+                                    </div>
+                                    <small>Define domains and choose whether to send them DIRECT (bypass) or through a specific active tunnel.</small>
+                                </div>
+                                <div class="settings-column">
+                                    <h3 class="sub-heading">Generated PAC Script Preview</h3>
+                                    <pre id="pac-script-preview-container"><code>// PAC script will be generated here...</code></pre>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                    <button id="add-wifi-button" class="add-button">+ Add Wi-Fi Network</button>
                 </div>
-                <div class="form-group checkbox-group">
-                    <input type="checkbox" id="auto-reconnect-enabled" name="auto-reconnect-enabled">
-                    <label for="auto-reconnect-enabled">Enable Auto-Reconnect</label>
-                    <small>Automatically try to restart the tunnel if it disconnects.</small>
-                </div>
-                <div class="form-group" id="manual-reconnect-container" style="display: none;">
-                    <label for="reconnect-now-button">Manual Reconnect</label>
-                    <button id="reconnect-now-button" class="button-success">Reconnect Now</button>
-                    <small>If the tunnel is disconnected, you can force a reconnection attempt.</small>
-                </div>
-            </section>
 
-            <section class="card">
-                <h2>Native Host Live Log</h2>
-                <p><small>Shows a live feed of the most recent entries from the native host log file.</small></p>
-                <div class="log-viewer-container">
-                    <pre id="log-viewer-content">Waiting for log entries...</pre>
+                <!-- Settings & Logs Panel -->
+                <div class="tab-panel" id="panel-settings">
+                    <div class="settings-grid">
+                        <section class="card">
+                            <h2>AI Assistant (Powered by OpenRouter)</h2>
+                            <div class="form-group">
+                                <label for="openrouter-api-key">OpenRouter API Key</label>
+                                <input type="password" id="openrouter-api-key" name="openrouter-api-key" placeholder="sk-or-...">
+                                <small>Your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter.ai</a>. Required for AI-powered suggestions.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="openrouter-model">AI Model</label>
+                                <input type="text" id="openrouter-model" name="openrouter-model">
+                                <small>The model to use for suggestions (e.g., z-ai/glm-4.5-air:free, google/gemini-flash-1.5).</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="openrouter-system-message">AI System Message</label>
+                                <textarea id="openrouter-system-message" name="openrouter-system-message" rows="6"></textarea>
+                                <small>The system prompt used to instruct the AI. Modify with caution.</small>
+                            </div>
+                            <div id="ai-live-log-container" class="log-viewer-container" style="display: none; margin-top: 1em; height: 150px;">
+                                <pre id="ai-live-log-content"></pre>
+                            </div>
+                        </section>
+                        <section class="card">
+                            <h2>Native Host Live Log</h2>
+                            <p><small>Shows a live feed of the most recent entries from the native host log file.</small></p>
+                            <div class="log-viewer-container">
+                                <pre id="log-viewer-content">Waiting for log entries...</pre>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                                <button id="clear-log-button" class="button-warn">Clear Log</button>
+                                <small>This is useful for debugging connection issues.</small>
+                            </div>
+                        </section>
+                        <section class="card">
+                            <h2>Geo-Database Status</h2>
+                            <div class="database-status" style="border-top: none; margin-top: 0; padding-top: 0;">
+                                <div id="geoip-status">GeoIP: Loading...</div>
+                                <div id="geosite-status">GeoSite: Loading...</div>
+                                <button id="update-db-button">Update Databases Now</button>
+                            </div>
+                        </section>
+                    </div>
                 </div>
-                <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
-                    <button id="clear-log-button" class="button-warn">Clear Log</button>
-                    <small>This is useful for debugging connection issues.</small>
-                </div>
-            </section>
-
+            </div>
         </div>
-        <section class="card" style="display: none;">
-            <h2>Proxy Bypass Rules</h2>
-            <p>Define global rules for when to bypass the active proxy tunnel. The generated PAC script on the right will update as you make changes.</p>
-            <div class="proxy-actions-bar form-group">
-                <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
-                <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
-                <small>Apply the PAC script to your browser's settings to route traffic.</small>
-            </div>
-            <div class="settings-grid two-column">
-                <div class="settings-column">
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="global-geoip-bypass">
-                        <label for="global-geoip-bypass">Bypass proxy for Iranian IPs (GeoIP)</label>
-                    </div>
-                    <div class="form-group checkbox-group">
-                        <input type="checkbox" id="global-geosite-bypass">
-                        <label for="global-geosite-bypass">Bypass proxy for Iranian sites (GeoSite)</label>
-                    </div>
-                    <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
-                    <div id="proxy-bypass-rules-list">
-                        <!-- Custom rules will be inserted here -->
-                    </div>
-                    <button id="add-proxy-rule-button" class="add-button">+ Add Rule</button>
-                    <small>Define domains and choose whether to send them DIRECT (bypass) or through a specific active tunnel.</small>
-                </div>
-                <div class="settings-column">
-                    <h3 class="sub-heading">Generated PAC Script Preview</h3>
-                    <pre id="pac-script-preview-container"><code>// PAC script will be generated here...</code></pre>
-                </div>
-            </div>
-        </section>
 
     <!-- Templates for dynamic elements -->
     <template id="port-forward-rule-template">

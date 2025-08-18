@@ -43,6 +43,31 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiLiveLogContainer = document.getElementById('ai-live-log-container');
   const aiLiveLogContent = document.getElementById('ai-live-log-content');
 
+  // --- Tabbed Interface Logic ---
+  const tabsNav = document.querySelector('.tabs-nav');
+  const tabPanels = document.querySelectorAll('.tab-panel');
+  const tabButtons = document.querySelectorAll('.tab-button');
+
+  if (tabsNav) {
+    tabsNav.addEventListener('click', (e) => {
+        const clickedButton = e.target.closest('.tab-button');
+        if (!clickedButton) return;
+
+        // Remove active state from all
+        tabButtons.forEach(button => button.classList.remove('active'));
+        tabPanels.forEach(panel => panel.classList.remove('active'));
+
+        // Apply active state to the clicked tab and its panel
+        const tabId = clickedButton.dataset.tab;
+        const targetPanel = document.getElementById(`panel-${tabId}`);
+
+        clickedButton.classList.add('active');
+        if (targetPanel) {
+          targetPanel.classList.add('active');
+        }
+    });
+  }
+
   // --- State ---
   let isDirty = false;
   let currentStatus = {}; // Cache the latest status object
