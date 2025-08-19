@@ -336,22 +336,93 @@
 
                 <!-- External Proxy Specific Fields -->
                 <div class="external-settings" style="display: none;">
-                    <!-- content remains the same -->
+                    <div class="form-group-grid three-column">
+                        <div class="form-group">
+                            <label>Protocol</label>
+                            <select class="config-input-external-protocol">
+                                <option value="SOCKS5">SOCKS5</option>
+                                <option value="SOCKS4">SOCKS4</option>
+                                <option value="HTTP">HTTP</option>
+                                <option value="HTTPS">HTTPS</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Proxy Host</label>
+                            <input type="text" class="config-input-external-host" placeholder="127.0.0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Proxy Port</label>
+                            <input type="number" class="config-input-external-port" placeholder="9050" min="1" max="65535">
+                        </div>
+                    </div>
+                    <small>Use this for connecting to an existing proxy server running on your machine or network (e.g., Tor, Privoxy).</small>
                 </div>
 
                 <!-- SSH Specific Fields -->
                 <div class="ssh-settings">
-                    <!-- content remains the same -->
+                    <div class="form-group-grid">
+                        <div class="form-group">
+                            <label>SSH User</label>
+                            <input type="text" class="config-input-ssh-user" placeholder="e.g., root">
+                        </div>
+                        <div class="form-group">
+                            <label>SSH Host</label>
+                            <input type="text" class="config-input-ssh-host" placeholder="e.g., bastion.example.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Remote Command (Optional)</label>
+                        <input type="text" class="config-input-ssh-remote-command" placeholder="e.g., /usr/local/bin/my_script.sh">
+                        <small>A command to run on the remote host after connecting.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Port Forwarding Rules</label>
+                        <div class="port-forwarding-rules-list">
+                            <!-- Rules will be dynamically inserted here -->
+                        </div>
+                        <button class="add-port-forward-rule-button add-button">+ Add Port Forward Rule</button>
+                    </div>
                 </div>
 
                 <!-- OpenVPN Specific Fields -->
                 <div class="openvpn-settings" style="display: none;">
-                    <!-- content remains the same -->
+                    <div class="form-group">
+                        <label>Profile Name</label>
+                        <input type="text" class="ovpn-profile-name" placeholder="e.g., My VPN">
+                        <small>A friendly name for this OpenVPN connection.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>OpenVPN Configuration File (.ovpn)</label>
+                        <input type="file" class="ovpn-file-upload" accept=".ovpn,.conf">
+                        <small class="ovpn-file-status">No file selected.</small>
+                        <textarea class="ovpn-file-content" style="display:none;"></textarea>
+                    </div>
+                    <div class="ovpn-auth-container" style="display: none;">
+                        <p><small>This profile requires a username and password.</small></p>
+                        <div class="form-group-grid">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" class="ovpn-auth-user" autocomplete="username">
+                            </div>
+                            <div class="form-group">
+                                <label>Password</label>
+                                <input type="password" class="ovpn-auth-pass" autocomplete="current-password">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- V2Ray Specific Fields -->
                 <div class="v2ray-settings" style="display: none;">
-                    <!-- content remains the same -->
+                    <div class="form-group">
+                        <label>V2Ray URL (VLESS)</label>
+                        <input type="text" class="config-input-v2ray-url" placeholder="vless://...">
+                        <small>Paste your full VLESS configuration URL here.</small>
+                    </div>
+                    <div class="v2ray-detected-params" style="display: none;">
+                        <strong>Detected Parameters:</strong>
+                        <ul class="v2ray-params-list"></ul>
+                    </div>
                 </div>
 
                 <div class="config-details-actions">
