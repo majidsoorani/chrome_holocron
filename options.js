@@ -36,8 +36,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const incognitoPermissionWarning = document.getElementById('incognito-permission-warning');
   const proxyBypassRulesList = document.getElementById('proxy-bypass-rules-list');
   const pacScriptPreviewContainer = document.getElementById('pac-script-preview-container');
+  const copyPacButton = document.getElementById('copy-pac-button');
+  const searchProxyRulesInput = document.getElementById('search-proxy-rules');
   const logViewerContent = document.getElementById('log-viewer-content');
   const clearLogButton = document.getElementById('clear-log-button');
+  const toggleLogPollingButton = document.getElementById('toggle-log-polling-button');
+  const copyLogButton = document.getElementById('copy-log-button');
   const aiSuggestRuleButton = document.getElementById('ai-suggest-rule-button');
   const aiApiKeyInput = document.getElementById('ai-api-key');
   const aiModelInput = document.getElementById('ai-model');
@@ -84,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let configLogPollIntervals = {}; // To hold setInterval IDs for config-specific log polling.
   let logPollInterval = null; // To hold the setInterval ID for log polling
   let mainLogPollInterval = null; // For the main log viewer
+  let isLogPollingPaused = false;
 
   // --- Debouncer for auto-saving ---
   function debounce(func, delay) {
@@ -96,11 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
         timeout = setTimeout(() => func.apply(context, args), 750);
     };
   }
-
-  const ICONS = {
-    EDIT: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>`,
-    DONE: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
-  };
 
   function formatTcpError(error) {
     if (!error) return 'Fail';
@@ -128,20 +128,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- Core Configuration Management ---
   function createConfigElement(config = {}, activeConfigId, startInEditMode = false) {
     const content = coreConfigTemplate.content.cloneNode(true);
-    const configItem = content.querySelector('.config-item');
-    const details = configItem.querySelector('.config-details');
-    const checkbox = configItem.querySelector('.config-enabled-checkbox');
-    const nameDisplay = configItem.querySelector('.config-name');
-    const userHostDisplay = configItem.querySelector('.config-user-host');
-    const editButton = configItem.querySelector('.edit-config-button');
-    const deleteButton = configItem.querySelector('.delete-config-button');
-    const connectButton = configItem.querySelector('.connect-config-button');
-    const disconnectButton = configItem.querySelector('.disconnect-config-button');
-    const duplicateButton = configItem.querySelector('.duplicate-config-button');
+    const configCard = content.querySelector('.config-card');
+    const details = configCard.querySelector('.config-details');
+    const nameDisplay = configCard.querySelector('.config-name');
+    const statusBadge = configCard.querySelector('.status-badge');
 
-    // Inputs inside details
+    // Main controls
+    const editButton = configCard.querySelector('.edit-config-button');
+    const connectButton = configCard.querySelector('.connect-config-button');
+    const disconnectButton = configCard.querySelector('.disconnect-config-button');
+
+    // Details form inputs
     const nameInput = details.querySelector('.config-input-name');
     const typeSelect = details.querySelector('.config-type-select');
+    const checkbox = details.querySelector('.config-enabled-checkbox');
+    const duplicateButton = details.querySelector('.duplicate-config-button');
+    const deleteButton = details.querySelector('.delete-config-button');
+
 
     // SSH settings
     const sshSettings = details.querySelector('.ssh-settings');
@@ -178,19 +181,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveLogContent = details.querySelector('.config-live-log-content');
 
     // Health Check elements
-    const testConfigButton = configItem.querySelector('.test-config-button');
-    const webLatencyValue = configItem.querySelector('.web-latency-value');
-    const tcpPingValue = configItem.querySelector('.tcp-ping-value');
-    const testStatusValue = configItem.querySelector('.test-status-value');
-    const testStatusMessage = configItem.querySelector('.test-status-message');
+    const testConfigButton = configCard.querySelector('.test-config-button');
+    const webLatencyValue = configCard.querySelector('.web-latency-value');
+    const tcpPingValue = configCard.querySelector('.tcp-ping-value');
+    const testStatusValue = configCard.querySelector('.test-status-value');
+    const testStatusMessage = configCard.querySelector('.test-status-message');
 
     const configId = config.id || crypto.randomUUID();
-    configItem.dataset.id = configId;
+    configCard.dataset.id = configId;
 
     // --- Helper to check if OVPN profile needs auth ---
     const checkOvpnForAuth = (content) => {
-        // Show auth fields if 'auth-user-pass' is present and *not* followed by a filename,
-        // which implies interactive prompt is needed.
         const needsAuth = /^\s*auth-user-pass\s*$/m.test(content || '');
         ovpnAuthContainer.style.display = needsAuth ? 'flex' : 'none';
         return needsAuth;
@@ -204,16 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
         v2raySettings.style.display = 'none';
         externalSettings.style.display = 'none';
 
-        if (type === 'ssh') {
-            sshSettings.style.display = 'block';
-        } else if (type === 'openvpn') {
-            openvpnSettings.style.display = 'block';
-        } else if (type === 'v2ray') {
-            v2raySettings.style.display = 'block';
-        } else if (type === 'external') {
-            externalSettings.style.display = 'block';
-        }
-        updateUserHostDisplay(); // Update summary on type change
+        if (type === 'ssh') sshSettings.style.display = 'block';
+        else if (type === 'openvpn') openvpnSettings.style.display = 'block';
+        else if (type === 'v2ray') v2raySettings.style.display = 'block';
+        else if (type === 'external') externalSettings.style.display = 'block';
     };
 
     typeSelect.addEventListener('change', () => {
@@ -259,52 +254,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     nameDisplay.textContent = config.name || 'New Configuration';
 
-    const updateUserHostDisplay = () => {
-        const type = typeSelect.value;
-        let summary = '';
-        if (type === 'ssh') {
-            const user = sshUserInput.value.trim();
-            const host = sshHostInput.value.trim();
-            summary = (user && host) ? `${user}@${host}` : 'SSH connection details missing';
-        } else if (type === 'openvpn') {
-            const profileName = ovpnProfileNameInput.value.trim();
-            summary = profileName ? `OpenVPN: ${profileName}` : 'OpenVPN profile details missing';
-        } else if (type === 'v2ray') {
-            const url = v2rayUrlInput.value.trim();
-            // Try to parse out the remark from the URL, e.g., vless://...@...#My-Server
-            const remarkMatch = url.match(/#(.+)$/);
-            if (remarkMatch && remarkMatch[1]) {
-                summary = `V2Ray: ${decodeURIComponent(remarkMatch[1])}`;
-            } else if (url) {
-                summary = 'V2Ray connection';
-            } else {
-                summary = 'V2Ray URL missing';
-            }
-        } else if (type === 'external') {
-            const protocol = externalProtocolSelect.value;
-            const host = externalHostInput.value.trim();
-            const port = externalPortInput.value.trim();
-            summary = (host && port) ? `${protocol}://${host}:${port}` : 'External proxy details missing';
-        }
-      userHostDisplay.textContent = summary;
-    };
-
     // Initial population
-    updateUserHostDisplay();
     toggleSettingsVisibility(); // Set initial visibility based on loaded config
 
     // Event Listeners
     editButton.addEventListener('click', () => {
       const isEditing = details.style.display === 'block';
       details.style.display = isEditing ? 'none' : 'block';
-      editButton.innerHTML = isEditing ? ICONS.EDIT : ICONS.DONE;
-      editButton.title = isEditing ? 'Edit configuration' : 'Done editing';
+      editButton.textContent = isEditing ? 'Edit' : 'Done';
       if (!isEditing) nameInput.focus();
     });
 
     deleteButton.addEventListener('click', () => {
       if (confirm(`Are you sure you want to delete the "${nameDisplay.textContent}" configuration?`)) {
-        configItem.remove();
+        configCard.remove();
         updateAllProxyRuleDropdownsAndPreview();
         debouncedSave();
       }
@@ -322,11 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ovpnProfileName: ovpnProfileNameInput.value.trim(),
         ovpnFileContent: ovpnFileContent.value,
         v2rayUrl: v2rayUrlInput.value.trim(),
-        // Note: Passwords are not persisted to sync storage for security.
         portForwards: (config.portForwards || []).map(p => ({...p})), // Deep copy
       };
       const newElement = createConfigElement(newConfig, null, true);
-      configItem.after(newElement);
+      configCard.after(newElement);
       updateAllProxyRuleDropdownsAndPreview();
       debouncedSave();
     });
@@ -334,9 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // OVPN File handling
     ovpnFileUpload.addEventListener('change', (event) => {
         const file = event.target.files[0];
-        if (!file) {
-            return;
-        }
+        if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
             ovpnFileContent.value = e.target.result;
@@ -353,21 +313,10 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAllProxyRuleDropdownsAndPreview();
       debouncedSave();
     });
-    sshUserInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
-    sshHostInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
-    sshRemoteCommandInput.addEventListener('input', () => debouncedSave());
-    ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
-    ovpnAuthUser.addEventListener('input', () => debouncedSave());
-    ovpnAuthPass.addEventListener('input', () => debouncedSave());
-    v2rayUrlInput.addEventListener('input', () => {
-        updateUserHostDisplay();
-        parseAndDisplayV2RayUrl(v2rayUrlInput.value);
-        debouncedSave();
+    // Add debounced save to all other inputs
+    [sshUserInput, sshHostInput, sshRemoteCommandInput, ovpnProfileNameInput, ovpnAuthUser, ovpnAuthPass, v2rayUrlInput, externalProtocolSelect, externalHostInput, externalPortInput].forEach(input => {
+        input.addEventListener('input', debouncedSave);
     });
-
-    externalProtocolSelect.addEventListener('change', () => { updateUserHostDisplay(); debouncedSave(); });
-    externalHostInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
-    externalPortInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
 
     const parseAndDisplayV2RayUrl = (url) => {
         if (!url || !url.startsWith('vless://')) {
@@ -409,19 +358,18 @@ document.addEventListener('DOMContentLoaded', () => {
             v2rayDetectedParams.style.display = 'none';
         }
     };
+    v2rayUrlInput.addEventListener('input', () => parseAndDisplayV2RayUrl(v2rayUrlInput.value));
 
 
     connectButton.addEventListener('click', () => {
         const type = typeSelect.value;
-
-        // --- Live Log ---
         if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
+        details.style.display = 'block'; // Show details to reveal log
         liveLogContainer.style.display = 'block';
         liveLogContent.textContent = 'Initiating connection...';
 
         const pollConfigLogs = () => {
-            // Stop polling if the element is no longer in the DOM or visible
-            if (!document.body.contains(configItem) || liveLogContainer.style.display === 'none') {
+            if (!document.body.contains(configCard) || liveLogContainer.style.display === 'none') {
                 if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
                 delete configLogPollIntervals[configId];
                 return;
@@ -429,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.runtime.sendMessage(
                 { command: COMMANDS.GET_LOGS, identifier: configId, conn_type: type },
                 (response) => {
-                    if (!configLogPollIntervals[configId]) return; // Stop if interval has been cleared elsewhere
+                    if (!configLogPollIntervals[configId]) return;
                     if (chrome.runtime.lastError) {
                         liveLogContent.textContent = `Error polling logs: ${chrome.runtime.lastError.message}`;
                         clearInterval(configLogPollIntervals[configId]);
@@ -441,48 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             );
         };
-        // Scrape data from this specific config item's inputs to send to the background script.
-        const configPayload = {
-            id: configId,
-            name: nameInput.value.trim(),
-            enabled: checkbox.checked,
-            type: type,
-        };
-
-        if (type === 'ssh') {
-            Object.assign(configPayload, {
-                sshUser: sshUserInput.value.trim(),
-                sshHost: sshHostInput.value.trim(),
-                sshRemoteCommand: sshRemoteCommandInput.value.trim(),
-                portForwards: Array.from(
-                    portForwardingList.querySelectorAll('.rule-item')
-                ).map(el => {
-                    const type = el.querySelector('.rule-type').value;
-                    const localPort = el.querySelector('.rule-local-port').value;
-                    const remoteHost = el.querySelector('.rule-remote-host').value;
-                    const remotePort = el.querySelector('.rule-remote-port').value;
-                    if (!localPort) return null;
-                    const rule = { type, localPort };
-                    if (type === 'L' || type === 'R') {
-                        rule.remoteHost = remoteHost;
-                        rule.remotePort = remotePort;
-                    }
-                    return rule;
-                }).filter(Boolean),
-            });
-        } else if (type === 'openvpn') {
-            Object.assign(configPayload, {
-                ovpnProfileName: ovpnProfileNameInput.value.trim(),
-                ovpnFileContent: ovpnFileContent.value,
-                ovpnUser: ovpnAuthUser.value, // Pass credentials
-                ovpnPass: ovpnAuthPass.value,
-            });
-        } else if (type === 'v2ray') {
-            Object.assign(configPayload, {
-                v2rayUrl: v2rayUrlInput.value.trim(),
-            });
-        }
-
+        const configPayload = getConfigPayloadFromElement(configCard);
 
         statusMessage.textContent = `Connecting with "${configPayload.name}"...`;
         statusMessage.className = 'info';
@@ -491,8 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
         configLogPollIntervals[configId] = setInterval(pollConfigLogs, 1500);
 
         chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL, config: configPayload }, (response) => {
-            // The main UI update will come from the broadcasted status message.
-            // But if the command fails immediately, we should stop polling.
             if (response && !response.success) {
                 if (configLogPollIntervals[configId]) {
                     clearInterval(configLogPollIntervals[configId]);
@@ -500,14 +405,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 statusMessage.textContent = `Failed to connect: ${response.message}`;
                 statusMessage.className = 'error';
-                // Keep the log viewer open on failure for debugging.
-                // If it's a clear authentication failure, help the user correct it.
                 if (type === 'openvpn' && response.message.includes("Authentication failed")) {
-                    ovpnAuthPass.value = ''; // Clear password field for re-entry
+                    ovpnAuthPass.value = '';
                     ovpnAuthPass.focus();
                 }
             }
-            // On success, the status update broadcast will eventually clear the pollers when the connection state changes.
         });
     });
 
@@ -521,67 +423,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     testConfigButton.addEventListener('click', () => {
-        // Reset UI for this config
         webLatencyValue.textContent = '--';
-        webLatencyValue.className = 'value web-latency-value';
         tcpPingValue.textContent = '--';
-        tcpPingValue.className = 'value tcp-ping-value';
         testStatusValue.textContent = 'Testing...';
-        testStatusValue.className = 'value test-status-value';
         testStatusMessage.textContent = 'Sending test request...';
         testStatusMessage.className = 'test-status-message info';
 
-        const configToTest = getConfigPayloadFromElement(configItem);
+        const configToTest = getConfigPayloadFromElement(configCard);
         const pingHost = pingHostInput.value;
         const webCheckUrl = webCheckUrlInput.value;
 
-        const request = {
-            command: COMMANDS.TEST_CONNECTION,
-            config: configToTest,
-            pingHost: pingHost,
-            webCheckUrl: webCheckUrl
-        };
+        const request = { command: COMMANDS.TEST_CONNECTION, config: configToTest, pingHost, webCheckUrl };
 
         chrome.runtime.sendMessage(request, (response) => {
             if (chrome.runtime.lastError) {
                 testStatusMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
-                testStatusMessage.className = 'test-status-message error';
                 testStatusValue.textContent = 'Error';
-                testStatusValue.className = 'value test-status-value bad';
                 return;
             }
 
             testStatusMessage.textContent = response.message;
             testStatusMessage.className = `test-status-message ${response.success ? 'success' : 'error'}`;
 
-            // Web Latency
             if (response.web_check_latency_ms !== undefined && response.web_check_latency_ms > -1) {
                 webLatencyValue.textContent = `${response.web_check_latency_ms}ms`;
-                webLatencyValue.className = 'value web-latency-value good';
             } else {
                 webLatencyValue.textContent = 'Fail';
-                webLatencyValue.className = 'value web-latency-value bad';
             }
 
-            // TCP Ping
             if (response.tcp_ping_ms !== undefined && response.tcp_ping_ms > -1) {
                 tcpPingValue.textContent = `${response.tcp_ping_ms}ms`;
-                tcpPingValue.className = 'value tcp-ping-value good';
             } else {
-                // Use the detailed error if available
                 tcpPingValue.textContent = formatTcpError(response.tcp_ping_error);
-                tcpPingValue.className = 'value tcp-ping-value bad';
             }
 
-            // Overall Status
             if (response.success) {
                 testStatusValue.textContent = response.web_check_status || 'OK';
-                testStatusValue.className = 'value test-status-value good';
             } else {
-                // The overall status is 'Down' or 'Error' if the success flag is false.
-                // The individual metrics above will show the specific failure point.
                 testStatusValue.textContent = 'Fail';
-                testStatusValue.className = 'value test-status-value bad';
             }
         });
     });
@@ -592,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     addPortForwardRuleButton.addEventListener('click', (e) => {
-      e.preventDefault(); // Prevent form submission if it's inside a form
+      e.preventDefault();
       const newRuleEl = createRuleElement();
       portForwardingList.appendChild(newRuleEl);
       debouncedSave();
@@ -600,34 +479,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (startInEditMode) {
       details.style.display = 'block';
-      editButton.innerHTML = ICONS.DONE;
-      editButton.title = 'Done editing';
-    } else {
-      // The default is already in the template, but this ensures it if the template were to change.
-      editButton.innerHTML = ICONS.EDIT;
-      editButton.title = 'Edit configuration';
+      editButton.textContent = 'Done';
     }
 
-    return configItem;
+    return configCard;
   }
 
   function getConfigPayloadFromElement(item) {
       const id = item.dataset.id;
-      const type = item.querySelector('.config-type-select').value;
+      const details = item.querySelector('.config-details');
+      const type = details.querySelector('.config-type-select').value;
       const config = {
           id: id,
-          enabled: item.querySelector('.config-enabled-checkbox').checked,
-          name: item.querySelector('.config-input-name').value.trim(),
+          enabled: details.querySelector('.config-enabled-checkbox').checked,
+          name: details.querySelector('.config-input-name').value.trim(),
           type: type,
       };
 
       if (type === 'ssh') {
           Object.assign(config, {
-              sshUser: item.querySelector('.config-input-ssh-user').value.trim(),
-              sshHost: item.querySelector('.config-input-ssh-host').value.trim(),
-              sshRemoteCommand: item.querySelector('.config-input-ssh-remote-command').value.trim(),
+              sshUser: details.querySelector('.config-input-ssh-user').value.trim(),
+              sshHost: details.querySelector('.config-input-ssh-host').value.trim(),
+              sshRemoteCommand: details.querySelector('.config-input-ssh-remote-command').value.trim(),
               portForwards: Array.from(
-                  item.querySelectorAll('.port-forwarding-rules-list .rule-item')
+                  details.querySelectorAll('.port-forwarding-rules-list .rule-item')
               ).map(el => {
                   const type = el.querySelector('.rule-type').value;
                   const localPort = el.querySelector('.rule-local-port').value;
@@ -644,14 +519,20 @@ document.addEventListener('DOMContentLoaded', () => {
           });
       } else if (type === 'openvpn') {
           Object.assign(config, {
-              ovpnProfileName: item.querySelector('.ovpn-profile-name').value.trim(),
-              ovpnFileContent: item.querySelector('.ovpn-file-content').value,
-              ovpnUser: item.querySelector('.ovpn-auth-user').value,
-              ovpnPass: item.querySelector('.ovpn-auth-pass').value,
+              ovpnProfileName: details.querySelector('.ovpn-profile-name').value.trim(),
+              ovpnFileContent: details.querySelector('.ovpn-file-content').value,
+              ovpnUser: details.querySelector('.ovpn-auth-user').value,
+              ovpnPass: details.querySelector('.ovpn-auth-pass').value,
           });
       } else if (type === 'v2ray') {
           Object.assign(config, {
-              v2rayUrl: item.querySelector('.config-input-v2ray-url').value.trim(),
+              v2rayUrl: details.querySelector('.config-input-v2ray-url').value.trim(),
+          });
+      } else if (type === 'external') {
+           Object.assign(config, {
+              proxyProtocol: details.querySelector('.config-input-external-protocol').value,
+              proxyHost: details.querySelector('.config-input-external-host').value.trim(),
+              proxyPort: details.querySelector('.config-input-external-port').value.trim(),
           });
       }
       return config;
@@ -660,10 +541,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function createProxyBypassRuleElement(rule = {}) {
     const content = proxyBypassRuleTemplate.content.cloneNode(true);
     const ruleElement = content.querySelector('.rule-item');
+    const enabledCheckbox = ruleElement.querySelector('.rule-enabled-checkbox');
     const domainInput = ruleElement.querySelector('.bypass-domain-input');
     const targetSelect = ruleElement.querySelector('.bypass-target-select');
     const removeButton = ruleElement.querySelector('.remove-rule-button');
 
+    // For backward compatibility, rules are enabled by default if the property is missing.
+    enabledCheckbox.checked = rule.enabled !== false;
     domainInput.value = rule.domain || '';
 
     // Populate the select dropdown from the cached list of configs
@@ -676,18 +560,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     targetSelect.value = rule.target || 'DIRECT';
 
-    domainInput.addEventListener('input', () => {
-      updatePacScriptPreview();
-      debouncedSave();
-    });
-    targetSelect.addEventListener('change', () => {
-      updatePacScriptPreview();
-      debouncedSave();
-    });
+    const commonCallback = () => {
+        updatePacScriptPreview();
+        debouncedSave();
+    };
+
+    enabledCheckbox.addEventListener('change', commonCallback);
+    domainInput.addEventListener('input', commonCallback);
+    targetSelect.addEventListener('change', commonCallback);
+
     removeButton.addEventListener('click', () => {
       ruleElement.remove();
-      updatePacScriptPreview();
-      debouncedSave();
+      commonCallback();
     });
     return ruleElement;
   }
@@ -777,7 +661,6 @@ document.addEventListener('DOMContentLoaded', () => {
       connectionStatusText.textContent = 'Tunnel Connected';
       disconnectTunnelButton.style.display = 'inline-block';
 
-      // Check proxy status only if connected and SOCKS port is available
       if (status.socks_port) {
         const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
         if (isProxyManaged) {
@@ -790,7 +673,6 @@ document.addEventListener('DOMContentLoaded', () => {
           revertProxyButton.style.display = 'none';
         }
       } else {
-        // Connected but no SOCKS port, can't apply proxy
         applyProxyButton.style.display = 'none';
         revertProxyButton.style.display = 'none';
       }
@@ -798,30 +680,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // --- Per-Configuration Button State ---
     const activeConfigId = status ? status.activeConfigId : null;
-    document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
-        const connectBtn = item.querySelector('.connect-config-button');
-        const disconnectBtn = item.querySelector('.disconnect-config-button');
-        const configId = item.dataset.id;
+    document.querySelectorAll('#core-configurations-list .config-card').forEach(card => {
+        const connectBtn = card.querySelector('.connect-config-button');
+        const disconnectBtn = card.querySelector('.disconnect-config-button');
+        const statusBadge = card.querySelector('.status-badge');
+        const configId = card.dataset.id;
 
         if (status && status.connected) {
             if (configId === activeConfigId) {
                 // This is the active one
                 connectBtn.style.display = 'none';
-                disconnectBtn.style.display = 'inline-block';;
+                disconnectBtn.style.display = 'inline-block';
                 disconnectBtn.disabled = false;
+                statusBadge.textContent = '[● CONNECTED]';
+                statusBadge.dataset.status = 'connected';
             } else {
                 // Another one is active, so disable connecting this one
                 connectBtn.style.display = 'inline-block';
                 connectBtn.disabled = true;
-                connectBtn.title = 'Disconnect the active tunnel before connecting another.';
                 disconnectBtn.style.display = 'none';
+                statusBadge.textContent = '[● INACTIVE]';
+                statusBadge.dataset.status = 'disconnected';
             }
         } else {
             // Nothing is connected, all are available to connect
             connectBtn.style.display = 'inline-block';
             connectBtn.disabled = false;
-            connectBtn.title = 'Connect using this configuration';
             disconnectBtn.style.display = 'none';
+            statusBadge.textContent = '[● DISCONNECTED]';
+            statusBadge.dataset.status = 'disconnected';
         }
     });
   }
@@ -855,7 +742,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ).map(el => {
       const domain = el.querySelector('.bypass-domain-input').value.trim();
       const target = el.querySelector('.bypass-target-select').value;
-      if (!domain) return null;
+      const enabled = el.querySelector('.rule-enabled-checkbox').checked;
+      if (!domain || !enabled) return null; // Ignore empty or disabled rules
       return { domain, target };
     }).filter(Boolean);
 
@@ -869,7 +757,7 @@ function FindProxyForURL(url, host) {
 `;
 
     const proxyDefinitions = [];
-    document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
+    document.querySelectorAll('#core-configurations-list .config-card').forEach(item => {
       const configId = item.dataset.id;
       const configType = item.querySelector('.config-type-select').value;
       const configName = item.querySelector('.config-input-name').value.trim() || 'Untitled';
@@ -912,7 +800,7 @@ function FindProxyForURL(url, host) {
     // first *enabled* configuration found with a SOCKS proxy.
 `;
 
-    const firstEnabledConfig = Array.from(document.querySelectorAll('#core-configurations-list .config-item'))
+    const firstEnabledConfig = Array.from(document.querySelectorAll('#core-configurations-list .config-card'))
       .find(item => item.querySelector('.config-enabled-checkbox').checked);
 
     let activeProxyVar = 'DIRECT'; // Default to DIRECT if no enabled proxy is found
@@ -1018,7 +906,7 @@ function FindProxyForURL(url, host) {
   function updateAllProxyRuleDropdownsAndPreview() {
     // 1. Rebuild the cache of core configs from the current state of the DOM
     coreConfigsForSelect = [];
-    document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
+    document.querySelectorAll('#core-configurations-list .config-card').forEach(item => {
         const id = item.dataset.id;
         const name = item.querySelector('.config-input-name').value.trim();
         if (id && name) {
@@ -1165,8 +1053,8 @@ function FindProxyForURL(url, host) {
 
   // --- Live Log Polling for Main Log Viewer ---
   function pollMainLogs() {
-    // Don't poll if the page is hidden
-    if (document.hidden) {
+    // Don't poll if the page is hidden or if polling is paused
+    if (document.hidden || isLogPollingPaused) {
         if (mainLogPollInterval) {
             clearInterval(mainLogPollInterval);
             mainLogPollInterval = null;
@@ -1376,9 +1264,9 @@ function FindProxyForURL(url, host) {
       const ipRanges = result[STORAGE_KEYS.GEOIP_RANGES];
       const ipLastUpdate = result[STORAGE_KEYS.GEOIP_LAST_UPDATE];
       if (ipLastUpdate) {
-        const date = new Date(ipLastUpdate).toLocaleString();
+        const date = new Date(ipLastUpdate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
         const count = ipRanges ? ipRanges.length : 0;
-        geoipStatusDiv.innerHTML = `<strong>GeoIP:</strong> ${count} IP ranges loaded (Updated: ${date})`;
+        geoipStatusDiv.innerHTML = `<strong>GeoIP:</strong> ${count} IP ranges loaded (Last Updated: ${date})`;
       } else {
         geoipStatusDiv.textContent = 'GeoIP: Database has not been updated yet.';
       }
@@ -1387,9 +1275,9 @@ function FindProxyForURL(url, host) {
       const domains = result[STORAGE_KEYS.GEOSITE_DOMAINS];
       const siteLastUpdate = result[STORAGE_KEYS.GEOSITE_LAST_UPDATE];
       if (siteLastUpdate) {
-        const date = new Date(siteLastUpdate).toLocaleString();
+        const date = new Date(siteLastUpdate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
         const count = domains ? domains.length : 0;
-        geositeStatusDiv.innerHTML = `<strong>GeoSite:</strong> ${count} domains loaded (Updated: ${date})`;
+        geositeStatusDiv.innerHTML = `<strong>GeoSite:</strong> ${count} domains loaded (Last Updated: ${date})`;
       } else {
         geositeStatusDiv.textContent = 'GeoSite: Database has not been updated yet.';
       }
@@ -1437,7 +1325,7 @@ function FindProxyForURL(url, host) {
     }
 
     // 3. Validate Core Configurations
-    document.querySelectorAll('#core-configurations-list .config-item').forEach((item) => {
+    document.querySelectorAll('#core-configurations-list .config-card').forEach((item) => {
       const nameInput = item.querySelector('.config-input-name');
       if (!nameInput.value.trim()) showError(nameInput, 'Configuration name cannot be empty.');
 
@@ -1521,59 +1409,8 @@ function FindProxyForURL(url, host) {
 
     const coreConfigs = [];
 
-    document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
-      const id = item.dataset.id;
-      const type = item.querySelector('.config-type-select').value;
-
-      const config = {
-        id: id,
-        enabled: item.querySelector('.config-enabled-checkbox').checked,
-        name: item.querySelector('.config-input-name').value.trim(),
-        type: type,
-      };
-
-      if (type === 'ssh') {
-          Object.assign(config, {
-            sshUser: item.querySelector('.config-input-ssh-user').value.trim(),
-            sshHost: item.querySelector('.config-input-ssh-host').value.trim(),
-            sshRemoteCommand: item.querySelector('.config-input-ssh-remote-command').value.trim(),
-            portForwards: Array.from(
-              item.querySelectorAll('.port-forwarding-rules-list .rule-item')
-            ).map(el => {
-              const type = el.querySelector('.rule-type').value;
-              const localPort = el.querySelector('.rule-local-port').value;
-              const remoteHost = el.querySelector('.rule-remote-host').value;
-              const remotePort = el.querySelector('.rule-remote-port').value;
-              if (!localPort) return null;
-              const rule = { type, localPort };
-              if (type === 'L' || type === 'R') {
-                rule.remoteHost = remoteHost;
-                rule.remotePort = remotePort;
-              }
-              return rule;
-            }).filter(Boolean), // Filter out nulls from empty rules
-          });
-      } else if (type === 'openvpn') {
-          Object.assign(config, {
-              ovpnProfileName: item.querySelector('.ovpn-profile-name').value.trim(),
-              ovpnFileContent: item.querySelector('.ovpn-file-content').value,
-              // Do not save credentials to sync storage. They are only held in memory
-              // in the input fields for the duration of the session.
-              ovpnUser: item.querySelector('.ovpn-auth-user').value,
-              ovpnPass: item.querySelector('.ovpn-auth-pass').value,
-          });
-      } else if (type === 'v2ray') {
-          Object.assign(config, {
-              v2rayUrl: item.querySelector('.config-input-v2ray-url').value.trim(),
-          });
-      } else if (type === 'external') {
-          Object.assign(config, {
-              proxyProtocol: item.querySelector('.config-input-external-protocol').value,
-              proxyHost: item.querySelector('.config-input-external-host').value.trim(),
-              proxyPort: item.querySelector('.config-input-external-port').value.trim(),
-          });
-      }
-      coreConfigs.push(config);
+    document.querySelectorAll('#core-configurations-list .config-card').forEach(item => {
+        coreConfigs.push(getConfigPayloadFromElement(item));
     });
 
     const proxyBypassRules = Array.from(
@@ -1581,8 +1418,9 @@ function FindProxyForURL(url, host) {
     ).map(el => {
         const domain = el.querySelector('.bypass-domain-input').value.trim();
         const target = el.querySelector('.bypass-target-select').value;
+        const enabled = el.querySelector('.rule-enabled-checkbox').checked;
         if (!domain) return null;
-        return { domain, target };
+        return { domain, target, enabled };
     }).filter(Boolean);
 
     const wifiSsids = [];
@@ -1667,6 +1505,34 @@ function FindProxyForURL(url, host) {
       newRuleEl.querySelector('input').focus();
       updatePacScriptPreview();
       debouncedSave();
+  });
+
+  copyPacButton.addEventListener('click', () => {
+    const pacScript = pacScriptPreviewContainer.querySelector('code').textContent;
+    navigator.clipboard.writeText(pacScript).then(() => {
+        copyPacButton.textContent = 'Copied!';
+        setTimeout(() => {
+            copyPacButton.textContent = 'Copy';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy PAC script: ', err);
+        copyPacButton.textContent = 'Failed!';
+         setTimeout(() => {
+            copyPacButton.textContent = 'Copy';
+        }, 2000);
+    });
+  });
+
+  searchProxyRulesInput.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    document.querySelectorAll('#proxy-bypass-rules-list .proxy-rule-item').forEach(ruleEl => {
+        const domain = ruleEl.querySelector('.bypass-domain-input').value.toLowerCase();
+        if (domain.includes(searchTerm)) {
+            ruleEl.style.display = 'flex';
+        } else {
+            ruleEl.style.display = 'none';
+        }
+    });
   });
 
   const proxyActionsBar = document.querySelector('.proxy-actions-bar');
@@ -1857,6 +1723,27 @@ function FindProxyForURL(url, host) {
       } else {
         logViewerContent.textContent = `Failed to clear log: ${response.message || 'Unknown error.'}`;
       }
+    });
+  });
+
+  toggleLogPollingButton.addEventListener('click', () => {
+    isLogPollingPaused = !isLogPollingPaused;
+    toggleLogPollingButton.textContent = isLogPollingPaused ? 'Resume Log' : 'Pause Log';
+    // If we are resuming, we need to restart the polling interval.
+    if (!isLogPollingPaused) {
+        handleVisibilityChange();
+    }
+  });
+
+  copyLogButton.addEventListener('click', () => {
+    const logText = logViewerContent.textContent;
+    navigator.clipboard.writeText(logText).then(() => {
+        copyLogButton.textContent = 'Copied!';
+        setTimeout(() => { copyLogButton.textContent = 'Copy Log'; }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy log: ', err);
+        copyLogButton.textContent = 'Failed!';
+        setTimeout(() => { copyLogButton.textContent = 'Copy Log'; }, 2000);
     });
   });
 
