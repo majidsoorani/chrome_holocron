@@ -117,6 +117,27 @@ def perform_web_check(url, socks_port, timeout=10):
             return -1, "Failed (Proxy Error)", "ProxyError"
         return -1, "Failed (Connection Error)", "ConnectionError"
 
+def is_port_in_use(port, host='127.0.0.1'):
+    """
+    Checks if a TCP port is already in use on the local machine.
+    Returns True if the port is in use, False otherwise.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host, port))
+            # If bind succeeds, the port is free.
+            return False
+        except OSError as e:
+            # In Python, "Address already in use" is errno 98 on Linux and 48 on macOS.
+            # We check for both for cross-platform compatibility.
+            if e.errno in (98, 48):  # EADDRINUSE
+                logging.warning(f"Port check: Port {port} on {host} is already in use.")
+                return True
+            # Re-raise any other OSError, as it's an unexpected issue.
+            logging.error(f"Unexpected OS error while checking port {port}: {e}", exc_info=True)
+            # For the purpose of this check, any other error means we can't proceed safely.
+            return True
+
 def get_ovpn_socks_port(ovpn_content):
     """Parses .ovpn file content to find the SOCKS proxy port."""
     if not ovpn_content:
@@ -241,8 +262,43 @@ def execute_tunnel_command(command, config):
         script_path = SHELL_SCRIPT_PATH
         cmd_list = [str(script_path), command, "--identifier", identifier]
         if command == "start":
-            if config.get("sshUser"): cmd_list.extend(["--user", config.get("sshUser")])
-            if config.get("sshHost"): cmd_list.extend(["--host", config.get("sshHost")])
+            # --- Port Pre-flight Check ---
+            port_forwards = config.get("portForwards", [])
+            for rule in port_forwards:
+                # We only care about local ports that SSH will try to bind.
+                # This applies to -L (local) and -D (dynamic) forwards.
+                # For -R (remote) forwards, the binding is on the remote server.
+                if rule.get("type") in ["L", "D"]:
+                    local_port_str = rule.get("localPort")
+                    if local_port_str:
+                        try:
+                            local_port = int(local_port_str)
+                            if is_port_in_use(local_port):
+                                message = f"Port {local_port} is already in use. Please close the application using this port or change the configuration."
+                                logging.error(message)
+                                return {"success": False, "message": message}
+                        except (ValueError, TypeError):
+                            # Ignore invalid port numbers, they will be caught by other validation
+                            # in the options page, but we shouldn't crash here.
+                            logging.warning(f"Invalid port '{local_port_str}' in forwarding rule. Skipping check.")
+                            pass
+            ssh_user = config.get("sshUser")
+            ssh_host = config.get("sshHost")
+
+            # Handle cases where user enters 'user@host' in the host field
+            if ssh_host and '@' in ssh_host:
+                host_user, host_host = ssh_host.rsplit('@', 1)
+                if ssh_user and ssh_user.lower() != host_user.lower():
+                    logging.warning(f"Both user '{ssh_user}' and host '{ssh_host}' contain a username. "
+                                    f"Using username '{host_user}' from host field.")
+                final_user = host_user
+                final_host = host_host
+            else:
+                final_user = ssh_user
+                final_host = ssh_host
+
+            if final_user: cmd_list.extend(["--user", final_user])
+            if final_host: cmd_list.extend(["--host", final_host])
             if config.get("sshRemoteCommand"):
                 cmd_list.extend(["--remote-command", config.get("sshRemoteCommand")])
             for ssid in config.get("wifiSsidList", []):
@@ -255,35 +311,64 @@ def execute_tunnel_command(command, config):
                 elif rule.get("type") == "R" and all(k in rule for k in ["localPort", "remoteHost", "remotePort"]):
                     cmd_list.extend(["-R", f"{rule['localPort']}:{rule['remoteHost']}:{rule['remotePort']}"])
         
-        if not script_path.is_file() or not os.access(script_path, os.X_OK):
-            error_msg = f"Shell script not found or not executable at {script_path}"
-            logging.error(error_msg)
-            return {"success": False, "message": error_msg}
+        if command == "start":
+            try:
+                logging.info(f"Executing 'start' for SSH tunnel '{identifier}'...")
+                process = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, encoding='utf-8', errors='ignore')
+                stdout, stderr = process.communicate(timeout=45)
+                returncode = process.returncode
 
-        try:
-            logging.info(f"Executing '{command}' for SSH tunnel '{identifier}'...")
-            timeout = 45 if command == "start" else 10
-            result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout, check=False)
-            logging.debug(f"Script stdout: {result.stdout.strip()}")
-            logging.debug(f"Script stderr: {result.stderr.strip()}")
-            if result.returncode == 3:
-                logging.debug(result.stdout.strip() or "Tunnel is already running.")
-                return {"success": True, "already_running": True, "message": result.stdout.strip() or "Tunnel is already running."}
+                logging.debug(f"Start script stdout: {stdout.strip()}")
+                logging.debug(f"Start script stderr: {stderr.strip()}")
+
+                if returncode == 3:
+                    logging.info("Start script reported 'already running'. Verifying status.")
+                elif returncode != 0:
+                    if returncode == 2:
+                        message = stdout.strip() or stderr.strip()
+                        logging.warning(f"SSH start blocked by script: {message}")
+                        return {"success": False, "message": message}
+                    error_output = stderr.strip() or stdout.strip()
+                    logging.error(f"Start script failed. Exit code: {returncode}. Output: {error_output}")
+                    return {"success": False, "message": f"Failed to start tunnel: {error_output}"}
+
+                # --- Verification Step ---
+                logging.info("Start script finished. Waiting 2s to verify tunnel stability...")
+                time.sleep(2)
+
+                status = get_tunnel_status(config)
+                if status.get("connected"):
+                    logging.info(f"Successfully started and verified tunnel '{identifier}'.")
+                    return {"success": True, "message": "Tunnel started and verified."}
+                else:
+                    logging.error(f"Verification failed. Tunnel '{identifier}' is not running after start command.")
+                    log_path = get_log_path_for_config(identifier, "ssh")
+                    error_details = "Verification failed: The SSH process is not running. Check logs for details."
+                    if log_path.is_file():
+                        try:
+                            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                log_lines = f.readlines()
+                                last_lines = "".join(log_lines[-10:]).strip()
+                                if last_lines:
+                                    error_details = f"The SSH process failed after connecting. Last log entries:\n---\n{last_lines}"
+                        except Exception as log_e:
+                            logging.warning(f"Could not read SSH log file at {log_path}: {log_e}")
+                            error_details = "The SSH process failed. Could not read its log file."
+                    return {"success": False, "message": error_details}
+
+            except subprocess.TimeoutExpired:
+                logging.error(f"Timeout: The 'start' command for tunnel '{identifier}' took too long to execute.")
+                return {"success": False, "message": "Timeout: The start command took too long."}
+            except Exception as e:
+                logging.error(f"An unexpected error occurred during 'start' for '{identifier}': {e}", exc_info=True)
+                return {"success": False, "message": f"An unexpected error occurred: {e}"}
+
+        elif command == "stop":
+            # The existing logic for stop is sufficient.
+            result = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10, check=False)
             if result.returncode != 0:
-                if result.returncode == 2:
-                    return {"success": False, "message": result.stdout.strip() or result.stderr.strip()}
-                error_output = result.stderr.strip() or result.stdout.strip()
-                logging.error(f"Script execution failed. Exit code: {result.returncode}. Output: {error_output}")
-                return {"success": False, "message": f"Failed to {command} tunnel: {error_output}"}
-
-            logging.info(f"Successfully executed '{command}' for tunnel '{identifier}'.")
-            return {"success": True, "message": result.stdout.strip()}
-        except subprocess.TimeoutExpired:
-            logging.error(f"Timeout: The command '{command}' for tunnel '{identifier}' took too long.")
-            return {"success": False, "message": f"Timeout: The command '{command}' took too long."}
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during script execution for '{identifier}': {e}", exc_info=True)
-            return {"success": False, "message": f"An unexpected error occurred: {e}"}
+                return {"success": False, "message": result.stderr.strip() or result.stdout.strip()}
+            return {"success": True, "message": result.stdout.strip() or "Stop command sent."}
 
     elif conn_type == "openvpn":
         openvpn_exec = find_openvpn_executable()
@@ -485,7 +570,7 @@ def execute_tunnel_command(command, config):
         try:
             logging.info(f"Executing '{command}' for V2Ray tunnel '{identifier}'...")
             timeout = 45 if command == "start" else 10
-            result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout, check=False)
+            result = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=timeout, check=False)
             logging.debug(f"V2Ray script stdout: {result.stdout.strip()}")
             logging.debug(f"V2Ray script stderr: {result.stderr.strip()}")
 
@@ -584,14 +669,19 @@ def main():
                 # This needs to be updated to better support OpenVPN testing
                 config = message.get("config")
                 status = get_tunnel_status(config)
-                response = {"success": True, "connected": status["connected"], "socks_port": status.get("socks_port")}
+                response = {"success": status["connected"], "connected": status["connected"], "socks_port": status.get("socks_port")}
                 if status["connected"] and status.get("socks_port"):
                     web_latency, web_status, _ = perform_web_check(url=message.get("webCheckUrl"), socks_port=status["socks_port"])
                     tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost"), socks_port=status["socks_port"])
                     response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "tcp_ping_ms": tcp_latency})
                 elif config.get("type") == "ssh":
                     ssh_host = config.get("sshHost")
-                    ssh_ping_latency, ssh_ping_error = perform_tcp_ping(host=ssh_host, port=22, timeout=5)
+                    # Sanitize host for pinging, in case user entered 'user@host'
+                    ssh_host_for_ping = ssh_host
+                    if ssh_host and '@' in ssh_host:
+                        ssh_host_for_ping = ssh_host.rsplit('@', 1)[-1]
+
+                    ssh_ping_latency, ssh_ping_error = perform_tcp_ping(host=ssh_host_for_ping, port=22, timeout=5)
                     response.update({"ssh_host_name": ssh_host, "ssh_host_ping_ms": ssh_ping_latency, "ssh_host_ping_error": ssh_ping_error})
             elif command == "getLogs":
                 identifier = message.get("identifier")

@@ -23,21 +23,25 @@ document.addEventListener('DOMContentLoaded', () => {
   function formatTcpError(error) {
     if (!error) return 'Fail';
     // Provide more user-friendly error messages
-    switch (error) {
-      case 'gaierror':
-        return 'DNS Fail';
-      case 'timeout':
-        return 'Timeout';
-      case 'ProxyError':
-        return 'Proxy Fail';
-      case 'ConnectionRefusedError':
-        return 'Refused';
-      case 'OSError':
-        return 'OS Error';
-      default:
-        // Return a cleaned-up version of the error if it's not in the map
-        return error.replace(/Error$/, '').trim();
+    // Map Python exception names to friendlier text.
+    const errorMap = {
+      'gaierror': 'DNS Fail',
+      'timeout': 'Timeout',
+      'ProxyError': 'Proxy Fail',
+      'ConnectionRefusedError': 'Refused',
+      'ConnectionResetError': 'Reset',
+      'NewConnectionError': 'Conn Fail',
+      'MaxRetryError': 'Retry Fail',
+      'SSLError': 'SSL Error',
+      'OSError': 'OS Error',
+    };
+
+    if (errorMap[error]) {
+      return errorMap[error];
     }
+
+    // Fallback for unmapped errors
+    return error.replace(/Error$/, '').trim();
   }
   function updateUI(status) {
     // Hide spinner once we have a status to show

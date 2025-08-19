@@ -260,6 +260,16 @@ button.button-info:hover {
 #status-message.info {
     color: var(--info-color);
 }
+.test-status-message.success { color: var(--success-color); }
+.test-status-message.error { color: var(--error-color); }
+.test-status-message.info { color: var(--info-color); }
+
+.detail-item .value {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+.detail-item .value.good { color: var(--success-color); }
+.detail-item .value.bad { color: var(--error-color); }
 
 /* Connection Controls */
 .connection-controls {
@@ -404,6 +414,14 @@ input:checked + .slider:before { transform: translateX(20px); }
     font-family: monospace;
     font-size: 0.85em;
     white-space: pre-wrap; /* Allow long lines to wrap */
+}
+
+.sub-heading {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--text-color-headings);
+    margin-bottom: 0.5em;
+    margin-top: 0;
 }
 
 /* --- Tabbed Interface --- */

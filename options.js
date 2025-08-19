@@ -15,9 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const addWifiButton = document.getElementById('add-wifi-button');
   const ruleTemplate = document.getElementById('port-forward-rule-template');
   const wifiTemplate = document.getElementById('wifi-network-template');
-  const saveButton = document.getElementById('save-button');
-  const discardButton = document.getElementById('discard-button');
-  const testButton = document.getElementById('test-button');
   const statusMessage = document.getElementById('status-message');
   const geoipStatusDiv = document.getElementById('geoip-status');
   const geositeStatusDiv = document.getElementById('geosite-status');
@@ -36,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const globalGeoIpBypassCheckbox = document.getElementById('global-geoip-bypass');
   const globalGeoSiteBypassCheckbox = document.getElementById('global-geosite-bypass');
   const incognitoProxySelect = document.getElementById('incognito-proxy-select');
+  const incognitoPermissionWarning = document.getElementById('incognito-permission-warning');
   const proxyBypassRulesList = document.getElementById('proxy-bypass-rules-list');
   const pacScriptPreviewContainer = document.getElementById('pac-script-preview-container');
   const logViewerContent = document.getElementById('log-viewer-content');
@@ -77,7 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- State ---
-  let isDirty = false;
   let currentStatus = {}; // Cache the latest status object
   let webLatencyChart = null;
   let tcpPingChart = null;
@@ -87,50 +84,44 @@ document.addEventListener('DOMContentLoaded', () => {
   let logPollInterval = null; // To hold the setInterval ID for log polling
   let mainLogPollInterval = null; // For the main log viewer
 
+  // --- Debouncer for auto-saving ---
+  function debounce(func, delay) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        statusMessage.textContent = 'Saving...';
+        statusMessage.className = 'info';
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), 750);
+    };
+  }
+
   const ICONS = {
     EDIT: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>`,
     DONE: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
   };
 
-  // --- Functions ---
+  function formatTcpError(error) {
+    if (!error) return 'Fail';
+    // Provide more user-friendly error messages
+    const errorMap = {
+      'gaierror': 'DNS Fail',
+      'timeout': 'Timeout',
+      'ProxyError': 'Proxy Fail',
+      'ConnectionRefusedError': 'Refused',
+      'ConnectionResetError': 'Reset',
+      'NewConnectionError': 'Conn Fail',
+      'MaxRetryError': 'Retry Fail',
+      'SSLError': 'SSL Error',
+      'OSError': 'OS Error',
+    };
 
-  function setDirty(dirtyState) {
-    if (isDirty === dirtyState) return; // No change
-    isDirty = dirtyState;
-    updateActionButtonsState();
-  }
-
-  function updateActionButtonsState() {
-    const actionButtons = [
-        testButton,
-        disconnectTunnelButton,
-        reconnectNowButton,
-        applyProxyButton,
-        revertProxyButton,
-        updateDbButton,
-        clearLogButton,
-        aiSuggestRuleButton,
-        ...document.querySelectorAll('.connect-config-button'),
-        ...document.querySelectorAll('.disconnect-config-button'),
-    ];
-
-    if (isDirty) {
-        actionButtons.forEach(btn => {
-            btn.disabled = true;
-            btn.title = 'Save or discard changes to enable this action.';
-        });
-        discardButton.style.display = 'inline-block';
-        saveButton.classList.add('pulse');
-        statusMessage.textContent = 'You have unsaved changes.';
-        statusMessage.className = 'info';
-    } else {
-        actionButtons.forEach(btn => {
-            btn.disabled = false;
-            btn.title = ''; // Reset title
-        });
-        discardButton.style.display = 'none';
-        saveButton.classList.remove('pulse');
+    if (errorMap[error]) {
+      return errorMap[error];
     }
+
+    // Fallback for unmapped errors
+    return error.replace(/Error$/, '').trim();
   }
 
   // --- Core Configuration Management ---
@@ -185,6 +176,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveLogContainer = details.querySelector('.config-live-log-container');
     const liveLogContent = details.querySelector('.config-live-log-content');
 
+    // Health Check elements
+    const testConfigButton = configItem.querySelector('.test-config-button');
+    const webLatencyValue = configItem.querySelector('.web-latency-value');
+    const tcpPingValue = configItem.querySelector('.tcp-ping-value');
+    const testStatusValue = configItem.querySelector('.test-status-value');
+    const testStatusMessage = configItem.querySelector('.test-status-message');
+
     const configId = config.id || crypto.randomUUID();
     configItem.dataset.id = configId;
 
@@ -219,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     typeSelect.addEventListener('change', () => {
         toggleSettingsVisibility();
-        setDirty(true);
+        debouncedSave();
     });
 
     // Populate fields
@@ -253,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for changes to the enabled state to update the PAC script preview
     checkbox.addEventListener('change', () => {
       updateAllProxyRuleDropdownsAndPreview();
-      setDirty(true);
+      debouncedSave();
     });
 
     checkbox.checked = config.enabled === true; // Default to false if undefined
@@ -307,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (confirm(`Are you sure you want to delete the "${nameDisplay.textContent}" configuration?`)) {
         configItem.remove();
         updateAllProxyRuleDropdownsAndPreview();
-        setDirty(true);
+        debouncedSave();
       }
     });
 
@@ -329,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const newElement = createConfigElement(newConfig, null, true);
       configItem.after(newElement);
       updateAllProxyRuleDropdownsAndPreview();
-      setDirty(true);
+      debouncedSave();
     });
 
     // OVPN File handling
@@ -343,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ovpnFileContent.value = e.target.result;
             ovpnFileStatus.textContent = `File selected: ${file.name}`;
             checkOvpnForAuth(e.target.result);
-            setDirty(true);
+            debouncedSave();
         };
         reader.readAsText(file);
     });
@@ -352,23 +350,23 @@ document.addEventListener('DOMContentLoaded', () => {
     nameInput.addEventListener('input', () => {
       nameDisplay.textContent = nameInput.value || 'New Configuration';
       updateAllProxyRuleDropdownsAndPreview();
-      setDirty(true);
+      debouncedSave();
     });
-    sshUserInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
-    sshHostInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
-    sshRemoteCommandInput.addEventListener('input', () => setDirty(true));
-    ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
-    ovpnAuthUser.addEventListener('input', () => setDirty(true));
-    ovpnAuthPass.addEventListener('input', () => setDirty(true));
+    sshUserInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
+    sshHostInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
+    sshRemoteCommandInput.addEventListener('input', () => debouncedSave());
+    ovpnProfileNameInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
+    ovpnAuthUser.addEventListener('input', () => debouncedSave());
+    ovpnAuthPass.addEventListener('input', () => debouncedSave());
     v2rayUrlInput.addEventListener('input', () => {
         updateUserHostDisplay();
         parseAndDisplayV2RayUrl(v2rayUrlInput.value);
-        setDirty(true);
+        debouncedSave();
     });
 
-    externalProtocolSelect.addEventListener('change', () => { updateUserHostDisplay(); setDirty(true); });
-    externalHostInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
-    externalPortInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
+    externalProtocolSelect.addEventListener('change', () => { updateUserHostDisplay(); debouncedSave(); });
+    externalHostInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
+    externalPortInput.addEventListener('input', () => { updateUserHostDisplay(); debouncedSave(); });
 
     const parseAndDisplayV2RayUrl = (url) => {
         if (!url || !url.startsWith('vless://')) {
@@ -521,6 +519,71 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL });
     });
 
+    testConfigButton.addEventListener('click', () => {
+        // Reset UI for this config
+        webLatencyValue.textContent = '--';
+        webLatencyValue.className = 'value web-latency-value';
+        tcpPingValue.textContent = '--';
+        tcpPingValue.className = 'value tcp-ping-value';
+        testStatusValue.textContent = 'Testing...';
+        testStatusValue.className = 'value test-status-value';
+        testStatusMessage.textContent = 'Sending test request...';
+        testStatusMessage.className = 'test-status-message info';
+
+        const configToTest = getConfigPayloadFromElement(configItem);
+        const pingHost = pingHostInput.value;
+        const webCheckUrl = webCheckUrlInput.value;
+
+        const request = {
+            command: COMMANDS.TEST_CONNECTION,
+            config: configToTest,
+            pingHost: pingHost,
+            webCheckUrl: webCheckUrl
+        };
+
+        chrome.runtime.sendMessage(request, (response) => {
+            if (chrome.runtime.lastError) {
+                testStatusMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
+                testStatusMessage.className = 'test-status-message error';
+                testStatusValue.textContent = 'Error';
+                testStatusValue.className = 'value test-status-value bad';
+                return;
+            }
+
+            testStatusMessage.textContent = response.message;
+            testStatusMessage.className = `test-status-message ${response.success ? 'success' : 'error'}`;
+
+            if (response.success) {
+                // Connected case
+                webLatencyValue.textContent = `${response.web_check_latency_ms}ms`;
+                webLatencyValue.className = 'value web-latency-value good';
+                tcpPingValue.textContent = `${response.tcp_ping_ms}ms`;
+                tcpPingValue.className = 'value tcp-ping-value good';
+                testStatusValue.textContent = response.web_check_status || 'OK';
+                testStatusValue.className = `value test-status-value ${response.web_check_status === 'OK' ? 'good' : 'bad'}`;
+            } else {
+                // Disconnected or error case
+                webLatencyValue.textContent = 'Fail';
+                webLatencyValue.className = 'value web-latency-value bad';
+                if (response.ssh_host_ping_ms !== undefined) {
+                    // SSH specific diagnostic
+                    if (response.ssh_host_ping_ms > -1) {
+                        tcpPingValue.textContent = `${response.ssh_host_ping_ms}ms`;
+                        tcpPingValue.className = 'value tcp-ping-value warn'; // Warn because it's a direct ping, not through tunnel
+                    } else {
+                        tcpPingValue.textContent = formatTcpError(response.ssh_host_ping_error);
+                        tcpPingValue.className = 'value tcp-ping-value bad';
+                    }
+                } else {
+                    tcpPingValue.textContent = 'Fail';
+                    tcpPingValue.className = 'value tcp-ping-value bad';
+                }
+                testStatusValue.textContent = 'Down';
+                testStatusValue.className = 'value test-status-value bad';
+            }
+        });
+    });
+
     // --- Port Forwarding Management ---
     (config.portForwards || []).forEach(rule => {
       portForwardingList.appendChild(createRuleElement(rule));
@@ -530,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault(); // Prevent form submission if it's inside a form
       const newRuleEl = createRuleElement();
       portForwardingList.appendChild(newRuleEl);
-      setDirty(true);
+      debouncedSave();
     });
 
     if (startInEditMode) {
@@ -544,6 +607,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return configItem;
+  }
+
+  function getConfigPayloadFromElement(item) {
+      const id = item.dataset.id;
+      const type = item.querySelector('.config-type-select').value;
+      const config = {
+          id: id,
+          enabled: item.querySelector('.config-enabled-checkbox').checked,
+          name: item.querySelector('.config-input-name').value.trim(),
+          type: type,
+      };
+
+      if (type === 'ssh') {
+          Object.assign(config, {
+              sshUser: item.querySelector('.config-input-ssh-user').value.trim(),
+              sshHost: item.querySelector('.config-input-ssh-host').value.trim(),
+              sshRemoteCommand: item.querySelector('.config-input-ssh-remote-command').value.trim(),
+              portForwards: Array.from(
+                  item.querySelectorAll('.port-forwarding-rules-list .rule-item')
+              ).map(el => {
+                  const type = el.querySelector('.rule-type').value;
+                  const localPort = el.querySelector('.rule-local-port').value;
+                  const remoteHost = el.querySelector('.rule-remote-host').value;
+                  const remotePort = el.querySelector('.rule-remote-port').value;
+                  if (!localPort) return null;
+                  const rule = { type, localPort };
+                  if (type === 'L' || type === 'R') {
+                      rule.remoteHost = remoteHost;
+                      rule.remotePort = remotePort;
+                  }
+                  return rule;
+              }).filter(Boolean),
+          });
+      } else if (type === 'openvpn') {
+          Object.assign(config, {
+              ovpnProfileName: item.querySelector('.ovpn-profile-name').value.trim(),
+              ovpnFileContent: item.querySelector('.ovpn-file-content').value,
+              ovpnUser: item.querySelector('.ovpn-auth-user').value,
+              ovpnPass: item.querySelector('.ovpn-auth-pass').value,
+          });
+      } else if (type === 'v2ray') {
+          Object.assign(config, {
+              v2rayUrl: item.querySelector('.config-input-v2ray-url').value.trim(),
+          });
+      }
+      return config;
   }
 
   function createProxyBypassRuleElement(rule = {}) {
@@ -567,16 +676,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     domainInput.addEventListener('input', () => {
       updatePacScriptPreview();
-      setDirty(true);
+      debouncedSave();
     });
     targetSelect.addEventListener('change', () => {
       updatePacScriptPreview();
-      setDirty(true);
+      debouncedSave();
     });
     removeButton.addEventListener('click', () => {
       ruleElement.remove();
       updatePacScriptPreview();
-      setDirty(true);
+      debouncedSave();
     });
     return ruleElement;
   }
@@ -614,13 +723,13 @@ document.addEventListener('DOMContentLoaded', () => {
       remotePortInput.placeholder = isRemote ? 'Local Port' : 'Remote Port';
     };
 
-    typeSelect.addEventListener('change', () => { toggleInputs(); setDirty(true); });
-    removeButton.addEventListener('click', () => { ruleElement.remove(); setDirty(true); });
+    typeSelect.addEventListener('change', () => { toggleInputs(); debouncedSave(); });
+    removeButton.addEventListener('click', () => { ruleElement.remove(); debouncedSave(); });
 
     // Add listeners to inputs
-    localPortInput.addEventListener('input', () => setDirty(true));
-    remoteHostInput.addEventListener('input', () => setDirty(true));
-    remotePortInput.addEventListener('input', () => setDirty(true));
+    localPortInput.addEventListener('input', () => debouncedSave());
+    remoteHostInput.addEventListener('input', () => debouncedSave());
+    remotePortInput.addEventListener('input', () => debouncedSave());
 
     toggleInputs(); // Initial setup
     return ruleElement;
@@ -635,8 +744,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const removeButton = ruleElement.querySelector('.remove-rule-button');
 
     ssidInput.value = ssid;
-    ssidInput.addEventListener('input', () => setDirty(true));
-    removeButton.addEventListener('click', () => { ruleElement.remove(); setDirty(true); });
+    ssidInput.addEventListener('input', () => debouncedSave());
+    removeButton.addEventListener('click', () => { ruleElement.remove(); debouncedSave(); });
     wifiListContainer.appendChild(ruleElement);
   }
 
@@ -696,8 +805,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (configId === activeConfigId) {
                 // This is the active one
                 connectBtn.style.display = 'none';
-                disconnectBtn.style.display = 'inline-block';
-                disconnectBtn.disabled = isDirty; // Respect dirty state
+                disconnectBtn.style.display = 'inline-block';;
+                disconnectBtn.disabled = false;
             } else {
                 // Another one is active, so disable connecting this one
                 connectBtn.style.display = 'inline-block';
@@ -708,13 +817,31 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Nothing is connected, all are available to connect
             connectBtn.style.display = 'inline-block';
-            connectBtn.disabled = isDirty; // Respect dirty state
+            connectBtn.disabled = false;
             connectBtn.title = 'Connect using this configuration';
             disconnectBtn.style.display = 'none';
         }
     });
+  }
 
-    updateActionButtonsState(); // Re-evaluate button states after UI changes
+  async function checkAndSetIncognitoControls() {
+    // This function is only available in Manifest V3 extensions.
+    // It might not exist in some testing environments or older browser versions.
+    if (typeof chrome.extension?.isAllowedIncognitoAccess !== 'function') {
+        console.warn("Could not check for incognito access permission. Feature will be assumed to be available.");
+        return;
+    }
+
+    try {
+        const isAllowed = await chrome.extension.isAllowedIncognitoAccess();
+        incognitoProxySelect.disabled = !isAllowed;
+        incognitoPermissionWarning.style.display = isAllowed ? 'none' : 'block';
+    } catch (e) {
+        // Gracefully handle any unexpected errors from the API call.
+        console.error("Error checking incognito access:", e);
+        incognitoProxySelect.disabled = false; // Default to enabled on error
+        incognitoPermissionWarning.style.display = 'none';
+    }
   }
 
   function updatePacScriptPreview() {
@@ -744,7 +871,6 @@ function FindProxyForURL(url, host) {
       const configId = item.dataset.id;
       const configType = item.querySelector('.config-type-select').value;
       const configName = item.querySelector('.config-input-name').value.trim() || 'Untitled';
-      const configType = item.querySelector('.config-type-select').value;
       const proxyVar = `PROXY_${configId.replace(/-/g, '_')}`;
 
       if (configType === 'external') {
@@ -1231,7 +1357,9 @@ function FindProxyForURL(url, host) {
       }
 
       updateAllProxyRuleDropdownsAndPreview(); // Initial generation
-      setDirty(false); // Set initial state to clean
+
+      // Check and update UI based on incognito permissions
+      checkAndSetIncognitoControls();
     });
 
     // Load and display database statuses from local storage
@@ -1380,13 +1508,13 @@ function FindProxyForURL(url, host) {
   }
 
   function saveSettings() {
-    statusMessage.textContent = ''; // Clear previous messages
-    statusMessage.className = '';
+    // The debouncer sets the "Saving..." message.
+    // We only need to handle validation failure and success here.
 
     if (!validateSettings()) {
       statusMessage.textContent = 'Please fix the errors before saving.';
       statusMessage.className = 'error';
-      return;
+      return; // Stop the save if validation fails
     }
 
     const coreConfigs = [];
@@ -1493,13 +1621,12 @@ function FindProxyForURL(url, host) {
     chrome.storage.sync.set(settings, () => {
       statusMessage.textContent = 'Settings saved!';
       statusMessage.className = 'success';
-      setDirty(false); // Reset dirty state after successful save
 
       // Notify the background script to apply the new WebRTC policy immediately
       chrome.runtime.sendMessage({ command: COMMANDS.APPLY_WEBRTC_POLICY });
 
       setTimeout(() => {
-          if (statusMessage.textContent === 'Settings saved!')
+        if (statusMessage.textContent === 'Settings saved!')
         statusMessage.textContent = '';
         statusMessage.className = '';
       }, 3000);
@@ -1520,21 +1647,24 @@ function FindProxyForURL(url, host) {
     });
   }
 
+  // --- Auto-saving setup ---
+  const debouncedSave = debounce(saveSettings, 750);
+
 
   // --- Event Listeners ---
   addConfigButton.addEventListener('click', () => {
     const newEl = createConfigElement({}, null, true);
     coreConfigListContainer.appendChild(newEl);
     updateAllProxyRuleDropdownsAndPreview();
-    setDirty(true);
+    debouncedSave();
   });
-  addWifiButton.addEventListener('click', () => { createWifiElement(); setDirty(true); });
+  addWifiButton.addEventListener('click', () => { createWifiElement(); debouncedSave(); });
   addProxyRuleButton.addEventListener('click', () => {
       const newRuleEl = createProxyBypassRuleElement();
       proxyBypassRulesList.appendChild(newRuleEl);
       newRuleEl.querySelector('input').focus();
       updatePacScriptPreview();
-      setDirty(true);
+      debouncedSave();
   });
 
   const openrouterApiKeyInput = document.getElementById('openrouter-api-key');
@@ -1648,7 +1778,7 @@ function FindProxyForURL(url, host) {
           const newRuleEl = createProxyBypassRuleElement(suggestedRule);
           proxyBypassRulesList.appendChild(newRuleEl);
           updatePacScriptPreview();
-          setDirty(true);
+          debouncedSave();
           statusMessage.textContent = 'AI suggestion added! Remember to save your settings.';
           statusMessage.className = 'success';
           lastError = null; // Clear last error on success
@@ -1713,8 +1843,6 @@ function FindProxyForURL(url, host) {
       aiLiveLogContainer.style.display = 'block'; // Show log after delay
     }, 8000); // Keep log visible for 8 seconds to see final output
   });
-  saveButton.addEventListener('click', saveSettings); // This now calls the version with validation
-  discardButton.addEventListener('click', loadSettings); // Reload settings to discard changes
 
   clearLogButton.addEventListener('click', () => {
     if (!confirm('Are you sure you want to permanently clear the native host log file?')) {
@@ -1736,16 +1864,16 @@ function FindProxyForURL(url, host) {
 
 
   // Add listeners to global inputs
-  pingHostInput.addEventListener('input', () => setDirty(true));
-  webCheckUrlInput.addEventListener('input', () => setDirty(true));
-  autoReconnectCheckbox.addEventListener('change', () => setDirty(true));
-  openrouterApiKeyInput.addEventListener('input', () => setDirty(true));
-  openrouterModelInput.addEventListener('input', () => setDirty(true));
-  openrouterSystemMessageInput.addEventListener('input', () => setDirty(true));
-  globalGeoIpBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); setDirty(true); });
-  globalGeoSiteBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); setDirty(true); });
-  incognitoProxySelect.addEventListener('change', () => setDirty(true));
-  webRtcPolicyToggle.addEventListener('change', () => setDirty(true));
+  pingHostInput.addEventListener('input', () => debouncedSave());
+  webCheckUrlInput.addEventListener('input', () => debouncedSave());
+  autoReconnectCheckbox.addEventListener('change', () => debouncedSave());
+  openrouterApiKeyInput.addEventListener('input', () => debouncedSave());
+  openrouterModelInput.addEventListener('input', () => debouncedSave());
+  openrouterSystemMessageInput.addEventListener('input', () => debouncedSave());
+  globalGeoIpBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
+  globalGeoSiteBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
+  incognitoProxySelect.addEventListener('change', () => debouncedSave());
+  webRtcPolicyToggle.addEventListener('change', () => debouncedSave());
   updateDbButton.addEventListener('click', () => {
     updateDbButton.textContent = 'Updating...';
     updateDbButton.disabled = true;
@@ -1772,51 +1900,6 @@ function FindProxyForURL(url, host) {
         statusMessage.className = '';
       }, 5000);
     });
-  });
-
-  testButton.addEventListener('click', () => {
-    statusMessage.textContent = '';
-    statusMessage.className = '';
-
-    (async () => {
-      const {
-        [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs,
-      } = await chrome.storage.sync.get([
-        STORAGE_KEYS.CORE_CONFIGURATIONS,
-      ]);
-
-      const enabledConfigs = configs ? configs.filter(c => c.enabled) : [];
-      const configToTest = enabledConfigs.length > 0 ? enabledConfigs[0] : null;
-
-      if (!configToTest) {
-        statusMessage.textContent = 'No enabled configuration to test.';
-        statusMessage.className = 'error';
-        return;
-      }
-
-      const pingHost = pingHostInput.value;
-      const webCheckUrl = webCheckUrlInput.value;
-      statusMessage.textContent = `Testing first enabled configuration: "${configToTest.name || 'Untitled'}"...`;
-      statusMessage.className = 'info';
-
-      const request = {
-        command: COMMANDS.TEST_CONNECTION,
-        config: configToTest,
-        pingHost: pingHost,
-        webCheckUrl: webCheckUrl
-      };
-
-      chrome.runtime.sendMessage(request, (response) => {
-        if (chrome.runtime.lastError) {
-          statusMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
-          statusMessage.className = 'error';
-          return;
-        }
-
-        statusMessage.textContent = response.message;
-        statusMessage.className = response.success ? 'success' : 'error';
-      });
-    })();
   });
 
     const refreshChartData = () => {
@@ -1921,7 +2004,7 @@ function FindProxyForURL(url, host) {
       const newEl = createConfigElement(config, null, true);
       coreConfigListContainer.appendChild(newEl);
       updateAllProxyRuleDropdownsAndPreview();
-      setDirty(true);
+      debouncedSave();
       hideModal();
     }
   }

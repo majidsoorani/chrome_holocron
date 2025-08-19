@@ -17,6 +17,18 @@
             cursor: not-allowed;
             opacity: 0.6;
         }
+        .warning-message {
+            background-color: var(--warning-bg-color, #fff3cd);
+            color: var(--warning-text-color, #856404);
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid var(--warning-border-color, #ffeeba);
+            font-size: 0.9em;
+        }
+        .warning-message a {
+            color: var(--warning-text-color, #856404);
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -27,20 +39,8 @@
         </header>
 
         <div class="button-bar">
-            <div class="action-buttons">
-                <button id="save-button" class="primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                    Save Settings
-                </button>
-                <button id="test-button">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    Test Connection
-                </button>
-                <button id="discard-button" class="button-secondary" style="display: none;">Discard Changes</button>
-                <div id="status-message">
-                    <span id="status-icon"></span>
-                    <span id="status-text"></span>
-                </div>
+            <div id="status-message">
+                <!-- This is used for "Saving...", "Settings saved!", etc. -->
             </div>
             <div class="connection-controls">
                 <div id="connection-status-indicator" class="status-indicator"></div>
@@ -154,6 +154,9 @@
                                             <!-- Options will be populated by JS -->
                                         </select>
                                         <small>Select a configuration to use exclusively for Incognito windows. This will not affect your regular browsing session.</small>
+                                        <div id="incognito-permission-warning" class="warning-message" style="display: none; margin-top: 8px;">
+                                            To use this feature, you must <a href="chrome://extensions" target="_blank" rel="noopener noreferrer">enable 'Allow in Incognito'</a> for the Holocron extension.
+                                        </div>
                                     </div>
 
                                     <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
@@ -396,6 +399,25 @@
                     <pre class="config-live-log-content">Waiting for connection logs...</pre>
                 </div>
             </div>
+            <div class="config-health-check" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">
+                <h3 class="sub-heading">Connection Test</h3>
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <span class="label">Web Latency</span>
+                        <span class="value web-latency-value">--</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">TCP Ping</span>
+                        <span class="value tcp-ping-value">--</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Status</span>
+                        <span class="value test-status-value">Not Tested</span>
+                    </div>
+                </div>
+                <button type="button" class="test-config-button button-secondary" style="margin-top: 1em;">Test This Configuration</button>
+                <div class="test-status-message" style="font-size: 0.9em; margin-top: 0.5em; min-height: 1.2em;"></div>
+            </div>
         </div>
     </template>
 
@@ -416,15 +438,5 @@
         </div>
     </div>
 
-    <footer style="margin-top: 2em;">
-        <section class="card full-width">
-            <h2>Geo-Database Status</h2>
-            <div class="database-status" style="border-top: none; margin-top: 0; padding-top: 0;">
-                <div id="geoip-status">GeoIP: Loading...</div>
-                <div id="geosite-status">GeoSite: Loading...</div>
-                <button id="update-db-button">Update Databases Now</button>
-            </div>
-        </section>
-    </footer>
 </body>
 </html>

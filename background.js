@@ -7,8 +7,8 @@ const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
 // --- State Variables ---
 let lastStatus = { connected: false }; // Store the last known status
-const GEOIP_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@release/direct/iran.txt'; // For IP ranges (CIDR)
-const GEOSITE_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@release/direct/iran/iran.txt'; // For domains
+const GEOIP_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@main/direct/iran-ip.txt'; // For IP ranges (CIDR)
+const GEOSITE_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@main/direct/iran-domain.txt'; // For domains
 const GEOIP_UPDATE_COOLDOWN_HOURS = 24;
 
 // --- State Variables ---
@@ -583,9 +583,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return;
         }
 
-        // Store original settings before changing them.
-        const originalSettings = await chrome.proxy.settings.get({ incognito: false });
-
         // --- Create a PAC script for advanced routing ---
         let pacScript = `/**
  * Holocron PAC (Proxy Auto-Configuration) Script
@@ -739,41 +736,63 @@ function FindProxyForURL(url, host) {
 
         // Store original settings before changing them.
         const originalRegularSettings = await chrome.proxy.settings.get({ incognito: false });
-        const originalIncognitoSettings = await chrome.proxy.settings.get({ incognito: true });
-
-
         // --- Apply Regular Proxy ---
         await chrome.proxy.settings.set({ value: config, scope: 'regular' });
 
-        // --- Handle Incognito-Specific Proxy ---
-        const { [STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID]: incognitoConfigId } = await chrome.storage.sync.get(STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID);
+        // --- Handle Incognito-Specific Proxy (if permission is granted) ---
+        const isAllowedInIncognito = await chrome.extension.isAllowedIncognitoAccess();
+        if (isAllowedInIncognito) {
+            const { [STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID]: incognitoConfigId } = await chrome.storage.sync.get(STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID);
 
-        if (incognitoConfigId) {
-            const incognitoConfig = coreConfigs.find(c => c.id === incognitoConfigId);
-            const socksPortForward = incognitoConfig?.portForwards?.find(pf => pf.type === 'D');
+            if (incognitoConfigId) {
+                const incognitoConfig = coreConfigs.find(c => c.id === incognitoConfigId);
+                let incognitoProxyRule = null;
 
-            if (socksPortForward && socksPortForward.localPort) {
-                const incognitoProxyRule = {
-                    mode: "fixed_servers",
-                    rules: {
-                        singleProxy: {
-                            scheme: "socks5",
-                            host: "127.0.0.1",
-                            port: parseInt(socksPortForward.localPort, 10)
-                        },
-                        bypassList: ["<local>"] // Standard bypass for local addresses
+                if (incognitoConfig) {
+                    if (incognitoConfig.type === 'external' && incognitoConfig.proxyHost && incognitoConfig.proxyPort) {
+                        let scheme = 'socks5'; // Default
+                        if (incognitoConfig.proxyProtocol === 'SOCKS4') scheme = 'socks4';
+                        else if (incognitoConfig.proxyProtocol === 'HTTP') scheme = 'http';
+                        else if (incognitoConfig.proxyProtocol === 'HTTPS') scheme = 'https';
+                        incognitoProxyRule = {
+                            mode: "fixed_servers",
+                            rules: { singleProxy: { scheme, host: incognitoConfig.proxyHost, port: parseInt(incognitoConfig.proxyPort, 10) }, bypassList: ["<local>"] }
+                        };
+                    } else if (incognitoConfig.type === 'v2ray') {
+                        incognitoProxyRule = {
+                            mode: "fixed_servers",
+                            rules: { singleProxy: { scheme: "socks5", host: "127.0.0.1", port: 10808 }, bypassList: ["<local>"] }
+                        };
+                    } else { // ssh, openvpn
+                        const socksPortForward = incognitoConfig.portForwards?.find(pf => pf.type === 'D');
+                        if (socksPortForward && socksPortForward.localPort) {
+                            incognitoProxyRule = {
+                                mode: "fixed_servers",
+                                rules: { singleProxy: { scheme: "socks5", host: "127.0.0.1", port: parseInt(socksPortForward.localPort, 10) }, bypassList: ["<local>"] }
+                            };
+                        }
                     }
-                };
-                await chrome.proxy.settings.set({ value: incognitoProxyRule, scope: 'incognito_persistent' });
-                 console.log(`Applied specific proxy "${incognitoConfig.name}" to Incognito mode.`);
+                }
+
+                if (incognitoProxyRule) {
+                    await chrome.proxy.settings.set({ value: incognitoProxyRule, scope: 'incognito_persistent' });
+                    console.log(`Applied specific proxy "${incognitoConfig.name}" to Incognito mode.`);
+                } else {
+                    // If the selected config has no applicable proxy, clear the setting for safety.
+                    await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+                    console.warn(`Selected Incognito config "${incognitoConfig?.name}" has no applicable proxy. Incognito will use regular settings.`);
+                }
             } else {
-                // If the selected config has no SOCKS proxy, clear the setting for safety.
+                // No incognito-specific proxy is selected, so ensure it's cleared.
                 await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
-                console.warn(`Selected Incognito config "${incognitoConfig?.name}" has no SOCKS proxy. Incognito will use regular settings.`);
             }
         } else {
-            // No incognito-specific proxy is selected, so ensure it's cleared.
-            await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+            const { [STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID]: incognitoConfigId } = await chrome.storage.sync.get(STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID);
+            if (incognitoConfigId) {
+                // Only warn if the user has actually configured an incognito-specific proxy.
+                // Otherwise, it's just noise.
+                console.warn("Cannot apply incognito-specific proxy. Please enable 'Allow in Incognito' for the Holocron extension in chrome://extensions.");
+            }
         }
 
 
@@ -794,9 +813,13 @@ function FindProxyForURL(url, host) {
     (async () => {
       try {
         const { [STORAGE_KEYS.ORIGINAL_PROXY]: originalProxySettings } = await chrome.storage.local.get(STORAGE_KEYS.ORIGINAL_PROXY);
-        // Clear both regular and incognito settings to be safe.
+        // Clear the regular proxy settings.
         await chrome.proxy.settings.clear({ scope: 'regular' });
-        await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+        // Only attempt to clear incognito settings if we have permission.
+        const isAllowedInIncognito = await chrome.extension.isAllowedIncognitoAccess();
+        if (isAllowedInIncognito) {
+            await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+        }
 
         // Restore the original regular settings if they existed
         if (originalProxySettings) {
@@ -850,22 +873,24 @@ function FindProxyForURL(url, host) {
                 webCheckUrl
             });
 
-            let message;
-            if (response && response.connected) {
-                message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
-            } else if (response && response.ssh_host_ping_ms !== undefined) {
-                const hostStatus = response.ssh_host_ping_ms > -1
-                    ? `Host '${response.ssh_host_name}' is reachable (ping: ${response.ssh_host_ping_ms}ms).`
-                    : `Host '${response.ssh_host_name}' is UNREACHABLE (${response.ssh_host_ping_error || 'Error'}).`;
-                message = `Tunnel is down. Diagnostic: ${hostStatus}`;
-            } else if (response) {
-                // Generic message for OpenVPN or other types that don't have a host ping
-                message = "Tunnel is down. Could not get a detailed status. Check native host logs for errors.";
+            const finalResponse = response || { success: false };
+            if (response) {
+                if (response.connected) {
+                    finalResponse.message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
+                } else if (response.ssh_host_ping_ms !== undefined) {
+                    const hostStatus = response.ssh_host_ping_ms > -1
+                        ? `Host '${response.ssh_host_name}' is reachable (ping: ${response.ssh_host_ping_ms}ms).`
+                        : `Host '${response.ssh_host_name}' is UNREACHABLE (${response.ssh_host_ping_error || 'Error'}).`;
+                    finalResponse.message = `Tunnel is down. Diagnostic: ${hostStatus}`;
+                } else {
+                    // Generic message for OpenVPN or other types that don't have a host ping
+                    finalResponse.message = "Tunnel is down. Could not get a detailed status. Check native host logs for errors.";
+                }
             } else {
-                message = "Did not receive a valid response from the native host.";
+                finalResponse.message = "Did not receive a valid response from the native host.";
             }
 
-            sendResponse({ success: response.success, message: message });
+            sendResponse(finalResponse);
         } catch (error) {
             sendResponse({ success: false, message: error.message });
         }

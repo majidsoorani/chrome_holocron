@@ -227,13 +227,28 @@ EOL
 
     echo "$pid" > "$LOCK_FILE"
     log "Xray process started with PID $pid."
-    # Give it a moment to initialize before the extension checks status
-    sleep 2
 
-    # Check if the process is still alive after a short sleep
-    if ! ps -p "$pid" > /dev/null; then
-        echo "Error: Xray process exited immediately. Check the log for details."
-        log "Error: Xray process with PID $pid exited immediately. See log above for details."
+    # Wait up to 5 seconds for the process to confirm it's running by checking the log file.
+    # This is more reliable than a fixed sleep duration.
+    local success=false
+    for i in {1..10}; do # Check every 0.5s for 5s
+        # If the process died, stop waiting.
+        if ! ps -p "$pid" > /dev/null; then
+            log "Process $pid died prematurely."
+            break
+        fi
+        # Check for the success message in the log.
+        if grep -q "proxy is listening on" "$LOG_FILE"; then
+            success=true
+            break
+        fi
+        sleep 0.5
+    done
+
+    if [ "$success" = false ]; then
+        echo "Error: Xray process failed to start correctly. Check the log for details."
+        log "Error: Xray process with PID $pid did not log a successful start message. It may have crashed."
+        kill "$pid" 2>/dev/null # Ensure the zombie process is gone
         cleanup
         exit 1
     fi
