@@ -39,8 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const logViewerContent = document.getElementById('log-viewer-content');
   const clearLogButton = document.getElementById('clear-log-button');
   const aiSuggestRuleButton = document.getElementById('ai-suggest-rule-button');
-  const openrouterModelInput = document.getElementById('openrouter-model');
-  const openrouterSystemMessageInput = document.getElementById('openrouter-system-message');
+  const aiApiKeyInput = document.getElementById('ai-api-key');
+  const aiModelInput = document.getElementById('ai-model');
+  const aiSystemMessageInput = document.getElementById('ai-system-message');
   const aiLiveLogContainer = document.getElementById('ai-live-log-container');
   const aiLiveLogContent = document.getElementById('ai-live-log-content');
   const webRtcPolicyToggle = document.getElementById('webrtc-policy-toggle');
@@ -553,32 +554,33 @@ document.addEventListener('DOMContentLoaded', () => {
             testStatusMessage.textContent = response.message;
             testStatusMessage.className = `test-status-message ${response.success ? 'success' : 'error'}`;
 
-            if (response.success) {
-                // Connected case
+            // Web Latency
+            if (response.web_check_latency_ms !== undefined && response.web_check_latency_ms > -1) {
                 webLatencyValue.textContent = `${response.web_check_latency_ms}ms`;
                 webLatencyValue.className = 'value web-latency-value good';
-                tcpPingValue.textContent = `${response.tcp_ping_ms}ms`;
-                tcpPingValue.className = 'value tcp-ping-value good';
-                testStatusValue.textContent = response.web_check_status || 'OK';
-                testStatusValue.className = `value test-status-value ${response.web_check_status === 'OK' ? 'good' : 'bad'}`;
             } else {
-                // Disconnected or error case
                 webLatencyValue.textContent = 'Fail';
                 webLatencyValue.className = 'value web-latency-value bad';
-                if (response.ssh_host_ping_ms !== undefined) {
-                    // SSH specific diagnostic
-                    if (response.ssh_host_ping_ms > -1) {
-                        tcpPingValue.textContent = `${response.ssh_host_ping_ms}ms`;
-                        tcpPingValue.className = 'value tcp-ping-value warn'; // Warn because it's a direct ping, not through tunnel
-                    } else {
-                        tcpPingValue.textContent = formatTcpError(response.ssh_host_ping_error);
-                        tcpPingValue.className = 'value tcp-ping-value bad';
-                    }
-                } else {
-                    tcpPingValue.textContent = 'Fail';
-                    tcpPingValue.className = 'value tcp-ping-value bad';
-                }
-                testStatusValue.textContent = 'Down';
+            }
+
+            // TCP Ping
+            if (response.tcp_ping_ms !== undefined && response.tcp_ping_ms > -1) {
+                tcpPingValue.textContent = `${response.tcp_ping_ms}ms`;
+                tcpPingValue.className = 'value tcp-ping-value good';
+            } else {
+                // Use the detailed error if available
+                tcpPingValue.textContent = formatTcpError(response.tcp_ping_error);
+                tcpPingValue.className = 'value tcp-ping-value bad';
+            }
+
+            // Overall Status
+            if (response.success) {
+                testStatusValue.textContent = response.web_check_status || 'OK';
+                testStatusValue.className = 'value test-status-value good';
+            } else {
+                // The overall status is 'Down' or 'Error' if the success flag is false.
+                // The individual metrics above will show the specific failure point.
+                testStatusValue.textContent = 'Fail';
                 testStatusValue.className = 'value test-status-value bad';
             }
         });
@@ -1308,10 +1310,10 @@ function FindProxyForURL(url, host) {
         wifiSsids.forEach(createWifiElement);
       }
 
-      openrouterApiKeyInput.value = result[STORAGE_KEYS.OPENROUTER_API_KEY] || '';
-      openrouterModelInput.value = result[STORAGE_KEYS.OPENROUTER_MODEL] || 'z-ai/glm-4.5-air:free';
+      aiApiKeyInput.value = result[STORAGE_KEYS.OPENROUTER_API_KEY] || '';
+      aiModelInput.value = result[STORAGE_KEYS.OPENROUTER_MODEL] || 'openai/gpt-4.1-nano';
       const defaultSystemMessage = `You are a network configuration assistant for a browser extension named Holocron. A user will describe a service, and you must suggest a proxy routing rule for it. The user has a list of available proxy configurations. Your task is to determine if the service should be accessed 'DIRECT' (bypassing the proxy, typically for local or national services) or through one of the available proxy configuration IDs (for international or blocked services). Respond ONLY with a single, valid JSON object in the format: {"domain": "domain.pattern.com", "target": "proxy_id_or_DIRECT"}. Do not include any other text, explanation, or markdown formatting. Example for a user trying to access an Iranian service like "Digikala": {"domain": "*.digikala.com", "target": "DIRECT"}. Example for a user trying to access a service that needs a proxy like "YouTube": {"domain": "*.youtube.com", "target": "some-uuid-for-a-proxy"}.`;
-      openrouterSystemMessageInput.value = result[STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE] || defaultSystemMessage;
+      aiSystemMessageInput.value = result[STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE] || defaultSystemMessage;
 
       // --- Populate Privacy Controls ---
       // The 'disable_non_proxied_udp' policy is the most restrictive and thus the safest default.
@@ -1610,9 +1612,9 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY]: webRtcPolicyToggle.checked ? 'disable_non_proxied_udp' : 'default',
       [STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED]: globalGeoIpBypassCheckbox.checked,
       [STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED]: globalGeoSiteBypassCheckbox.checked,
-      [STORAGE_KEYS.OPENROUTER_API_KEY]: openrouterApiKeyInput.value.trim(),
-      [STORAGE_KEYS.OPENROUTER_MODEL]: openrouterModelInput.value.trim(),
-      [STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE]: openrouterSystemMessageInput.value.trim(),
+      [STORAGE_KEYS.OPENROUTER_API_KEY]: aiApiKeyInput.value.trim(),
+      [STORAGE_KEYS.OPENROUTER_MODEL]: aiModelInput.value.trim(),
+      [STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE]: aiSystemMessageInput.value.trim(),
     };
 
     // Replace coreConfigs with the sanitized version for storage.
@@ -1667,18 +1669,16 @@ function FindProxyForURL(url, host) {
       debouncedSave();
   });
 
-  const openrouterApiKeyInput = document.getElementById('openrouter-api-key');
   const proxyActionsBar = document.querySelector('.proxy-actions-bar');
 
   proxyActionsBar.insertAdjacentElement('afterend', aiLiveLogContainer);
   aiLiveLogContainer.style.marginTop = '1em';
 
   aiSuggestRuleButton.addEventListener('click', async () => {
-    const apiKey = openrouterApiKeyInput.value.trim();
-
+    const apiKey = aiApiKeyInput.value.trim();
     if (!apiKey) {
-        alert('Please enter your OpenRouter API key in the AI Assistant section to use this feature.');
-        openrouterApiKeyInput.focus();
+        alert('Please enter your GitHub Models API key in the AI Assistant section to use this feature.');
+        aiApiKeyInput.focus();
         return;
     }
 
@@ -1713,18 +1713,17 @@ function FindProxyForURL(url, host) {
 
         const userPrompt = `The user wants a rule for the service: "${serviceName}". The available proxy configurations are: [${availableProxies}].`;
 
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        const response = await fetch('https://models.github.ai/inference/chat/completions', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': 'https://github.com/majid-soorani/holocron',
-            'X-Title': 'Holocron',
+            'X-GitHub-Api-Version': '2022-11-28'
           },
           body: JSON.stringify({
-            model: openrouterModelInput.value.trim() || 'z-ai/glm-4.5-air:free',
+            model: aiModelInput.value.trim() || 'openai/gpt-4.1-nano',
             messages: [
-              { role: 'system', content: openrouterSystemMessageInput.value.trim() },
+              { role: 'system', content: aiSystemMessageInput.value.trim() },
               { role: 'user', content: userPrompt }
             ],
             temperature: 0.2,
@@ -1867,9 +1866,9 @@ function FindProxyForURL(url, host) {
   pingHostInput.addEventListener('input', () => debouncedSave());
   webCheckUrlInput.addEventListener('input', () => debouncedSave());
   autoReconnectCheckbox.addEventListener('change', () => debouncedSave());
-  openrouterApiKeyInput.addEventListener('input', () => debouncedSave());
-  openrouterModelInput.addEventListener('input', () => debouncedSave());
-  openrouterSystemMessageInput.addEventListener('input', () => debouncedSave());
+  aiApiKeyInput.addEventListener('input', () => debouncedSave());
+  aiModelInput.addEventListener('input', () => debouncedSave());
+  aiSystemMessageInput.addEventListener('input', () => debouncedSave());
   globalGeoIpBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
   globalGeoSiteBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
   incognitoProxySelect.addEventListener('change', () => debouncedSave());

@@ -873,24 +873,10 @@ function FindProxyForURL(url, host) {
                 webCheckUrl
             });
 
-            const finalResponse = response || { success: false };
-            if (response) {
-                if (response.connected) {
-                    finalResponse.message = `Success! Web Latency: ${response.web_check_latency_ms}ms, TCP Ping: ${response.tcp_ping_ms}ms. Site Status: ${response.web_check_status}`;
-                } else if (response.ssh_host_ping_ms !== undefined) {
-                    const hostStatus = response.ssh_host_ping_ms > -1
-                        ? `Host '${response.ssh_host_name}' is reachable (ping: ${response.ssh_host_ping_ms}ms).`
-                        : `Host '${response.ssh_host_name}' is UNREACHABLE (${response.ssh_host_ping_error || 'Error'}).`;
-                    finalResponse.message = `Tunnel is down. Diagnostic: ${hostStatus}`;
-                } else {
-                    // Generic message for OpenVPN or other types that don't have a host ping
-                    finalResponse.message = "Tunnel is down. Could not get a detailed status. Check native host logs for errors.";
-                }
-            } else {
-                finalResponse.message = "Did not receive a valid response from the native host.";
-            }
+            // The native host now provides a comprehensive response.
+            // We can largely pass it through directly.
+            sendResponse(response || { success: false, message: "Did not receive a valid response from the native host." });
 
-            sendResponse(finalResponse);
         } catch (error) {
             sendResponse({ success: false, message: error.message });
         }

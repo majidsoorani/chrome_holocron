@@ -109,17 +109,25 @@ start_tunnel() {
     FP=$(echo "$query_part" | sed -n 's/.*fp=\([^&]*\).*/\1/p')
     ALPN_RAW=$(echo "$query_part" | sed -n 's/.*alpn=\([^&]*\).*/\1/p')
     ALPN=$(echo "$ALPN_RAW" | sed 's/%2C/,/g') # URL Decode for comma
+    PATH_RAW=$(echo "$query_part" | sed -n 's/.*path=\([^&]*\).*/\1/p')
+    # V2Ray paths are typically URL-encoded, but we just need the raw string.
+    PATH=$(echo "$PATH_RAW" | sed 's|%2F|/|g')
     FLOW=$(echo "$query_part" | sed -n 's/.*flow=\([^&]*\).*/\1/p')
+    HOST=$(echo "$query_part" | sed -n 's/.*host=\([^&]*\).*/\1/p')
 
     log "Parsed Type: $TYPE"
     log "Parsed Security: $SECURITY"
     log "Parsed SNI: $SNI"
     log "Parsed Fingerprint: $FP"
     log "Parsed ALPN: $ALPN"
+    log "Parsed Path: $PATH"
+    log "Parsed Host: $HOST"
     log "Parsed Flow: $FLOW"
 
     # --- Generate Xray JSON Config ---
     log "Generating Xray config file at $CONFIG_FILE"
+
+    # ... (rest of the script has a larger change, see below)
 
     # Basic validation
     if [ -z "$UUID" ] || [ -z "$DOMAIN" ] || [ -z "$PORT" ]; then
@@ -145,21 +153,23 @@ start_tunnel() {
         FLOW_JSON_LINE="\"flow\": \"$FLOW\","
     fi
 
-    # Conditionally build the tlsSettings or xtlsSettings object as a string
-    SECURITY_SETTINGS_JSON=""
+    # --- Build streamSettings object parts ---
+    STREAM_SETTINGS_PARTS=()
+    STREAM_SETTINGS_PARTS+=("\"network\": \"${TYPE:-tcp}\"")
+    STREAM_SETTINGS_PARTS+=("\"security\": \"${SECURITY:-none}\"")
+
+    # Add TLS/XTLS settings if applicable
     if [ "$SECURITY" = "tls" ] || [ "$SECURITY" = "xtls" ]; then
         # Note: The alpn field expects a JSON array of strings.
         # We'll construct it carefully.
         ALPN_JSON_ARRAY="\"h2\", \"http/1.1\"" # Default
         if [ -n "$ALPN" ]; then
             # If ALPN is provided, format it as a JSON array of strings
-            # Use [^,][^,]* instead of [^,]+ for macOS (BSD) sed compatibility
             ALPN_JSON_ARRAY=$(echo "$ALPN" | sed 's/[^,][^,]*/"&"/g')
         fi
 
         SETTINGS_KEY="${SECURITY}Settings"
-
-        SECURITY_SETTINGS_JSON=$(cat <<EOF
+        TLS_SETTINGS_JSON=$(cat <<EOF
                 "${SETTINGS_KEY}": {
                     "serverName": "${SNI:-$DOMAIN}",
                     "fingerprint": "${FP:-chrome}",
@@ -167,7 +177,23 @@ start_tunnel() {
                 }
 EOF
 )
+        STREAM_SETTINGS_PARTS+=("$TLS_SETTINGS_JSON")
     fi
+
+    # Add transport-specific settings (e.g., wsSettings)
+    if [ "$TYPE" = "ws" ]; then
+        WS_SETTINGS_JSON=$(cat <<EOF
+                "wsSettings": {
+                    "path": "${PATH:-/}",
+                    "headers": {
+                        "Host": "${HOST:-${SNI:-$DOMAIN}}"
+                    }
+                }
+EOF
+)
+        STREAM_SETTINGS_PARTS+=("$WS_SETTINGS_JSON")
+    fi
+    STREAM_SETTINGS_CONTENT=$(IFS=,; echo "${STREAM_SETTINGS_PARTS[*]}")
 
     # Build the final JSON using the conditionally created parts
     cat > "$CONFIG_FILE" << EOL
@@ -205,9 +231,7 @@ EOF
                 ]
             },
             "streamSettings": {
-                "network": "${TYPE:-tcp}",
-                "security": "${SECURITY:-none}"$(if [ -n "$SECURITY_SETTINGS_JSON" ]; then echo ","; fi)
-                ${SECURITY_SETTINGS_JSON}
+                ${STREAM_SETTINGS_CONTENT}
             }
         }
     ]
@@ -238,7 +262,8 @@ EOL
             break
         fi
         # Check for the success message in the log.
-        if grep -q "proxy is listening on" "$LOG_FILE"; then
+        # Xray logs a specific message when the SOCKS inbound is ready.
+        if grep -q "SOCKS5 inbound is listening on" "$LOG_FILE"; then
             success=true
             break
         fi

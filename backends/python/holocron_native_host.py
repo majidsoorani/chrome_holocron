@@ -117,26 +117,31 @@ def perform_web_check(url, socks_port, timeout=10):
             return -1, "Failed (Proxy Error)", "ProxyError"
         return -1, "Failed (Connection Error)", "ConnectionError"
 
-def is_port_in_use(port, host='127.0.0.1'):
+def get_process_using_port(port):
     """
-    Checks if a TCP port is already in use on the local machine.
-    Returns True if the port is in use, False otherwise.
+    Checks if a TCP port is in use. If so, returns info about the process using it.
+    This implementation is more robust for macOS to avoid psutil.AccessDenied
+    crashes when scanning system-wide connections.
+    Returns a descriptive string if the port is in use, None otherwise.
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    listen_addrs = ('127.0.0.1', '0.0.0.0', '::1', '::')
+    
+    # On macOS, psutil.net_connections() can fail with AccessDenied if it can't
+    # inspect a process owned by another user (e.g., root). We iterate through
+    # processes manually and handle the exception gracefully for each one.
+    for proc in psutil.process_iter(['pid', 'name']):
         try:
-            s.bind((host, port))
-            # If bind succeeds, the port is free.
-            return False
-        except OSError as e:
-            # In Python, "Address already in use" is errno 98 on Linux and 48 on macOS.
-            # We check for both for cross-platform compatibility.
-            if e.errno in (98, 48):  # EADDRINUSE
-                logging.warning(f"Port check: Port {port} on {host} is already in use.")
-                return True
-            # Re-raise any other OSError, as it's an unexpected issue.
-            logging.error(f"Unexpected OS error while checking port {port}: {e}", exc_info=True)
-            # For the purpose of this check, any other error means we can't proceed safely.
-            return True
+            # is_running() is a quick check to skip zombies and other defunct processes.
+            if not proc.is_running():
+                continue
+            conns = proc.connections(kind='inet')
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            # This is expected for some system processes, just skip them.
+            continue
+        for conn in conns:
+            if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port and conn.laddr.ip in listen_addrs:
+                return f"process '{proc.info['name']}' (PID: {proc.pid})"
+    return None
 
 def get_ovpn_socks_port(ovpn_content):
     """Parses .ovpn file content to find the SOCKS proxy port."""
@@ -273,8 +278,9 @@ def execute_tunnel_command(command, config):
                     if local_port_str:
                         try:
                             local_port = int(local_port_str)
-                            if is_port_in_use(local_port):
-                                message = f"Port {local_port} is already in use. Please close the application using this port or change the configuration."
+                            process_info = get_process_using_port(local_port)
+                            if process_info:
+                                message = f"Port {local_port} is already in use by {process_info}. Please close the application or change the configuration."
                                 logging.error(message)
                                 return {"success": False, "message": message}
                         except (ValueError, TypeError):
@@ -640,6 +646,67 @@ def clear_logs():
         logging.error(f"Error clearing log file: {e}", exc_info=True)
         return {"success": False, "message": f"Error clearing log file: {e}"}
 
+def handle_test_connection(message):
+    """
+    Handles the entire test connection lifecycle: start, test, and stop.
+    """
+    config = message.get("config")
+    ping_host = message.get("pingHost")
+    web_check_url = message.get("webCheckUrl")
+
+    if not config:
+        return {"success": False, "message": "No configuration provided to test."}
+    if not ping_host or not web_check_url:
+        return {"success": False, "message": "Ping Host and Web Check URL must be provided for testing."}
+
+    # 1. Check current status and decide if we need to start/stop later.
+    status_before_test = get_tunnel_status(config)
+    tunnel_was_running = status_before_test.get("connected")
+    
+    if not tunnel_was_running:
+        logging.info(f"Test Connection: Tunnel for '{config.get('name')}' is not running. Attempting to start it for the test.")
+        # A manual test should bypass any configured Wi-Fi SSID restrictions.
+        # The execute_tunnel_command function correctly handles this because the config
+        # from the options page does not include the 'wifiSsidList' key.
+        start_response = execute_tunnel_command("start", config)
+        if not start_response.get("success"):
+            logging.error(f"Test Connection: Failed to start tunnel for test. Reason: {start_response.get('message')}")
+            return {"success": False, "message": start_response.get('message', 'Failed to start tunnel for testing.')}
+    
+    # 2. Get status again to find the SOCKS port.
+    status_after_start = get_tunnel_status(config)
+    if not status_after_start.get("connected"):
+        logging.error("Test Connection: Tunnel started but is not connected. Aborting test.")
+        if not tunnel_was_running:
+            execute_tunnel_command("stop", config) # Cleanup
+        return {"success": False, "message": "Tunnel process failed to stabilize after starting. Check logs."}
+
+    socks_port = status_after_start.get("socks_port")
+    
+    # 3. Perform the actual checks.
+    if not socks_port:
+        logging.warning(f"Test Connection: Tunnel for '{config.get('name')}' is running but no SOCKS port is configured. Cannot perform checks.")
+        if not tunnel_was_running:
+            execute_tunnel_command("stop", config) # Cleanup
+        return {"success": False, "message": "Tunnel is active but has no SOCKS proxy (-D rule) configured for testing."}
+
+    logging.info(f"Test Connection: Performing checks for '{config.get('name')}' via SOCKS port {socks_port}.")
+    web_latency, web_status, web_error = perform_web_check(url=web_check_url, socks_port=socks_port)
+    tcp_latency, tcp_error = perform_tcp_ping(host=ping_host, socks_port=socks_port)
+    
+    # 4. Stop the tunnel if we started it for the test.
+    if not tunnel_was_running:
+        logging.info(f"Test Connection: Test complete. Stopping temporary tunnel for '{config.get('name')}'.")
+        execute_tunnel_command("stop", config)
+
+    # 5. Format and send the response.
+    is_overall_success = web_latency > -1 and tcp_latency > -1 and web_status == "OK"
+    final_message = f"Test completed. Web: {web_latency}ms ({web_status or web_error}), TCP: {tcp_latency}ms." if is_overall_success else "Test failed. See details."
+    if tunnel_was_running:
+        final_message = f"(Tunnel was already running) {final_message}"
+
+    return {"success": is_overall_success, "connected": True, "web_check_latency_ms": web_latency, "web_check_status": web_status or web_error, "tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_error, "message": final_message}
+
 def main():
     """Main loop to read commands and send status."""
     while True:
@@ -666,23 +733,7 @@ def main():
                     tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=None)
                     response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "tcp_ping_ms": tcp_latency})
             elif command == "testConnection":
-                # This needs to be updated to better support OpenVPN testing
-                config = message.get("config")
-                status = get_tunnel_status(config)
-                response = {"success": status["connected"], "connected": status["connected"], "socks_port": status.get("socks_port")}
-                if status["connected"] and status.get("socks_port"):
-                    web_latency, web_status, _ = perform_web_check(url=message.get("webCheckUrl"), socks_port=status["socks_port"])
-                    tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost"), socks_port=status["socks_port"])
-                    response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "tcp_ping_ms": tcp_latency})
-                elif config.get("type") == "ssh":
-                    ssh_host = config.get("sshHost")
-                    # Sanitize host for pinging, in case user entered 'user@host'
-                    ssh_host_for_ping = ssh_host
-                    if ssh_host and '@' in ssh_host:
-                        ssh_host_for_ping = ssh_host.rsplit('@', 1)[-1]
-
-                    ssh_ping_latency, ssh_ping_error = perform_tcp_ping(host=ssh_host_for_ping, port=22, timeout=5)
-                    response.update({"ssh_host_name": ssh_host, "ssh_host_ping_ms": ssh_ping_latency, "ssh_host_ping_error": ssh_ping_error})
+                response = handle_test_connection(message)
             elif command == "getLogs":
                 identifier = message.get("identifier")
                 conn_type = message.get("conn_type")

@@ -22,6 +22,7 @@ Holocron is a Google Chrome extension designed to seamlessly manage an SSH tunne
     - Custom port forwarding rules (local, remote, and dynamic/SOCKS).
     - Hosts and URLs for latency checks.
 
+- **AI-Powered Suggestions**: Utilizes an external AI model (e.g., from GitHub) to suggest proxy bypass rules based on natural language input.
 ## How It Works (Architecture)
 
 Holocron uses a combination of a Chrome extension and a local native application to interact with your system.
@@ -104,6 +105,7 @@ An installation script is provided to automate the setup process.
 1.  **Configure Extension Options**
     - Right-click the Holocron icon in your Chrome toolbar and select **Options**.
     - Fill in the required fields for your desired connection types (SSH, OpenVPN, etc.).
+    - To use the AI rule suggestion feature, navigate to the "Settings & Logs" tab and enter your API key for the desired service (e.g., GitHub Models).
     - Click **Save Settings**.
 
 ## Security Considerations

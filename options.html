@@ -182,20 +182,20 @@
                 <div class="tab-panel" id="panel-settings">
                     <div class="settings-grid">
                         <section class="card">
-                            <h2>AI Assistant (Powered by OpenRouter)</h2>
+                            <h2>AI Assistant (Powered by GitHub)</h2>
                             <div class="form-group">
-                                <label for="openrouter-api-key">OpenRouter API Key</label>
-                                <input type="password" id="openrouter-api-key" name="openrouter-api-key" placeholder="sk-or-...">
-                                <small>Your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter.ai</a>. Required for AI-powered suggestions.</small>
+                                <label for="ai-api-key">GitHub Models API Key</label>
+                                <input type="password" id="ai-api-key" name="ai-api-key" placeholder="ghm_...">
+                                <small>Your API key from <a href="https://github.com/settings/copilot" target="_blank" rel="noopener noreferrer">GitHub Models</a>. Required for AI-powered suggestions.</small>
                             </div>
                             <div class="form-group">
-                                <label for="openrouter-model">AI Model</label>
-                                <input type="text" id="openrouter-model" name="openrouter-model">
-                                <small>The model to use for suggestions (e.g., z-ai/glm-4.5-air:free, google/gemini-flash-1.5).</small>
+                                <label for="ai-model">AI Model</label>
+                                <input type="text" id="ai-model" name="ai-model">
+                                <small>The model to use for suggestions (e.g., openai/gpt-4.1-nano).</small>
                             </div>
                             <div class="form-group">
-                                <label for="openrouter-system-message">AI System Message</label>
-                                <textarea id="openrouter-system-message" name="openrouter-system-message" rows="6"></textarea>
+                                <label for="ai-system-message">AI System Message</label>
+                                <textarea id="ai-system-message" name="ai-system-message" rows="6"></textarea>
                                 <small>The system prompt used to instruct the AI. Modify with caution.</small>
                             </div>
                             <div id="ai-live-log-container" class="log-viewer-container" style="display: none; margin-top: 1em; height: 150px;">
