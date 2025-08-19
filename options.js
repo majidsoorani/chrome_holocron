@@ -221,27 +221,28 @@ document.addEventListener('DOMContentLoaded', () => {
     typeSelect.value = config.type || 'ssh';
 
     // SSH fields
-    sshUserInput.value = config.sshUser || '';
-    sshHostInput.value = config.sshHost || '';
-    sshRemoteCommandInput.value = config.sshRemoteCommand || '';
+    if (sshUserInput) sshUserInput.value = config.sshUser || '';
+    if (sshHostInput) sshHostInput.value = config.sshHost || '';
+    if (sshRemoteCommandInput) sshRemoteCommandInput.value = config.sshRemoteCommand || '';
 
     // OpenVPN fields
-    ovpnProfileNameInput.value = config.ovpnProfileName || '';
-    ovpnFileContent.value = config.ovpnFileContent || '';
-    ovpnAuthUser.value = config.ovpnUser || '';
-    ovpnAuthPass.value = config.ovpnPass || '';
-    if (config.ovpnFileContent) {
+    if (ovpnProfileNameInput) ovpnProfileNameInput.value = config.ovpnProfileName || '';
+    if (ovpnFileContent) ovpnFileContent.value = config.ovpnFileContent || '';
+    if (ovpnAuthUser) ovpnAuthUser.value = config.ovpnUser || '';
+    if (ovpnAuthPass) ovpnAuthPass.value = config.ovpnPass || '';
+    if (config.ovpnFileContent && ovpnFileStatus) {
         ovpnFileStatus.textContent = `Saved profile loaded. Upload a new file to replace it.`;
     }
     checkOvpnForAuth(config.ovpnFileContent); // Check on initial load
 
     // V2Ray fields
-    v2rayUrlInput.value = config.v2rayUrl || '';
+    // This check prevents a crash if the element doesn't exist in the template.
+    if (v2rayUrlInput) v2rayUrlInput.value = config.v2rayUrl || '';
 
     // External Proxy fields
-    externalProtocolSelect.value = config.proxyProtocol || 'SOCKS5';
-    externalHostInput.value = config.proxyHost || '127.0.0.1';
-    externalPortInput.value = config.proxyPort || '';
+    if (externalProtocolSelect) externalProtocolSelect.value = config.proxyProtocol || 'SOCKS5';
+    if (externalHostInput) externalHostInput.value = config.proxyHost || '127.0.0.1';
+    if (externalPortInput) externalPortInput.value = config.proxyPort || '';
 
 
     // Listen for changes to the enabled state to update the PAC script preview
@@ -314,10 +315,10 @@ document.addEventListener('DOMContentLoaded', () => {
       debouncedSave();
     });
     // Add debounced save to all other inputs
-    [sshUserInput, sshHostInput, sshRemoteCommandInput, ovpnProfileNameInput, ovpnAuthUser, ovpnAuthPass, v2rayUrlInput, externalProtocolSelect, externalHostInput, externalPortInput].forEach(input => {
+    // Using .filter(Boolean) safely removes any null elements from the list before adding listeners.
+    [sshUserInput, sshHostInput, sshRemoteCommandInput, ovpnProfileNameInput, ovpnAuthUser, ovpnAuthPass, v2rayUrlInput, externalProtocolSelect, externalHostInput, externalPortInput].filter(Boolean).forEach(input => {
         input.addEventListener('input', debouncedSave);
     });
-
     const parseAndDisplayV2RayUrl = (url) => {
         if (!url || !url.startsWith('vless://')) {
             v2rayDetectedParams.style.display = 'none';
@@ -358,8 +359,10 @@ document.addEventListener('DOMContentLoaded', () => {
             v2rayDetectedParams.style.display = 'none';
         }
     };
-    v2rayUrlInput.addEventListener('input', () => parseAndDisplayV2RayUrl(v2rayUrlInput.value));
-
+    // This check prevents a crash if the element doesn't exist in the template
+    if (v2rayUrlInput) {
+      v2rayUrlInput.addEventListener('input', () => parseAndDisplayV2RayUrl(v2rayUrlInput.value));
+    }
 
     connectButton.addEventListener('click', () => {
         const type = typeSelect.value;
@@ -498,16 +501,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (type === 'ssh') {
           Object.assign(config, {
-              sshUser: details.querySelector('.config-input-ssh-user').value.trim(),
-              sshHost: details.querySelector('.config-input-ssh-host').value.trim(),
-              sshRemoteCommand: details.querySelector('.config-input-ssh-remote-command').value.trim(),
+              sshUser: details.querySelector('.config-input-ssh-user')?.value.trim() || '',
+              sshHost: details.querySelector('.config-input-ssh-host')?.value.trim() || '',
+              sshRemoteCommand: details.querySelector('.config-input-ssh-remote-command')?.value.trim() || '',
               portForwards: Array.from(
                   details.querySelectorAll('.port-forwarding-rules-list .rule-item')
               ).map(el => {
-                  const type = el.querySelector('.rule-type').value;
-                  const localPort = el.querySelector('.rule-local-port').value;
-                  const remoteHost = el.querySelector('.rule-remote-host').value;
-                  const remotePort = el.querySelector('.rule-remote-port').value;
+                  const type = el.querySelector('.rule-type')?.value;
+                  const localPort = el.querySelector('.rule-local-port')?.value;
+                  const remoteHost = el.querySelector('.rule-remote-host')?.value;
+                  const remotePort = el.querySelector('.rule-remote-port')?.value;
                   if (!localPort) return null;
                   const rule = { type, localPort };
                   if (type === 'L' || type === 'R') {
@@ -519,20 +522,20 @@ document.addEventListener('DOMContentLoaded', () => {
           });
       } else if (type === 'openvpn') {
           Object.assign(config, {
-              ovpnProfileName: details.querySelector('.ovpn-profile-name').value.trim(),
-              ovpnFileContent: details.querySelector('.ovpn-file-content').value,
-              ovpnUser: details.querySelector('.ovpn-auth-user').value,
-              ovpnPass: details.querySelector('.ovpn-auth-pass').value,
+              ovpnProfileName: details.querySelector('.ovpn-profile-name')?.value.trim() || '',
+              ovpnFileContent: details.querySelector('.ovpn-file-content')?.value || '',
+              ovpnUser: details.querySelector('.ovpn-auth-user')?.value || '',
+              ovpnPass: details.querySelector('.ovpn-auth-pass')?.value || '',
           });
       } else if (type === 'v2ray') {
           Object.assign(config, {
-              v2rayUrl: details.querySelector('.config-input-v2ray-url').value.trim(),
+              v2rayUrl: details.querySelector('.config-input-v2ray-url')?.value.trim() || '',
           });
       } else if (type === 'external') {
            Object.assign(config, {
-              proxyProtocol: details.querySelector('.config-input-external-protocol').value,
-              proxyHost: details.querySelector('.config-input-external-host').value.trim(),
-              proxyPort: details.querySelector('.config-input-external-port').value.trim(),
+              proxyProtocol: details.querySelector('.config-input-external-protocol')?.value || 'SOCKS5',
+              proxyHost: details.querySelector('.config-input-external-host')?.value.trim() || '',
+              proxyPort: details.querySelector('.config-input-external-port')?.value.trim() || '',
           });
       }
       return config;
@@ -1484,7 +1487,7 @@ function FindProxyForURL(url, host) {
 
   function requestStatusUpdate() {
     connectionStatusText.textContent = 'Checking...';
-    connectionStatusIndicator.className = 'status-indicator'; // Reset to default
+    connectionStatusDot.dataset.status = 'in-progress'; // Reset to default
     chrome.runtime.sendMessage({ command: COMMANDS.GET_POPUP_STATUS }, (response) => {
       if (chrome.runtime.lastError) {
         console.error(`Error requesting status: ${chrome.runtime.lastError.message}`);

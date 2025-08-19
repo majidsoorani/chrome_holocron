@@ -140,8 +140,13 @@ start_tunnels() {
         echo "ℹ️ No work Wi-Fi networks configured. Skipping SSID check."
     fi
 
+    # Get the script's directory to reliably locate the project's log folder.
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    local log_dir="$script_dir/../log/connections"
+    mkdir -p "$log_dir"
     # Define a per-connection log file for live logging in the UI
-    local log_file="/tmp/holocron_ssh_${identifier}.log"
+    local log_file="$log_dir/holocron_ssh_${identifier}.log"
     # Clear previous log for this identifier to ensure a fresh log for each attempt.
     >"$log_file"
 
@@ -152,14 +157,6 @@ start_tunnels() {
         -o "ServerAliveInterval=60"
         -o "ExitOnForwardFailure=yes"
     )
-
-    # Use a unique ControlPath to tag the SSH process with the identifier.
-    # This is a standard SSH option, and since ControlMaster is 'no' by default,
-    # it won't create a socket but will appear in the process's command line,
-    # allowing the native host to find it reliably.
-    if [ -n "$identifier" ]; then
-        final_ssh_args+=(-o "ControlPath=/tmp/holocron.ssh.socket.$identifier")
-    fi
 
     # If no remote command is specified, use -N to prevent shell allocation.
     if [ -z "$remote_command" ]; then

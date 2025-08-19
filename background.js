@@ -6,9 +6,10 @@ import { IRAN_IP_RANGES_NETMASK } from './iran_ip_ranges.js';
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
 // --- State Variables ---
-let lastStatus = { connected: false }; // Store the last known status
-const GEOIP_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@main/direct/iran-ip.txt'; // For IP ranges (CIDR)
-const GEOSITE_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@main/direct/iran-domain.txt'; // For domains
+let lastStatus = { connected: false }; // Store the last known status.
+// Use raw GitHub URLs as a fallback for jsDelivr, which can sometimes have caching/availability issues.
+const GEOIP_URL = 'https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/main/direct/iran-ip.txt'; // For IP ranges (CIDR)
+const GEOSITE_URL = 'https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/main/direct/iran-domain.txt'; // For domains
 const GEOIP_UPDATE_COOLDOWN_HOURS = 24;
 
 // --- State Variables ---

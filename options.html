@@ -34,21 +34,12 @@
 <body>
     <div class="container">
         <header>
+            <span id="connection-status-dot" class="status-dot"></span>
+                <span id="connection-status-text">Loading...</span>
+                <button id="connection-action-button" class="icon-button" title="Refresh Status">⏻</button>
             <h1>Holocron Settings</h1>
             <p>Configure the SSH tunnel and proxy behavior.</p>
         </header>
-
-        <div class="button-bar">
-            <div id="status-message">
-                <!-- This is used for "Saving...", "Settings saved!", etc. -->
-            </div>
-            <div id="main-connection-controls" class="connection-controls compact">
-                <span id="connection-status-dot" class="status-dot"></span>
-                <span id="connection-status-text">Loading...</span>
-                <button id="connection-action-button" class="icon-button" title="Refresh Status">⏻</button>
-            </div>
-        </div>
-
         <div class="tabs-container">
             <nav class="tabs-nav">
                 <button class="tab-button active" data-tab="connections">Connections & Health</button>
@@ -336,22 +327,90 @@
 
                 <!-- External Proxy Specific Fields -->
                 <div class="external-settings" style="display: none;">
-                    <!-- content remains the same -->
+                    <div class="form-group-grid">
+                        <div class="form-group">
+                            <label>Protocol</label>
+                            <select class="config-input-external-protocol">
+                                <option value="SOCKS5">SOCKS5</option>
+                                <option value="SOCKS4">SOCKS4</option>
+                                <option value="HTTP">HTTP</option>
+                                <option value="HTTPS">HTTPS</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Proxy Host</label>
+                            <input type="text" class="config-input-external-host" placeholder="127.0.0.1">
+                        </div>
+                        <div class="form-group">
+                            <label>Proxy Port</label>
+                            <input type="number" class="config-input-external-port" placeholder="9050" min="1" max="65535">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- SSH Specific Fields -->
                 <div class="ssh-settings">
-                    <!-- content remains the same -->
+                    <div class="form-group-grid">
+                        <div class="form-group">
+                            <label>SSH User</label>
+                            <input type="text" class="config-input-ssh-user" placeholder="e.g., root">
+                        </div>
+                        <div class="form-group">
+                            <label>SSH Host</label>
+                            <input type="text" class="config-input-ssh-host" placeholder="e.g., bastion.example.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Remote Command (Optional)</label>
+                        <input type="text" class="config-input-ssh-remote-command" placeholder="e.g., /usr/local/bin/my_script.sh">
+                        <small>A command to run on the remote server after connecting.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Port Forwarding Rules</label>
+                        <div class="port-forwarding-rules-list">
+                            <!-- Rules will be added here -->
+                        </div>
+                        <button class="add-port-forward-rule-button add-button">+ Add Port Forwarding Rule</button>
+                    </div>
                 </div>
 
                 <!-- OpenVPN Specific Fields -->
                 <div class="openvpn-settings" style="display: none;">
-                    <!-- content remains the same -->
+                    <div class="form-group">
+                        <label>Profile Name</label>
+                        <input type="text" class="ovpn-profile-name" placeholder="e.g., My Work VPN">
+                    </div>
+                    <div class="form-group">
+                        <label>OpenVPN Configuration File (.ovpn)</label>
+                        <input type="file" class="ovpn-file-upload" accept=".ovpn,.conf">
+                        <span class="ovpn-file-status">No file selected.</span>
+                        <textarea class="ovpn-file-content" style="display:none;"></textarea>
+                    </div>
+                    <div class="form-group-grid ovpn-auth-container" style="display: none;">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" class="ovpn-auth-user" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" class="ovpn-auth-pass" autocomplete="off">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- V2Ray Specific Fields -->
                 <div class="v2ray-settings" style="display: none;">
-                    <!-- content remains the same -->
+                    <div class="form-group">
+                        <label>V2Ray URL (VLESS)</label>
+                        <input type="text" class="config-input-v2ray-url" placeholder="vless://...">
+                        <small>Paste your full VLESS URL here. The extension will parse it automatically.</small>
+                    </div>
+                    <div class="v2ray-detected-params" style="display: none; margin-top: 1em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">
+                        <strong>Detected Parameters:</strong>
+                        <ul class="v2ray-params-list" style="list-style-type: none; padding-left: 1em; font-size: 0.9em; color: var(--text-color-secondary);">
+                            <!-- Parsed params will be shown here -->
+                        </ul>
+                    </div>
                 </div>
 
                 <div class="config-details-actions">

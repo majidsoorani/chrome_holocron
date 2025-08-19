@@ -190,17 +190,24 @@ def get_tunnel_status(config):
     logging.debug(f"Checking for {conn_type} process with identifier: '{identifier}'")
 
     if conn_type == "ssh":
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'username']):
+        lock_file = Path.home() / ".ssh" / f"holocron_tunnel_{identifier}.lock"
+        if lock_file.is_file():
             try:
-                if proc.info['name'] == 'ssh' and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
-                    cmd_str = " ".join(proc.info['cmdline'])
-                    if f"ControlPath=/tmp/holocron.ssh.socket.{identifier}" in cmd_str:
-                        logging.debug(f"Found matching SSH process with PID: {proc.pid}")
-                        match = re.search(r'-D\s*(\d+)', cmd_str)
-                        socks_port = int(match.group(1)) if match else None
-                        return {"connected": True, "socks_port": socks_port}
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
+                pid = int(lock_file.read_text().strip())
+                proc = psutil.Process(pid)
+                # Verify the process is still running and is an ssh process.
+                if proc.is_running() and proc.name() == 'ssh':
+                    logging.debug(f"Found matching SSH process with PID: {proc.pid} from lock file.")
+                    cmd_str = " ".join(proc.cmdline())
+                    match = re.search(r'-D\s*(\d+)', cmd_str)
+                    socks_port = int(match.group(1)) if match else None
+                    return {"connected": True, "socks_port": socks_port}
+            except (ValueError, psutil.NoSuchProcess, FileNotFoundError):
+                # Handle cases where lock file is stale or PID is gone.
+                logging.warning(f"Stale lock file found for SSH identifier '{identifier}'.")
+                # The function will fall through and return disconnected.
+            except Exception as e:
+                logging.error(f"Error checking SSH status via lock file for identifier '{identifier}': {e}")
     elif conn_type == "openvpn":
         paths = get_ovpn_temp_paths(identifier)
         lock_file = paths["lock"]
@@ -214,7 +221,7 @@ def get_tunnel_status(config):
             except (ValueError, psutil.NoSuchProcess):
                 logging.warning(f"Stale lock file found for OpenVPN identifier '{identifier}'.")
     elif conn_type == "v2ray":
-        lock_file = Path(f"/tmp/holocron_v2ray_{identifier}.lock")
+        lock_file = CONN_LOG_DIR / f"holocron_v2ray_{identifier}.lock"
         if lock_file.is_file():
             try:
                 pid = int(lock_file.read_text().strip())
@@ -604,11 +611,11 @@ def get_log_path_for_config(identifier, conn_type):
 
     # This assumes work_connect.sh will log to a file with this naming convention.
     if conn_type == "ssh":
-        return Path(f"/tmp/holocron_ssh_{identifier}.log") # SSH script still uses /tmp
+        return CONN_LOG_DIR / f"holocron_ssh_{identifier}.log"
     elif conn_type == "openvpn":
         return get_ovpn_temp_paths(identifier)["log"]
     elif conn_type == "v2ray":
-        return Path(f"/tmp/holocron_v2ray_{identifier}.log")
+        return CONN_LOG_DIR / f"holocron_v2ray_{identifier}.log"
     else:
         # Fallback for unknown types
         return log_file

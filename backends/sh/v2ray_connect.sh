@@ -1,11 +1,26 @@
 #!/bin/bash
 
-# --- Configuration ---
-SOCKS_PORT="10808" # Default SOCKS port
+# --- Full paths for reliability in non-interactive environments ---
+DATE_CMD="/bin/date"
+RM_CMD="/bin/rm"
+PS_CMD="/bin/ps"
+KILL_CMD="/bin/kill"
+NOHUP_CMD="/usr/bin/nohup"
+SED_CMD="/usr/bin/sed"
+AWK_CMD="/usr/bin/awk"
+GREP_CMD="/usr/bin/grep"
+TAIL_CMD="/usr/bin/tail"
+CAT_CMD="/bin/cat"
+SLEEP_CMD="/bin/sleep"
+MKDIR_CMD="/bin/mkdir"
+DIRNAME_CMD="/usr/bin/dirname"
+
+# --- Default Configuration ---
+SOCKS_PORT="10808"
 
 # --- Helper Functions ---
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+    echo "$($DATE_CMD '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
 }
 
 find_xray_executable() {
@@ -38,7 +53,7 @@ find_xray_executable() {
 
 cleanup() {
     log "Cleaning up temporary files..."
-    rm -f "$CONFIG_FILE" "$LOCK_FILE"
+    $RM_CMD -f "$CONFIG_FILE" "$LOCK_FILE" "$LOG_FILE"
 }
 
 # --- Command Functions ---
@@ -53,8 +68,8 @@ start_tunnel() {
     fi
 
     if [ -f "$LOCK_FILE" ]; then
-        pid=$(cat "$LOCK_FILE")
-        if ps -p "$pid" > /dev/null; then
+        pid=$($CAT_CMD "$LOCK_FILE")
+        if $PS_CMD -p "$pid" > /dev/null; then
             echo "V2Ray tunnel is already running with PID $pid."
             log "Start command issued, but tunnel already running with PID $pid."
             exit 3 # Special exit code for "already running"
@@ -79,41 +94,41 @@ start_tunnel() {
     url_body=${V2RAY_URL#vless://}
 
     # Extract remark (everything after #)
-    REMARK=$(echo "$url_body" | awk -F'#' '{print $2}')
+    REMARK=$(echo "$url_body" | $AWK_CMD -F'#' '{print $2}')
     log "Parsed Remark: $REMARK"
 
     # Extract main part (before #)
-    main_part=$(echo "$url_body" | awk -F'#' '{print $1}')
+    main_part=$(echo "$url_body" | $AWK_CMD -F'#' '{print $1}')
 
     # Extract user@host:port
-    user_host_port=$(echo "$main_part" | awk -F'?' '{print $1}')
+    user_host_port=$(echo "$main_part" | $AWK_CMD -F'?' '{print $1}')
 
     # Extract UUID
-    UUID=$(echo "$user_host_port" | awk -F'@' '{print $1}')
+    UUID=$(echo "$user_host_port" | $AWK_CMD -F'@' '{print $1}')
     log "Parsed UUID: $UUID"
 
     # Extract domain and port
-    host_port=$(echo "$user_host_port" | awk -F'@' '{print $2}')
-    DOMAIN=$(echo "$host_port" | awk -F':' '{print $1}')
-    PORT=$(echo "$host_port" | awk -F':' '{print $2}')
+    host_port=$(echo "$user_host_port" | $AWK_CMD -F'@' '{print $2}')
+    DOMAIN=$(echo "$host_port" | $AWK_CMD -F':' '{print $1}')
+    PORT=$(echo "$host_port" | $AWK_CMD -F':' '{print $2}')
     log "Parsed Domain: $DOMAIN"
     log "Parsed Port: $PORT"
 
     # Extract query parameters
-    query_part=$(echo "$main_part" | awk -F'?' -v N=2 '{if(NF>1) print $N}')
+    query_part=$(echo "$main_part" | $AWK_CMD -F'?' -v N=2 '{if(NF>1) print $N}')
 
     # Simple parsing for required params. A more robust solution would handle all cases.
-    TYPE=$(echo "$query_part" | sed -n 's/.*type=\([^&]*\).*/\1/p')
-    SECURITY=$(echo "$query_part" | sed -n 's/.*security=\([^&]*\).*/\1/p')
-    SNI=$(echo "$query_part" | sed -n 's/.*sni=\([^&]*\).*/\1/p')
-    FP=$(echo "$query_part" | sed -n 's/.*fp=\([^&]*\).*/\1/p')
-    ALPN_RAW=$(echo "$query_part" | sed -n 's/.*alpn=\([^&]*\).*/\1/p')
-    ALPN=$(echo "$ALPN_RAW" | sed 's/%2C/,/g') # URL Decode for comma
-    PATH_RAW=$(echo "$query_part" | sed -n 's/.*path=\([^&]*\).*/\1/p')
+    TYPE=$(echo "$query_part" | $SED_CMD -n 's/.*type=\([^&]*\).*/\1/p')
+    SECURITY=$(echo "$query_part" | $SED_CMD -n 's/.*security=\([^&]*\).*/\1/p')
+    SNI=$(echo "$query_part" | $SED_CMD -n 's/.*sni=\([^&]*\).*/\1/p')
+    FP=$(echo "$query_part" | $SED_CMD -n 's/.*fp=\([^&]*\).*/\1/p')
+    ALPN_RAW=$(echo "$query_part" | $SED_CMD -n 's/.*alpn=\([^&]*\).*/\1/p')
+    ALPN=$(echo "$ALPN_RAW" | $SED_CMD 's/%2C/,/g') # URL Decode for comma
+    PATH_RAW=$(echo "$query_part" | $SED_CMD -n 's/.*path=\([^&]*\).*/\1/p')
     # V2Ray paths are typically URL-encoded, but we just need the raw string.
-    PATH=$(echo "$PATH_RAW" | sed 's|%2F|/|g')
-    FLOW=$(echo "$query_part" | sed -n 's/.*flow=\([^&]*\).*/\1/p')
-    HOST=$(echo "$query_part" | sed -n 's/.*host=\([^&]*\).*/\1/p')
+    PATH=$(echo "$PATH_RAW" | $SED_CMD 's|%2F|/|g')
+    FLOW=$(echo "$query_part" | $SED_CMD -n 's/.*flow=\([^&]*\).*/\1/p')
+    HOST=$(echo "$query_part" | $SED_CMD -n 's/.*host=\([^&]*\).*/\1/p')
 
     log "Parsed Type: $TYPE"
     log "Parsed Security: $SECURITY"
@@ -165,11 +180,11 @@ start_tunnel() {
         ALPN_JSON_ARRAY="\"h2\", \"http/1.1\"" # Default
         if [ -n "$ALPN" ]; then
             # If ALPN is provided, format it as a JSON array of strings
-            ALPN_JSON_ARRAY=$(echo "$ALPN" | sed 's/[^,][^,]*/"&"/g')
+            ALPN_JSON_ARRAY=$(echo "$ALPN" | $SED_CMD 's/[^,][^,]*/"&"/g')
         fi
 
         SETTINGS_KEY="${SECURITY}Settings"
-        TLS_SETTINGS_JSON=$(cat <<EOF
+        TLS_SETTINGS_JSON=$($CAT_CMD <<EOF
                 "${SETTINGS_KEY}": {
                     "serverName": "${SNI:-$DOMAIN}",
                     "fingerprint": "${FP:-chrome}",
@@ -182,7 +197,7 @@ EOF
 
     # Add transport-specific settings (e.g., wsSettings)
     if [ "$TYPE" = "ws" ]; then
-        WS_SETTINGS_JSON=$(cat <<EOF
+        WS_SETTINGS_JSON=$($CAT_CMD <<EOF
                 "wsSettings": {
                     "path": "${PATH:-/}",
                     "headers": {
@@ -196,10 +211,10 @@ EOF
     STREAM_SETTINGS_CONTENT=$(IFS=,; echo "${STREAM_SETTINGS_PARTS[*]}")
 
     # Build the final JSON using the conditionally created parts
-    cat > "$CONFIG_FILE" << EOL
+    $CAT_CMD > "$CONFIG_FILE" << EOL
 {
     "log": {
-        "loglevel": "warning"
+        "loglevel": "info"
     },
     "inbounds": [
         {
@@ -209,7 +224,8 @@ EOF
             "settings": {
                 "auth": "noauth",
                 "udp": true
-            }
+            },
+            "tag": "socks-in"
         }
     ],
     "outbounds": [
@@ -239,7 +255,7 @@ EOF
 EOL
 
     log "Config file generated. Starting Xray..."
-    nohup "$XRAY_EXEC" -config "$CONFIG_FILE" > "$LOG_FILE" 2>&1 &
+    $NOHUP_CMD "$XRAY_EXEC" -config "$CONFIG_FILE" > "$LOG_FILE" 2>&1 &
     pid=$!
 
     if [ -z "$pid" ]; then
@@ -249,7 +265,7 @@ EOL
         exit 1
     fi
 
-    echo "$pid" > "$LOCK_FILE"
+    echo "$pid" > "$LOCK_FILE" # Use echo, not cat
     log "Xray process started with PID $pid."
 
     # Wait up to 5 seconds for the process to confirm it's running by checking the log file.
@@ -257,23 +273,28 @@ EOL
     local success=false
     for i in {1..10}; do # Check every 0.5s for 5s
         # If the process died, stop waiting.
-        if ! ps -p "$pid" > /dev/null; then
+        if ! $PS_CMD -p "$pid" > /dev/null; then
             log "Process $pid died prematurely."
             break
         fi
         # Check for the success message in the log.
         # Xray logs a specific message when the SOCKS inbound is ready.
-        if grep -q "SOCKS5 inbound is listening on" "$LOG_FILE"; then
+        # The log message format can change between versions, so we look for a more
+        # stable indicator that the inbound listener is active.
+        if $GREP_CMD -q "listening TCP on" "$LOG_FILE"; then
             success=true
             break
         fi
-        sleep 0.5
+        $SLEEP_CMD 0.5
     done
 
     if [ "$success" = false ]; then
         echo "Error: Xray process failed to start correctly. Check the log for details."
         log "Error: Xray process with PID $pid did not log a successful start message. It may have crashed."
-        kill "$pid" 2>/dev/null # Ensure the zombie process is gone
+        echo "   --- V2Ray Connection Log (from ${LOG_FILE}) ---" >&2
+        $TAIL_CMD -n 15 "$LOG_FILE" | $SED_CMD 's/^/   | /' >&2
+        echo "   --------------------------" >&2
+        $KILL_CMD "$pid" 2>/dev/null # Ensure the zombie process is gone
         cleanup
         exit 1
     fi
@@ -290,21 +311,21 @@ stop_tunnel() {
         exit 0
     fi
 
-    pid=$(cat "$LOCK_FILE")
+    pid=$($CAT_CMD "$LOCK_FILE")
     if [ -z "$pid" ]; then
         log "Lock file is empty. Cleaning up."
         cleanup
         exit 0
     fi
 
-    if ps -p "$pid" > /dev/null; then
+    if $PS_CMD -p "$pid" > /dev/null; then
         log "Killing process with PID $pid."
-        kill "$pid"
+        $KILL_CMD "$pid"
         # Wait a moment for the process to terminate
-        sleep 1
-        if ps -p "$pid" > /dev/null; then
+        $SLEEP_CMD 1
+        if $PS_CMD -p "$pid" > /dev/null; then
             log "Process $pid did not terminate gracefully. Forcing kill."
-            kill -9 "$pid"
+            $KILL_CMD -9 "$pid"
         fi
         log "Process $pid stopped."
     else
@@ -350,9 +371,13 @@ if [ -z "$IDENTIFIER" ]; then
 fi
 
 # Define file paths based on the identifier
-LOCK_FILE="/tmp/holocron_v2ray_${IDENTIFIER}.lock"
-LOG_FILE="/tmp/holocron_v2ray_${IDENTIFIER}.log"
-CONFIG_FILE="/tmp/holocron_v2ray_config_${IDENTIFIER}.json"
+script_dir=$(cd "$($DIRNAME_CMD "${BASH_SOURCE[0]}")" && pwd)
+CONN_DIR="$script_dir/../log/connections"
+$MKDIR_CMD -p "$CONN_DIR"
+
+LOCK_FILE="$CONN_DIR/holocron_v2ray_${IDENTIFIER}.lock"
+LOG_FILE="$CONN_DIR/holocron_v2ray_${IDENTIFIER}.log"
+CONFIG_FILE="$CONN_DIR/holocron_v2ray_config_${IDENTIFIER}.json"
 
 # Execute command
 case "$COMMAND" in
