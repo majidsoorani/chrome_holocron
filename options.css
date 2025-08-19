@@ -424,6 +424,125 @@ input:checked + .slider:before { transform: translateX(20px); }
     margin-top: 0;
 }
 
+/* --- Core Configuration Cards --- */
+.config-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 1.5em;
+    background-color: var(--container-bg); /* Use main container bg for contrast */
+    box-shadow: 0 2px 4px var(--shadow-color);
+    transition: box-shadow 0.2s ease-in-out;
+}
+.config-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+}
+
+.config-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1em 1.5em;
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+.config-status-area {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    flex-grow: 1;
+}
+
+.status-badge {
+    font-weight: 700;
+    font-size: 1em;
+}
+.status-badge[data-status="connected"] { color: var(--status-indicator-good); }
+.status-badge[data-status="disconnected"] { color: var(--status-indicator-default); }
+.status-badge[data-status="error"] { color: var(--status-indicator-bad); }
+.status-badge[data-status="testing"] { color: var(--info-color); }
+
+.config-name {
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.config-main-controls {
+    display: flex;
+    gap: 0.5em;
+    flex-shrink: 0;
+}
+.config-main-controls button {
+    padding: 8px 12px;
+    font-size: 0.9em;
+}
+
+.config-card-body {
+    padding: 1em 1.5em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--card-bg);
+}
+
+.config-health-metrics {
+    display: flex;
+    gap: 2em;
+}
+
+.metric-item {
+    text-align: left;
+}
+.metric-item .label {
+    font-size: 0.85em;
+    color: var(--text-color-secondary);
+    display: block;
+}
+.metric-item .value {
+    font-size: 1.2em;
+    font-weight: 600;
+}
+.config-health-actions {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+}
+.config-health-actions .test-status-message {
+    font-size: 0.9em;
+    min-height: 0;
+}
+
+
+.config-details {
+    padding: 1.5em;
+    border-top: 1px solid var(--border-color-light);
+    background-color: var(--bg-color); /* Slightly different bg for edit area */
+}
+
+.form-group-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5em;
+    margin-bottom: 1.5em;
+}
+
+.config-details-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2em;
+    padding-top: 1.5em;
+    border-top: 1px solid var(--border-color);
+}
+.config-details-actions .toggle-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+.config-details-actions .toggle-switch span:last-child {
+    font-weight: 500;
+}
+
+
 /* --- Tabbed Interface --- */
 .tabs-nav {
     display: flex;
