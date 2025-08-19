@@ -1,8 +1,9 @@
 import { COMMANDS, STORAGE_KEYS } from './constants.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-  const statusEl = document.getElementById('connection_status');
-  const statusIndicator = document.getElementById('status_indicator');
+  const statusTextEl = document.getElementById('connection-status');
+  const statusDotEl = document.getElementById('status-dot');
+  const actionButton = document.getElementById('connection-action-button');
   const detailsGrid = document.getElementById('details_grid');
   const spinnerOverlay = document.getElementById('spinner');
   const webLatencyEl = document.getElementById('web_latency');
@@ -13,10 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const proxyMessage = document.getElementById('proxy-message');
   const applyProxyButton = document.getElementById('apply-proxy-button');
   const revertProxyButton = document.getElementById('revert-proxy-button');
-  const tunnelControls = document.getElementById('tunnel-controls');
-  const tunnelMessage = document.getElementById('tunnel-message');
-  const connectButton = document.getElementById('connect-button');
-  const disconnectButton = document.getElementById('disconnect-button');
 
   let currentStatus = {}; // Cache the latest status object
 
@@ -44,59 +41,40 @@ document.addEventListener('DOMContentLoaded', () => {
     return error.replace(/Error$/, '').trim();
   }
   function updateUI(status) {
-    // Hide spinner once we have a status to show
     spinnerOverlay.style.display = 'none';
-
-    tunnelControls.style.display = 'block';
-    // Handle disconnected state first
-    if (!status || !status.connected) {
-      statusEl.textContent = 'Disconnected';
-      statusIndicator.className = 'status-indicator bad';
-      detailsGrid.style.display = 'grid'; // Show grid for diagnostics
-
-      webLatencyEl.textContent = '--';
-      webLatencyEl.className = 'value';
-      webCheckEl.textContent = 'N/A';
-      webCheckEl.className = 'value';
-
-      // When disconnected, show the direct TCP ping latency for basic diagnostics
-      if (status && typeof status.tcp_ping_ms !== 'undefined') {
-        if (status.tcp_ping_ms === -1) {
-          tcpPingEl.textContent = formatTcpError(status.tcp_ping_error);
-          tcpPingEl.className = 'value bad';
-        } else {
-          tcpPingEl.textContent = `${status.tcp_ping_ms}ms`;
-          tcpPingEl.className = 'value'; // Neutral color for direct ping
-        }
-      } else {
-        tcpPingEl.textContent = '--';
-        tcpPingEl.className = 'value';
-      }
-      proxyContainer.style.display = 'none';
-
-      // Configure tunnel controls for disconnected state
-      connectButton.style.display = 'inline-flex';
-      disconnectButton.style.display = 'none';
-      tunnelMessage.textContent = 'Tunnel is disconnected.';
-      return;
-    }
-
-    // Handle connected state
-    statusEl.textContent = 'Connected';
-    statusIndicator.className = 'status-indicator good';
     detailsGrid.style.display = 'grid';
 
-    // Display Web Check Latency (from the full HTTP check)
+    // Update main status display
+    if (status.connecting) {
+        statusDotEl.dataset.status = 'in-progress';
+        statusTextEl.textContent = 'Connecting...';
+        actionButton.innerHTML = '⏳';
+        actionButton.title = 'In Progress...';
+        actionButton.disabled = true;
+    } else if (status.connected) {
+        statusDotEl.dataset.status = 'connected';
+        statusTextEl.textContent = 'Connected';
+        actionButton.innerHTML = '⏻';
+        actionButton.title = 'Disconnect';
+        actionButton.disabled = false;
+    } else { // Disconnected
+        statusDotEl.dataset.status = 'disconnected';
+        statusTextEl.textContent = 'Disconnected';
+        actionButton.innerHTML = '⏻';
+        actionButton.title = 'Connect';
+        actionButton.disabled = false;
+    }
+
+    // Update details grid
     const webLatency = status.web_check_latency_ms;
     if (webLatency === -1 || typeof webLatency === 'undefined') {
-      webLatencyEl.textContent = 'Fail';
+      webLatencyEl.textContent = '--';
       webLatencyEl.className = 'value bad';
     } else {
       webLatencyEl.textContent = `${webLatency}ms`;
       webLatencyEl.className = 'value good';
     }
 
-    // Display TCP Ping Latency
     const tcpLatency = status.tcp_ping_ms;
     if (tcpLatency === -1 || typeof tcpLatency === 'undefined') {
       tcpPingEl.textContent = formatTcpError(status.tcp_ping_error);
@@ -106,30 +84,18 @@ document.addEventListener('DOMContentLoaded', () => {
       tcpPingEl.className = 'value good';
     }
 
-    // Display Web Check Status
     const webStatus = status.web_check_status;
-    if (webStatus) {
-      if (webStatus === 'OK') {
-        webCheckEl.textContent = 'OK';
-        webCheckEl.className = 'value good';
-      } else {
-        webCheckEl.textContent = webStatus;
-        webCheckEl.className = 'value bad';
-      }
+    if (webStatus === 'OK') {
+      webCheckEl.textContent = 'OK';
+      webCheckEl.className = 'value good';
     } else {
-      webCheckEl.textContent = '--';
-      webCheckEl.className = 'value';
+      webCheckEl.textContent = webStatus || '--';
+      webCheckEl.className = 'value bad';
     }
 
-    // Configure tunnel controls for connected state
-    connectButton.style.display = 'none';
-    disconnectButton.style.display = 'inline-flex';
-    tunnelMessage.textContent = 'Tunnel is active.';
-
-    // Show proxy controls only if the tunnel is connected and provides a SOCKS port.
-    if (status.socks_port) {
+    // Update proxy controls display
+    if (status.connected && status.socks_port) {
         proxyContainer.style.display = 'block';
-        // Use an async IIFE to handle the storage get call cleanly
         (async () => {
             const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
             if (isProxyManaged) {
@@ -207,40 +173,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  connectButton.addEventListener('click', () => {
-    tunnelMessage.textContent = 'Connecting...';
+  actionButton.addEventListener('click', () => {
     spinnerOverlay.style.display = 'flex';
-    chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL }, (response) => {
-      // The main UI update will come from the status refresh.
-      // We only need to handle direct errors here.
-      if (chrome.runtime.lastError) {
-        tunnelMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
-        spinnerOverlay.style.display = 'none';
-        return;
-      }
-      if (response && !response.success) {
-        const message = response.message.split('\n')[0];
-        // If the message starts with an info emoji (ℹ️), treat it as an info message, not an error.
-        if (message.startsWith('ℹ️')) {
-          tunnelMessage.textContent = message;
-        } else {
-          tunnelMessage.textContent = `Error: ${message}`;
-        }
-        spinnerOverlay.style.display = 'none';
-      }
-    });
-  });
-
-  disconnectButton.addEventListener('click', () => {
-    tunnelMessage.textContent = 'Disconnecting...';
-    spinnerOverlay.style.display = 'flex';
-    chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL }, (response) => {
-      if (chrome.runtime.lastError) {
-        tunnelMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
-        spinnerOverlay.style.display = 'none';
-      }
-      // Success or failure, the subsequent status update will refresh the UI.
-    });
+    if (currentStatus.connected) {
+      statusTextEl.textContent = 'Disconnecting...';
+      chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL });
+    } else {
+      statusTextEl.textContent = 'Connecting...';
+      chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL });
+    }
+    // The UI will be fully updated by the status broadcast message.
   });
 
   // Initial status request

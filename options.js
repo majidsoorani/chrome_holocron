@@ -19,9 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const geoipStatusDiv = document.getElementById('geoip-status');
   const geositeStatusDiv = document.getElementById('geosite-status');
   const updateDbButton = document.getElementById('update-db-button');
-  const connectionStatusIndicator = document.getElementById('connection-status-indicator');
+  const connectionStatusDot = document.getElementById('connection-status-dot');
   const connectionStatusText = document.getElementById('connection-status-text');
-  const disconnectTunnelButton = document.getElementById('disconnect-tunnel-button');
+  const connectionActionButton = document.getElementById('connection-action-button');
   const reconnectNowContainer = document.getElementById('manual-reconnect-container');
   const reconnectNowButton = document.getElementById('reconnect-now-button');
   const applyProxyButton = document.getElementById('apply-proxy-button');
@@ -640,35 +640,46 @@ document.addEventListener('DOMContentLoaded', () => {
   async function updateConnectionUI(status) {
     currentStatus = status; // Cache the status
 
+    // --- Main Compact Status Indicator ---
+    if (status.connecting) {
+        connectionStatusDot.dataset.status = 'in-progress';
+        connectionStatusText.textContent = 'Connecting...';
+        connectionActionButton.innerHTML = '⏳';
+        connectionActionButton.title = 'In Progress...';
+        connectionActionButton.disabled = true;
+    } else if (status.connected) {
+        connectionStatusDot.dataset.status = 'connected';
+        const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
+        connectionStatusText.textContent = isProxyManaged ? 'Tunnel Connected (Proxy Applied)' : 'Tunnel Connected';
+        connectionActionButton.innerHTML = '⏻';
+        connectionActionButton.title = 'Disconnect';
+        connectionActionButton.disabled = false;
+    } else { // Disconnected
+        connectionStatusDot.dataset.status = 'disconnected';
+        connectionStatusText.textContent = 'Disconnected';
+        connectionActionButton.innerHTML = '⏻';
+        connectionActionButton.title = 'Connect';
+        connectionActionButton.disabled = false;
+    }
+
+
     if (!status || !status.connected) {
-      // --- DISCONNECTED STATE ---
-      connectionStatusIndicator.className = 'status-indicator bad';
-      connectionStatusText.textContent = 'Tunnel Disconnected';
-      disconnectTunnelButton.style.display = 'none';
       applyProxyButton.style.display = 'none';
       revertProxyButton.style.display = 'none';
       reconnectNowContainer.style.display = 'block';
 
-      // Stop all config log polling if disconnected
       if (Object.keys(configLogPollIntervals).length > 0) {
         Object.values(configLogPollIntervals).forEach(clearInterval);
         configLogPollIntervals = {};
         document.querySelectorAll('.config-live-log-container').forEach(el => el.style.display = 'none');
       }
     } else {
-      // --- CONNECTED STATE ---
-      connectionStatusIndicator.className = 'status-indicator good';
-      connectionStatusText.textContent = 'Tunnel Connected';
-      disconnectTunnelButton.style.display = 'inline-block';
-
       if (status.socks_port) {
         const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
         if (isProxyManaged) {
-          connectionStatusText.textContent = 'Tunnel Connected (Proxy Applied)';
           applyProxyButton.style.display = 'none';
           revertProxyButton.style.display = 'inline-block';
         } else {
-          connectionStatusText.textContent = 'Tunnel Connected (Proxy Ready)';
           applyProxyButton.style.display = 'inline-block';
           revertProxyButton.style.display = 'none';
         }
@@ -686,16 +697,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusBadge = card.querySelector('.status-badge');
         const configId = card.dataset.id;
 
-        if (status && status.connected) {
+        if (status && (status.connected || status.connecting)) {
             if (configId === activeConfigId) {
-                // This is the active one
                 connectBtn.style.display = 'none';
                 disconnectBtn.style.display = 'inline-block';
                 disconnectBtn.disabled = false;
-                statusBadge.textContent = '[● CONNECTED]';
-                statusBadge.dataset.status = 'connected';
+                statusBadge.textContent = status.connecting ? '[● CONNECTING...]' : '[● CONNECTED]';
+                statusBadge.dataset.status = status.connecting ? 'testing' : 'connected';
             } else {
-                // Another one is active, so disable connecting this one
                 connectBtn.style.display = 'inline-block';
                 connectBtn.disabled = true;
                 disconnectBtn.style.display = 'none';
@@ -703,7 +712,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusBadge.dataset.status = 'disconnected';
             }
         } else {
-            // Nothing is connected, all are available to connect
             connectBtn.style.display = 'inline-block';
             connectBtn.disabled = false;
             disconnectBtn.style.display = 'none';
@@ -1803,20 +1811,22 @@ function FindProxyForURL(url, host) {
 
 
   // --- Connection Control Event Listeners ---
+  connectionActionButton.addEventListener('click', () => {
+    if (currentStatus.connected) {
+        chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL });
+    } else {
+        chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL });
+    }
+  });
+
   reconnectNowButton.addEventListener('click', () => {
-    connectionStatusText.textContent = 'Connecting...';
     chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL }, (response) => {
       if (response && !response.success) {
         const message = response.message.split('\n')[0];
-        connectionStatusText.textContent = `Error: ${message}`;
+        statusMessage.textContent = `Error: ${message}`;
+        statusMessage.className = 'error';
       }
-      // The final status will be updated via the broadcast message.
     });
-  });
-
-  disconnectTunnelButton.addEventListener('click', () => {
-    connectionStatusText.textContent = 'Disconnecting...';
-    chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL });
   });
 
   applyProxyButton.addEventListener('click', () => {
