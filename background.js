@@ -493,11 +493,24 @@ async function updateStatus() {
   }
 }
 
+async function applyWebRTCPolicy() {
+    const { [STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY]: policy } = await chrome.storage.sync.get(STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY);
+    // Default to the most restrictive policy for privacy if it's not set.
+    const policyToApply = policy || 'disable_non_proxied_udp';
+    try {
+        await chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: policyToApply });
+        console.log(`WebRTC IP Handling Policy set to: ${policyToApply}`);
+    } catch (e) {
+        console.error("Failed to set WebRTC policy:", e);
+    }
+}
+
 // Perform an initial check on browser startup.
 chrome.runtime.onStartup.addListener(() => {
   updateStatus();
   updateGeoIpDatabase();
   updateGeoSiteDatabase();
+  applyWebRTCPolicy();
 });
 
 // Set up the alarm and perform an initial check when the extension is installed.
@@ -513,6 +526,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   updateStatus();
   updateGeoIpDatabase();
   updateGeoSiteDatabase();
+  applyWebRTCPolicy();
 });
 
 // Listen for the alarm to trigger subsequent checks.
@@ -584,10 +598,21 @@ function FindProxyForURL(url, host) {
 `;
         const proxyDefinitions = [];
         coreConfigs.forEach(config => {
-            if (config.portForwards && config.portForwards.length > 0) {
+            const proxyVar = `PROXY_${config.id.replace(/-/g, '_')}`;
+            if (config.type === 'external') {
+                if (config.proxyHost && config.proxyPort) {
+                    let pacProtocol = 'SOCKS5'; // Default
+                    if (config.proxyProtocol === 'SOCKS4') pacProtocol = 'SOCKS';
+                    else if (config.proxyProtocol === 'HTTP') pacProtocol = 'PROXY';
+                    else if (config.proxyProtocol === 'HTTPS') pacProtocol = 'HTTPS';
+
+                    pacScript += `    const ${proxyVar} = "${pacProtocol} ${config.proxyHost}:${config.proxyPort}"; // For "${config.name}"\n`;
+                    proxyDefinitions.push({ id: config.id, variable: proxyVar });
+                }
+            } else if (config.portForwards && config.portForwards.length > 0) {
+                // Handle tunnel-based configs (ssh, openvpn, v2ray)
                 config.portForwards.forEach(rule => {
                     if (rule.type === 'D' && rule.localPort) {
-                        const proxyVar = `PROXY_${config.id.replace(/-/g, '_')}`;
                         pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${rule.localPort}"; // For "${config.name}"\n`;
                         proxyDefinitions.push({ id: config.id, variable: proxyVar });
                     }
@@ -705,13 +730,52 @@ function FindProxyForURL(url, host) {
           pacScript: { data: pacScript }
         };
 
+        // Store original settings before changing them.
+        const originalRegularSettings = await chrome.proxy.settings.get({ incognito: false });
+        const originalIncognitoSettings = await chrome.proxy.settings.get({ incognito: true });
+
+
+        // --- Apply Regular Proxy ---
         await chrome.proxy.settings.set({ value: config, scope: 'regular' });
+
+        // --- Handle Incognito-Specific Proxy ---
+        const { [STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID]: incognitoConfigId } = await chrome.storage.sync.get(STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID);
+
+        if (incognitoConfigId) {
+            const incognitoConfig = coreConfigs.find(c => c.id === incognitoConfigId);
+            const socksPortForward = incognitoConfig?.portForwards?.find(pf => pf.type === 'D');
+
+            if (socksPortForward && socksPortForward.localPort) {
+                const incognitoProxyRule = {
+                    mode: "fixed_servers",
+                    rules: {
+                        singleProxy: {
+                            scheme: "socks5",
+                            host: "127.0.0.1",
+                            port: parseInt(socksPortForward.localPort, 10)
+                        },
+                        bypassList: ["<local>"] // Standard bypass for local addresses
+                    }
+                };
+                await chrome.proxy.settings.set({ value: incognitoProxyRule, scope: 'incognito_persistent' });
+                 console.log(`Applied specific proxy "${incognitoConfig.name}" to Incognito mode.`);
+            } else {
+                // If the selected config has no SOCKS proxy, clear the setting for safety.
+                await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+                console.warn(`Selected Incognito config "${incognitoConfig?.name}" has no SOCKS proxy. Incognito will use regular settings.`);
+            }
+        } else {
+            // No incognito-specific proxy is selected, so ensure it's cleared.
+            await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+        }
+
+
         // Set flag and store original settings AFTER successfully setting the new proxy.
         await chrome.storage.local.set({
           [STORAGE_KEYS.IS_PROXY_MANAGED]: true,
-          [STORAGE_KEYS.ORIGINAL_PROXY]: originalSettings.value
+          [STORAGE_KEYS.ORIGINAL_PROXY]: originalRegularSettings.value, // Store only the regular settings
         });
-        sendResponse({ success: true, message: "Browser proxy set with advanced PAC script." });
+        sendResponse({ success: true, message: "Browser proxy settings applied." });
       } catch (e) {
         sendResponse({ success: false, message: `Failed to set proxy: ${e.message}` });
       }
@@ -723,7 +787,15 @@ function FindProxyForURL(url, host) {
     (async () => {
       try {
         const { [STORAGE_KEYS.ORIGINAL_PROXY]: originalProxySettings } = await chrome.storage.local.get(STORAGE_KEYS.ORIGINAL_PROXY);
-        await chrome.proxy.settings.set({ value: originalProxySettings || { mode: "direct" }, scope: 'regular' });
+        // Clear both regular and incognito settings to be safe.
+        await chrome.proxy.settings.clear({ scope: 'regular' });
+        await chrome.proxy.settings.clear({ scope: 'incognito_persistent' });
+
+        // Restore the original regular settings if they existed
+        if (originalProxySettings) {
+             await chrome.proxy.settings.set({ value: originalProxySettings, scope: 'regular' });
+        }
+
         await chrome.storage.local.remove([STORAGE_KEYS.ORIGINAL_PROXY, STORAGE_KEYS.IS_PROXY_MANAGED]);
         sendResponse({ success: true, message: "Browser proxy restored." });
       } catch (e) {
@@ -866,6 +938,12 @@ function FindProxyForURL(url, host) {
       }
     })();
     return true; // Indicate async response
+  }
+
+  if (request.command === COMMANDS.APPLY_WEBRTC_POLICY) {
+    applyWebRTCPolicy();
+    // No response needed, this is a fire-and-forget.
+    return false;
   }
   return false; // Explicitly return false for other messages.
 });

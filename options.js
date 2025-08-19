@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const webCheckUrlInput = document.getElementById('web-check-url');
   const coreConfigListContainer = document.getElementById('core-configurations-list');
   const addConfigButton = document.getElementById('add-config-button');
+  const addPredefinedConfigButton = document.getElementById('add-predefined-config-button');
   const coreConfigTemplate = document.getElementById('core-configuration-template');
   const proxyBypassRuleTemplate = document.getElementById('proxy-bypass-rule-template');
   const addProxyRuleButton = document.getElementById('add-proxy-rule-button');
@@ -34,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshTcpPingChartButton = document.getElementById('refresh-tcp-ping-chart');
   const globalGeoIpBypassCheckbox = document.getElementById('global-geoip-bypass');
   const globalGeoSiteBypassCheckbox = document.getElementById('global-geosite-bypass');
+  const incognitoProxySelect = document.getElementById('incognito-proxy-select');
   const proxyBypassRulesList = document.getElementById('proxy-bypass-rules-list');
   const pacScriptPreviewContainer = document.getElementById('pac-script-preview-container');
   const logViewerContent = document.getElementById('log-viewer-content');
@@ -43,6 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const openrouterSystemMessageInput = document.getElementById('openrouter-system-message');
   const aiLiveLogContainer = document.getElementById('ai-live-log-container');
   const aiLiveLogContent = document.getElementById('ai-live-log-content');
+  const webRtcPolicyToggle = document.getElementById('webrtc-policy-toggle');
+  const predefinedModal = document.getElementById('predefined-modal');
+  const modalCloseButton = document.getElementById('modal-close-button');
+  const predefinedChoices = document.querySelector('.predefined-choices');
+
 
   // --- Tabbed Interface Logic ---
   const tabsNav = document.querySelector('.tabs-nav');
@@ -168,6 +175,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const v2rayDetectedParams = v2raySettings.querySelector('.v2ray-detected-params');
     const v2rayParamsList = v2raySettings.querySelector('.v2ray-params-list');
 
+    // External Proxy settings
+    const externalSettings = details.querySelector('.external-settings');
+    const externalProtocolSelect = externalSettings.querySelector('.config-input-external-protocol');
+    const externalHostInput = externalSettings.querySelector('.config-input-external-host');
+    const externalPortInput = externalSettings.querySelector('.config-input-external-port');
+
     // Live Log viewer
     const liveLogContainer = details.querySelector('.config-live-log-container');
     const liveLogContent = details.querySelector('.config-live-log-content');
@@ -190,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sshSettings.style.display = 'none';
         openvpnSettings.style.display = 'none';
         v2raySettings.style.display = 'none';
+        externalSettings.style.display = 'none';
 
         if (type === 'ssh') {
             sshSettings.style.display = 'block';
@@ -197,6 +211,8 @@ document.addEventListener('DOMContentLoaded', () => {
             openvpnSettings.style.display = 'block';
         } else if (type === 'v2ray') {
             v2raySettings.style.display = 'block';
+        } else if (type === 'external') {
+            externalSettings.style.display = 'block';
         }
         updateUserHostDisplay(); // Update summary on type change
     };
@@ -227,6 +243,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // V2Ray fields
     v2rayUrlInput.value = config.v2rayUrl || '';
+
+    // External Proxy fields
+    externalProtocolSelect.value = config.proxyProtocol || 'SOCKS5';
+    externalHostInput.value = config.proxyHost || '127.0.0.1';
+    externalPortInput.value = config.proxyPort || '';
+
 
     // Listen for changes to the enabled state to update the PAC script preview
     checkbox.addEventListener('change', () => {
@@ -259,6 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 summary = 'V2Ray URL missing';
             }
+        } else if (type === 'external') {
+            const protocol = externalProtocolSelect.value;
+            const host = externalHostInput.value.trim();
+            const port = externalPortInput.value.trim();
+            summary = (host && port) ? `${protocol}://${host}:${port}` : 'External proxy details missing';
         }
       userHostDisplay.textContent = summary;
     };
@@ -338,6 +365,10 @@ document.addEventListener('DOMContentLoaded', () => {
         parseAndDisplayV2RayUrl(v2rayUrlInput.value);
         setDirty(true);
     });
+
+    externalProtocolSelect.addEventListener('change', () => { updateUserHostDisplay(); setDirty(true); });
+    externalHostInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
+    externalPortInput.addEventListener('input', () => { updateUserHostDisplay(); setDirty(true); });
 
     const parseAndDisplayV2RayUrl = (url) => {
         if (!url || !url.startsWith('vless://')) {
@@ -712,19 +743,37 @@ function FindProxyForURL(url, host) {
     document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
       const configId = item.dataset.id;
       const configName = item.querySelector('.config-input-name').value.trim() || 'Untitled';
-      const portForwardingList = item.querySelector('.port-forwarding-rules-list');
+      const configType = item.querySelector('.config-type-select').value;
+      const proxyVar = `PROXY_${configId.replace(/-/g, '_')}`;
 
-      portForwardingList.querySelectorAll('.rule-item').forEach(ruleEl => {
-        const type = ruleEl.querySelector('.rule-type').value;
-        if (type === 'D') {
-          const port = ruleEl.querySelector('.rule-local-port').value;
-          if (port) {
-            const proxyVar = `PROXY_${configId.replace(/-/g, '_')}`;
-            pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${port}"; // For "${configName}"\n`;
+      if (configType === 'external') {
+        const protocol = item.querySelector('.config-input-external-protocol').value;
+        const host = item.querySelector('.config-input-external-host').value.trim();
+        const port = item.querySelector('.config-input-external-port').value.trim();
+
+        if (host && port) {
+            let pacProtocol = 'SOCKS5'; // Default
+            if (protocol === 'SOCKS4') pacProtocol = 'SOCKS';
+            else if (protocol === 'HTTP') pacProtocol = 'PROXY';
+            else if (protocol === 'HTTPS') pacProtocol = 'HTTPS';
+
+            pacScript += `    const ${proxyVar} = "${pacProtocol} ${host}:${port}"; // For "${configName}"\n`;
             proxyDefinitions.push({ id: configId, variable: proxyVar });
-          }
         }
-      });
+      } else {
+        // This handles ssh, openvpn, v2ray which rely on port forwarding rules
+        const portForwardingList = item.querySelector('.port-forwarding-rules-list');
+        portForwardingList.querySelectorAll('.rule-item').forEach(ruleEl => {
+            const type = ruleEl.querySelector('.rule-type').value;
+            if (type === 'D') {
+                const port = ruleEl.querySelector('.rule-local-port').value;
+                if (port) {
+                    pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${port}"; // For "${configName}"\n`;
+                    proxyDefinitions.push({ id: configId, variable: proxyVar });
+                }
+            }
+        });
+      }
     });
 
     pacScript += `
@@ -1041,6 +1090,8 @@ function FindProxyForURL(url, host) {
       STORAGE_KEYS.PROXY_BYPASS_RULES,
       STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED,
       STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED,
+      STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID,
+      STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY,
       STORAGE_KEYS.OPENROUTER_API_KEY,
       STORAGE_KEYS.OPENROUTER_MODEL,
       STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE,
@@ -1135,6 +1186,13 @@ function FindProxyForURL(url, host) {
       const defaultSystemMessage = `You are a network configuration assistant for a browser extension named Holocron. A user will describe a service, and you must suggest a proxy routing rule for it. The user has a list of available proxy configurations. Your task is to determine if the service should be accessed 'DIRECT' (bypassing the proxy, typically for local or national services) or through one of the available proxy configuration IDs (for international or blocked services). Respond ONLY with a single, valid JSON object in the format: {"domain": "domain.pattern.com", "target": "proxy_id_or_DIRECT"}. Do not include any other text, explanation, or markdown formatting. Example for a user trying to access an Iranian service like "Digikala": {"domain": "*.digikala.com", "target": "DIRECT"}. Example for a user trying to access a service that needs a proxy like "YouTube": {"domain": "*.youtube.com", "target": "some-uuid-for-a-proxy"}.`;
       openrouterSystemMessageInput.value = result[STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE] || defaultSystemMessage;
 
+      // --- Populate Privacy Controls ---
+      // The 'disable_non_proxied_udp' policy is the most restrictive and thus the safest default.
+      // The toggle is "on" (checked) if the policy is this, or if it's not set at all (first run).
+      webRtcPolicyToggle.checked = result[STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY] === 'disable_non_proxied_udp' ||
+                                  typeof result[STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY] === 'undefined';
+
+
       // --- Populate Core Configurations UI ---
       coreConfigListContainer.innerHTML = ''; // Clear existing
       coreConfigsForSelect = []; // Reset cache
@@ -1148,6 +1206,16 @@ function FindProxyForURL(url, host) {
       } else {
         coreConfigListContainer.appendChild(createConfigElement({}, null, true)); // Add a blank one for new users, in edit mode
       }
+
+      // --- Populate Incognito Proxy Dropdown ---
+      incognitoProxySelect.innerHTML = '<option value="">-- Use Regular Proxy Settings --</option>'; // Clear and add default
+      coreConfigsForSelect.forEach(config => {
+          const option = document.createElement('option');
+          option.value = config.id;
+          option.textContent = config.name;
+          incognitoProxySelect.appendChild(option);
+      });
+      incognitoProxySelect.value = result[STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID] || '';
 
       // --- Populate Global Proxy Bypass Rules ---
       globalGeoIpBypassCheckbox.checked = result[STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED] !== false; // Default true
@@ -1367,6 +1435,12 @@ function FindProxyForURL(url, host) {
           Object.assign(config, {
               v2rayUrl: item.querySelector('.config-input-v2ray-url').value.trim(),
           });
+      } else if (type === 'external') {
+          Object.assign(config, {
+              proxyProtocol: item.querySelector('.config-input-external-protocol').value,
+              proxyHost: item.querySelector('.config-input-external-host').value.trim(),
+              proxyPort: item.querySelector('.config-input-external-port').value.trim(),
+          });
       }
       coreConfigs.push(config);
     });
@@ -1403,6 +1477,8 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.WIFI_SSIDS]: wifiSsids,
       [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectCheckbox.checked,
       [STORAGE_KEYS.PROXY_BYPASS_RULES]: proxyBypassRules,
+      [STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID]: incognitoProxySelect.value,
+      [STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY]: webRtcPolicyToggle.checked ? 'disable_non_proxied_udp' : 'default',
       [STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED]: globalGeoIpBypassCheckbox.checked,
       [STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED]: globalGeoSiteBypassCheckbox.checked,
       [STORAGE_KEYS.OPENROUTER_API_KEY]: openrouterApiKeyInput.value.trim(),
@@ -1417,6 +1493,10 @@ function FindProxyForURL(url, host) {
       statusMessage.textContent = 'Settings saved!';
       statusMessage.className = 'success';
       setDirty(false); // Reset dirty state after successful save
+
+      // Notify the background script to apply the new WebRTC policy immediately
+      chrome.runtime.sendMessage({ command: COMMANDS.APPLY_WEBRTC_POLICY });
+
       setTimeout(() => {
           if (statusMessage.textContent === 'Settings saved!')
         statusMessage.textContent = '';
@@ -1663,6 +1743,8 @@ function FindProxyForURL(url, host) {
   openrouterSystemMessageInput.addEventListener('input', () => setDirty(true));
   globalGeoIpBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); setDirty(true); });
   globalGeoSiteBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); setDirty(true); });
+  incognitoProxySelect.addEventListener('change', () => setDirty(true));
+  webRtcPolicyToggle.addEventListener('change', () => setDirty(true));
   updateDbButton.addEventListener('click', () => {
     updateDbButton.textContent = 'Updating...';
     updateDbButton.disabled = true;
@@ -1786,6 +1868,70 @@ function FindProxyForURL(url, host) {
       updateCharts(request.status);
     }
   });
+
+  // --- Modal Logic ---
+  function showModal() {
+    predefinedModal.style.display = 'flex';
+  }
+  function hideModal() {
+    predefinedModal.style.display = 'none';
+  }
+
+  addPredefinedConfigButton.addEventListener('click', showModal);
+  modalCloseButton.addEventListener('click', hideModal);
+  predefinedModal.addEventListener('click', (e) => {
+    if (e.target === predefinedModal) {
+      hideModal();
+    }
+  });
+
+  function addPredefinedProfile(profileType) {
+    let config = {};
+    if (profileType === 'tor') {
+      config = {
+        name: 'Tor',
+        type: 'external',
+        proxyProtocol: 'SOCKS5',
+        proxyHost: '127.0.0.1',
+        proxyPort: '9050',
+        enabled: false,
+      };
+    } else if (profileType === 'privoxy') {
+      config = {
+        name: 'Privoxy',
+        type: 'external',
+        proxyProtocol: 'HTTP',
+        proxyHost: '127.0.0.1',
+        proxyPort: '8118',
+        enabled: false,
+      };
+    } else if (profileType === 'psiphon') {
+      config = {
+        name: 'Psiphon (SOCKS)',
+        type: 'external',
+        proxyProtocol: 'SOCKS5',
+        proxyHost: '127.0.0.1',
+        proxyPort: '1080',
+        enabled: false,
+      };
+    }
+
+    if (config.name) {
+      const newEl = createConfigElement(config, null, true);
+      coreConfigListContainer.appendChild(newEl);
+      updateAllProxyRuleDropdownsAndPreview();
+      setDirty(true);
+      hideModal();
+    }
+  }
+
+  predefinedChoices.addEventListener('click', (e) => {
+    const profile = e.target.dataset.profile;
+    if (profile) {
+      addPredefinedProfile(profile);
+    }
+  });
+
 
   // --- Initial Load ---
   loadSettings();
