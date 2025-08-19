@@ -711,9 +711,11 @@ function FindProxyForURL(url, host) {
     const proxyDefinitions = [];
     document.querySelectorAll('#core-configurations-list .config-item').forEach(item => {
       const configId = item.dataset.id;
+      const configType = item.querySelector('.config-type-select').value;
       const configName = item.querySelector('.config-input-name').value.trim() || 'Untitled';
       const portForwardingList = item.querySelector('.port-forwarding-rules-list');
 
+      // For SSH configs, check port forwarding rules
       portForwardingList.querySelectorAll('.rule-item').forEach(ruleEl => {
         const type = ruleEl.querySelector('.rule-type').value;
         if (type === 'D') {
@@ -725,6 +727,14 @@ function FindProxyForURL(url, host) {
           }
         }
       });
+
+      // For V2Ray configs, add the hardcoded SOCKS port
+      if (configType === 'v2ray') {
+          const port = '10808'; // The default SOCKS port for V2Ray in this system
+          const proxyVar = `PROXY_${configId.replace(/-/g, '_')}`;
+          pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${port}"; // For "${configName}"\n`;
+          proxyDefinitions.push({ id: configId, variable: proxyVar });
+      }
     });
 
     pacScript += `

@@ -1,14 +1,39 @@
 #!/bin/bash
 
 # --- Configuration ---
-# This script assumes 'xray' executable is in the system's PATH.
-# You can specify a direct path if needed, e.g., XRAY_EXEC="/usr/local/bin/xray"
-XRAY_EXEC=$(command -v xray)
 SOCKS_PORT="10808" # Default SOCKS port
 
 # --- Helper Functions ---
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+find_xray_executable() {
+    # This function robustly finds the 'xray' executable.
+    # It's necessary because the script, when launched by Chrome's native host,
+    # may not inherit the user's full shell PATH environment, especially on macOS.
+
+    # 1. Use command -v first, as it's the most common case for PATH-configured shells.
+    local exec_path
+    exec_path=$(command -v xray)
+    if [ -n "$exec_path" ] && [ -x "$exec_path" ]; then
+        echo "$exec_path"
+        return 0
+    fi
+
+    # 2. Check common Homebrew paths for macOS, which are often not in the GUI app PATH.
+    local common_paths=(
+        "/opt/homebrew/bin/xray"  # Apple Silicon Homebrew
+        "/usr/local/bin/xray"     # Intel Homebrew / other standard location
+    )
+    for path in "${common_paths[@]}"; do
+        if [ -x "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+
+    return 1 # Not found
 }
 
 cleanup() {
@@ -18,9 +43,12 @@ cleanup() {
 
 # --- Command Functions ---
 start_tunnel() {
+    local XRAY_EXEC
+    XRAY_EXEC=$(find_xray_executable)
     if [ -z "$XRAY_EXEC" ]; then
-        echo "Error: 'xray' executable not found. Please install Xray-core."
-        log "Error: 'xray' executable not found."
+        local error_msg="Error: 'xray' executable not found. Please install Xray-core and ensure it's in your PATH or a standard location (e.g., /opt/homebrew/bin)."
+        echo "$error_msg"
+        log "$error_msg"
         exit 1
     fi
 
@@ -81,12 +109,14 @@ start_tunnel() {
     FP=$(echo "$query_part" | sed -n 's/.*fp=\([^&]*\).*/\1/p')
     ALPN_RAW=$(echo "$query_part" | sed -n 's/.*alpn=\([^&]*\).*/\1/p')
     ALPN=$(echo "$ALPN_RAW" | sed 's/%2C/,/g') # URL Decode for comma
+    FLOW=$(echo "$query_part" | sed -n 's/.*flow=\([^&]*\).*/\1/p')
 
     log "Parsed Type: $TYPE"
     log "Parsed Security: $SECURITY"
     log "Parsed SNI: $SNI"
     log "Parsed Fingerprint: $FP"
     log "Parsed ALPN: $ALPN"
+    log "Parsed Flow: $FLOW"
 
     # --- Generate Xray JSON Config ---
     log "Generating Xray config file at $CONFIG_FILE"
@@ -108,20 +138,30 @@ start_tunnel() {
         exit 1
     fi
 
-    # Conditionally build the tlsSettings object as a string
-    TLS_SETTINGS_JSON=""
-    if [ "$SECURITY" = "tls" ]; then
+    # Conditionally add the "flow" field to the user object
+    FLOW_JSON_LINE=""
+    if [ -n "$FLOW" ]; then
+        # Note the comma at the end. This is safe because "encryption" always follows.
+        FLOW_JSON_LINE="\"flow\": \"$FLOW\","
+    fi
+
+    # Conditionally build the tlsSettings or xtlsSettings object as a string
+    SECURITY_SETTINGS_JSON=""
+    if [ "$SECURITY" = "tls" ] || [ "$SECURITY" = "xtls" ]; then
         # Note: The alpn field expects a JSON array of strings.
         # We'll construct it carefully.
         ALPN_JSON_ARRAY="\"h2\", \"http/1.1\"" # Default
         if [ -n "$ALPN" ]; then
             # If ALPN is provided, format it as a JSON array of strings
-            ALPN_JSON_ARRAY=$(echo "$ALPN" | sed 's/[^,]\+/"&"/g')
+            # Use [^,][^,]* instead of [^,]+ for macOS (BSD) sed compatibility
+            ALPN_JSON_ARRAY=$(echo "$ALPN" | sed 's/[^,][^,]*/"&"/g')
         fi
 
-        TLS_SETTINGS_JSON=$(cat <<EOF
-                ,"tlsSettings": {
-                    "serverName": "${SNI:-${DOMAIN}}",
+        SETTINGS_KEY="${SECURITY}Settings"
+
+        SECURITY_SETTINGS_JSON=$(cat <<EOF
+                "${SETTINGS_KEY}": {
+                    "serverName": "${SNI:-$DOMAIN}",
                     "fingerprint": "${FP:-chrome}",
                     "alpn": [${ALPN_JSON_ARRAY}]
                 }
@@ -129,7 +169,7 @@ EOF
 )
     fi
 
-    # Build the final JSON using the conditionally created TLS part
+    # Build the final JSON using the conditionally created parts
     cat > "$CONFIG_FILE" << EOL
 {
     "log": {
@@ -157,8 +197,8 @@ EOF
                         "users": [
                             {
                                 "id": "${UUID}",
-                                "flow": "xtls-rprx-vision",
-                                "encryption": "none"
+                                ${FLOW_JSON_LINE}
+                                "encryption": "none" # VLESS encryption is handled by the underlying transport (TLS/XTLS)
                             }
                         ]
                     }
@@ -166,8 +206,8 @@ EOF
             },
             "streamSettings": {
                 "network": "${TYPE:-tcp}",
-                "security": "${SECURITY:-none}"
-                ${TLS_SETTINGS_JSON}
+                "security": "${SECURITY:-none}"$(if [ -n "$SECURITY_SETTINGS_JSON" ]; then echo ","; fi)
+                ${SECURITY_SETTINGS_JSON}
             }
         }
     ]

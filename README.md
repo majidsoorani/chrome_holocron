@@ -117,6 +117,8 @@ An installation script is provided to automate the setup process.
 ## Troubleshooting
 
 - **"Native host has exited" or "Failed to connect to native host"**: This usually means the Python script failed. The first step is to check the log file for errors at `backends/log/holocron_native_host.log`. The last few lines will usually contain a detailed Python error message (a "traceback") that explains why the script stopped. The log file is automatically rotated when it reaches 1MB in size, so it will not grow indefinitely.
+- **"Access to the specified native messaging host is forbidden"**: This is a security error from Chrome. It means the extension's ID has changed and no longer matches the one authorized in the native host manifest. This commonly happens when you reload the unpacked extension.
+    - **Solution**: Run the `./fix_extension_id.sh` script. It will prompt you for the new extension ID from `chrome://extensions` and update the configuration file. You must restart Chrome after running it.
 - **Extension icon is always red**:
     - Use the "Test Connection" button in the options page to get a detailed status.
     - Verify you can manually `ssh` to the host from your terminal.

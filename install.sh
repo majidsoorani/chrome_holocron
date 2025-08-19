@@ -42,6 +42,28 @@ else
     echo "✅ Found OpenVPN client."
 fi
 
+echo "🔎 Checking for Xray-core (optional)..."
+XRAY_EXEC_PATH=""
+if command -v xray &> /dev/null; then
+    XRAY_EXEC_PATH=$(command -v xray)
+else
+    # Check common non-PATH locations for GUI apps
+    for path in "/opt/homebrew/bin/xray" "/usr/local/bin/xray"; do
+        if [ -x "$path" ]; then
+            XRAY_EXEC_PATH="$path"
+            break
+        fi
+    done
+fi
+
+if [ -z "$XRAY_EXEC_PATH" ]; then
+    echo "⚠️  Warning: The 'xray' command-line tool was not found in your PATH or standard Homebrew locations."
+    echo "   To use V2Ray configurations, you must install Xray-core."
+    echo "   On macOS, the recommended way is via Homebrew: brew install xray"
+else
+    echo "✅ Found Xray-core at: $XRAY_EXEC_PATH"
+fi
+
 echo "🔎 Checking for required passwordless sudo configuration..."
 
 missing_sudo_rules=()
@@ -142,6 +164,9 @@ echo "2. Enable 'Developer mode' in the top right."
 echo "3. Click 'Load unpacked' and select the '$PROJECT_ROOT' directory."
 echo "4. The 'Holocron Status' extension will appear. Find its 'ID' (it is a long string of letters)."
 echo ""
+echo "IMPORTANT: If you ever 'Reload' the extension from the extensions page, Chrome may"
+echo "assign it a NEW ID. If this happens, the native host will stop working. You can"
+echo "run the 'fix_extension_id.sh' script to quickly update it without a full reinstall."
 
 # -p for prompt, -r to prevent backslash interpretation
 read -r -p "5. Paste the Extension ID here and press [Enter]: " extension_id
@@ -152,8 +177,17 @@ if [ -z "$extension_id" ]; then
 fi
 
 echo "✍️  Updating manifest with your Extension ID..."
-sed -i.bak "s|YOUR_EXTENSION_ID_HERE|$extension_id|" "$FINAL_MANIFEST_PATH"
-rm "${FINAL_MANIFEST_PATH}.bak"
+
+# This makes the script idempotent. It first tries to replace the placeholder.
+# If the placeholder isn't found (e.g., on a re-run), it uses a more robust
+# regex to replace whatever 32-character extension ID is already there. This
+# is the same logic used by the fix_extension_id.sh script.
+if grep -q "YOUR_EXTENSION_ID_HERE" "$FINAL_MANIFEST_PATH"; then
+    sed -i.bak "s|YOUR_EXTENSION_ID_HERE|$extension_id|" "$FINAL_MANIFEST_PATH"
+else
+    sed -i.bak "s#\(chrome-extension://\)[a-z]\{32\}\(/\"\)#\1${extension_id}\2#" "$FINAL_MANIFEST_PATH"
+fi
+rm -f "${FINAL_MANIFEST_PATH}.bak"
 
 echo "✅ Manifest updated successfully!"
 echo "🔒 The native host is now locked to your specific extension instance."

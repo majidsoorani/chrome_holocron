@@ -581,9 +581,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 function FindProxyForURL(url, host) {
     // --- Proxy Definitions ---
     // These are defined based on your Core Configurations that have a Dynamic (-D) port forward.
-`;
+`
         const proxyDefinitions = [];
         coreConfigs.forEach(config => {
+            // For SSH configs, check port forwarding rules
             if (config.portForwards && config.portForwards.length > 0) {
                 config.portForwards.forEach(rule => {
                     if (rule.type === 'D' && rule.localPort) {
@@ -592,6 +593,13 @@ function FindProxyForURL(url, host) {
                         proxyDefinitions.push({ id: config.id, variable: proxyVar });
                     }
                 });
+            }
+            // For V2Ray configs, add the hardcoded SOCKS port
+            if (config.type === 'v2ray') {
+                const port = '10808'; // The default SOCKS port for V2Ray in this system
+                const proxyVar = `PROXY_${config.id.replace(/-/g, '_')}`;
+                pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${port}"; // For "${config.name}"\n`;
+                proxyDefinitions.push({ id: config.id, variable: proxyVar });
             }
         });
 
