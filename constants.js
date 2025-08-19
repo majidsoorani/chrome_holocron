@@ -12,6 +12,8 @@ export const STORAGE_KEYS = {
   PROXY_BYPASS_RULES: 'proxyBypassRules',
   GLOBAL_GEOIP_BYPASS_ENABLED: 'globalGeoIpBypassEnabled',
   GLOBAL_GEOSITE_BYPASS_ENABLED: 'globalGeoSiteBypassEnabled',
+  INCOGNITO_PROXY_CONFIG_ID: 'incognitoProxyConfigId',
+  WEBRTC_IP_HANDLING_POLICY: 'webRtcIpHandlingPolicy',
   OPENROUTER_API_KEY: 'openrouter_api_key',
   OPENROUTER_MODEL: 'openrouter_model',
   OPENROUTER_SYSTEM_MESSAGE: 'openrouter_system_message',
@@ -47,4 +49,5 @@ export const COMMANDS = {
   MANUAL_DB_UPDATE: 'manualDbUpdate',
   GET_LOGS: 'getLogs',
   CLEAR_LOGS: 'clearLogs',
+  APPLY_WEBRTC_POLICY: 'applyWebRtcPolicy',
 };

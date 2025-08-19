@@ -66,7 +66,10 @@
                                 <div id="core-configurations-list">
                                     <!-- Configurations will be dynamically inserted here -->
                                 </div>
-                                <button id="add-config-button" class="add-button">+ Add Configuration</button>
+                                <div class="button-group" style="margin-top: 1em; display: flex; gap: 10px;">
+                                    <button id="add-config-button" class="add-button" style="margin-top: 0;">+ Add Custom Configuration</button>
+                                    <button id="add-predefined-config-button" class="add-button" style="margin-top: 0;">+ Add Predefined Profile</button>
+                                </div>
                             </section>
                              <section class="card">
                                 <details>
@@ -143,6 +146,16 @@
                                         <input type="checkbox" id="global-geosite-bypass">
                                         <label for="global-geosite-bypass">Bypass proxy for Iranian sites (GeoSite)</label>
                                     </div>
+                                    <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Incognito Mode Proxy</h3>
+                                    <div class="form-group">
+                                        <label for="incognito-proxy-select">Incognito-Specific Proxy</label>
+                                        <select id="incognito-proxy-select" name="incognito-proxy-select">
+                                            <option value="">-- Use Regular Proxy Settings --</option>
+                                            <!-- Options will be populated by JS -->
+                                        </select>
+                                        <small>Select a configuration to use exclusively for Incognito windows. This will not affect your regular browsing session.</small>
+                                    </div>
+
                                     <h3 class="sub-heading" style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">Custom Routing Rules</h3>
                                     <div id="proxy-bypass-rules-list">
                                         <!-- Custom rules will be inserted here -->
@@ -184,6 +197,14 @@
                             </div>
                             <div id="ai-live-log-container" class="log-viewer-container" style="display: none; margin-top: 1em; height: 150px;">
                                 <pre id="ai-live-log-content"></pre>
+                            </div>
+                        </section>
+                        <section class="card">
+                            <h2>Privacy Controls</h2>
+                             <div class="form-group checkbox-group">
+                                <input type="checkbox" id="webrtc-policy-toggle" name="webrtc-policy-toggle">
+                                <label for="webrtc-policy-toggle">Prevent WebRTC IP Leak</label>
+                                <small>Sets WebRTC to only use proxied network connections, preventing your real IP from being exposed. Recommended to keep enabled.</small>
                             </div>
                         </section>
                         <section class="card">
@@ -290,7 +311,29 @@
                         <option value="ssh">SSH Tunnel</option>
                         <option value="openvpn">OpenVPN</option>
                         <option value="v2ray">V2Ray</option>
+                        <option value="external">External Proxy</option>
                     </select>
+                </div>
+
+                <!-- External Proxy Specific Fields -->
+                <div class="external-settings" style="display: none;">
+                    <div class="form-group">
+                        <label>Proxy Protocol</label>
+                        <select class="config-input-external-protocol">
+                            <option value="SOCKS5">SOCKS5</option>
+                            <option value="SOCKS4">SOCKS4</option>
+                            <option value="HTTP">HTTP</option>
+                            <option value="HTTPS">HTTPS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Proxy Host</label>
+                        <input type="text" class="config-input-external-host" placeholder="127.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Proxy Port</label>
+                        <input type="number" class="config-input-external-port" placeholder="9050" min="1" max="65535">
+                    </div>
                 </div>
 
                 <!-- SSH Specific Fields -->
@@ -358,6 +401,21 @@
 
     <script src="vendor/chart.js"></script>
     <script type="module" src="options.js"></script>
+
+    <!-- Modal for Predefined Profiles -->
+    <div id="predefined-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 style="margin-top:0;">Add a Predefined Profile</h2>
+            <p>Select a service to create a pre-configured "External Proxy" profile for it. You must ensure the service (e.g., the Tor client) is running on your computer for the proxy to work.</p>
+            <div class="predefined-choices">
+                <button data-profile="tor">Tor</button>
+                <button data-profile="privoxy">Privoxy</button>
+                <button data-profile="psiphon">Psiphon (SOCKS)</button>
+            </div>
+            <button id="modal-close-button" class="button-secondary" style="margin-top: 1.5em;">Cancel</button>
+        </div>
+    </div>
+
     <footer style="margin-top: 2em;">
         <section class="card full-width">
             <h2>Geo-Database Status</h2>
