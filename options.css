@@ -247,6 +247,31 @@ button.button-info:hover {
     background-color: #138496;
 }
 
+button.icon-button {
+    background: none;
+    border: none;
+    padding: 4px;
+    font-size: 1.4em; /* Make icon slightly larger */
+    line-height: 1;
+    color: var(--text-color-secondary);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+button.icon-button:hover {
+    background-color: var(--secondary-button-bg);
+    color: var(--text-color);
+}
+button.icon-button:disabled {
+    color: var(--text-color-secondary);
+    background-color: transparent;
+    opacity: 0.5;
+}
+
+
 /* Status Messages */
 #status-message {
     font-weight: 600;
@@ -278,16 +303,29 @@ button.button-info:hover {
     gap: 0.8em;
 }
 
-.status-indicator {
-    width: 12px;
-    height: 12px;
+.connection-controls.compact {
+    flex-grow: 0; /* Do not take full width */
+    padding: 6px 12px;
+    border-radius: 20px;
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-color);
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background-color: var(--status-indicator-default); /* Default/loading color */
+    background-color: var(--status-indicator-default);
     transition: background-color 0.3s;
     flex-shrink: 0;
 }
-.status-indicator.good { background-color: var(--status-indicator-good); }
-.status-indicator.bad { background-color: var(--status-indicator-bad); }
+.status-dot[data-status="connected"] { background-color: var(--status-indicator-good); }
+.status-dot[data-status="disconnected"] { background-color: var(--status-indicator-bad); }
+.status-dot[data-status="in-progress"] {
+    background-color: var(--warn-color);
+    animation: pulse-animation 1.5s infinite;
+}
+
 
 #connection-status-text {
     font-weight: 500;

@@ -29,26 +29,47 @@
             color: var(--warning-text-color, #856404);
             font-weight: bold;
         }
+        #status-message {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 500;
+            transition: opacity 0.3s ease-in-out, max-height 0.3s ease-in-out;
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+        }
+        #status-message.info, #status-message.success, #status-message.error {
+            opacity: 1;
+            max-height: 50px; /* Or enough to fit text */
+        }
+        #status-message.info {
+            background-color: #e7f3fe; color: #0c5460;
+        }
+        #status-message.success {
+            background-color: #d4edda; color: #155724;
+        }
+        #status-message.error {
+            background-color: #f8d7da; color: #721c24;
+        }
+        .form-group.checkbox-group.disabled {
+            opacity: 0.6;
+            pointer-events: none;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
+            <span id="connection-status-dot" class="status-dot"></span>
+                <span id="connection-status-text">Loading...</span>
+                <button id="connection-action-button" class="icon-button" title="Refresh Status">⏻</button>
             <h1>Holocron Settings</h1>
             <p>Configure the SSH tunnel and proxy behavior.</p>
+            <div id="status-message"></div>
         </header>
-
-        <div class="button-bar">
-            <div id="status-message">
-                <!-- This is used for "Saving...", "Settings saved!", etc. -->
-            </div>
-            <div class="connection-controls">
-                <div id="connection-status-indicator" class="status-indicator"></div>
-                <span id="connection-status-text">Loading...</span>
-                <button id="disconnect-tunnel-button" class="button-warn" style="display: none;">Disconnect</button>
-            </div>
-        </div>
-
         <div class="tabs-container">
             <nav class="tabs-nav">
                 <button class="tab-button active" data-tab="connections">Connections & Health</button>
@@ -120,6 +141,11 @@
                                     <input type="url" id="web-check-url" name="web-check-url">
                                     <small>A URL for full HTTP/S connectivity checks.</small>
                                 </div>
+                                <div class="form-group checkbox-group">
+                                    <input type="checkbox" id="docker-auth-check-enabled" name="docker-auth-check-enabled">
+                                    <label for="docker-auth-check-enabled">Enable Docker Auth Check</label>
+                                    <small>Verifies connectivity to Docker Hub. Useful for detecting proxy issues blocking US-based services.</small>
+                                </div>
                             </section>
                         </div>
                     </div>
@@ -134,7 +160,18 @@
                             <div class="proxy-actions-bar form-group">
                                 <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
                                 <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
-                                <small>Apply the PAC script to your browser's settings to route traffic.</small>
+                                <button id="disable-pac-button" class="button-warn" title="Clear any proxy settings set by this extension and revert to your browser's default.">Disable Proxy</button>
+                                <small>Apply or revert proxy for the active tunnel. 'Disable Proxy' clears any proxy settings set by this extension.</small>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="apply-system-proxy" name="apply-system-proxy">
+                                <label for="apply-system-proxy">Apply proxy settings to the entire OS</label>
+                                <small>When enabled, the active proxy will be set as the system-wide proxy. Requires administrator privileges.</small>
+                            </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="auto-apply-proxy" name="auto-apply-proxy">
+                                <label for="auto-apply-proxy">Automatically apply proxy when tunnel connects</label>
+                                <small>When enabled, the proxy will be set automatically after a successful connection.</small>
                             </div>
                             <div class="settings-grid two-column">
                                 <div class="settings-column">
@@ -239,6 +276,15 @@
                                 <button id="update-db-button">Update Databases Now</button>
                             </div>
                         </section>
+                        <section class="card">
+                            <h2>Configuration Management</h2>
+                            <p><small>Export all your settings to a JSON file for backup or to share with others. Import a file to restore your settings.</small></p>
+                            <div class="button-group" style="display: flex; gap: 10px; margin-top: 1em;">
+                                <button id="export-settings-button" class="button-secondary">Export Settings</button>
+                                <button id="import-settings-button" class="button-secondary">Import Settings</button>
+                                <input type="file" id="import-file-input" style="display: none;" accept=".json">
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
@@ -307,6 +353,10 @@
                         <span class="label">TCP Ping</span>
                         <span class="value tcp-ping-value">--</span>
                     </div>
+                    <div class="metric-item docker-metric-item" style="display: none;">
+                        <span class="label">Docker Auth</span>
+                        <span class="value docker-auth-value">--</span>
+                    </div>
                     <div class="metric-item">
                         <span class="label">Status</span>
                         <span class="value test-status-value">Not Tested</span>
@@ -336,7 +386,7 @@
 
                 <!-- External Proxy Specific Fields -->
                 <div class="external-settings" style="display: none;">
-                    <div class="form-group-grid three-column">
+                    <div class="form-group-grid">
                         <div class="form-group">
                             <label>Protocol</label>
                             <select class="config-input-external-protocol">
@@ -355,7 +405,6 @@
                             <input type="number" class="config-input-external-port" placeholder="9050" min="1" max="65535">
                         </div>
                     </div>
-                    <small>Use this for connecting to an existing proxy server running on your machine or network (e.g., Tor, Privoxy).</small>
                 </div>
 
                 <!-- SSH Specific Fields -->
@@ -373,14 +422,14 @@
                     <div class="form-group">
                         <label>Remote Command (Optional)</label>
                         <input type="text" class="config-input-ssh-remote-command" placeholder="e.g., /usr/local/bin/my_script.sh">
-                        <small>A command to run on the remote host after connecting.</small>
+                        <small>A command to run on the remote server after connecting.</small>
                     </div>
                     <div class="form-group">
                         <label>Port Forwarding Rules</label>
                         <div class="port-forwarding-rules-list">
-                            <!-- Rules will be dynamically inserted here -->
+                            <!-- Rules will be added here -->
                         </div>
-                        <button class="add-port-forward-rule-button add-button">+ Add Port Forward Rule</button>
+                        <button class="add-port-forward-rule-button add-button">+ Add Port Forwarding Rule</button>
                     </div>
                 </div>
 
@@ -388,26 +437,22 @@
                 <div class="openvpn-settings" style="display: none;">
                     <div class="form-group">
                         <label>Profile Name</label>
-                        <input type="text" class="ovpn-profile-name" placeholder="e.g., My VPN">
-                        <small>A friendly name for this OpenVPN connection.</small>
+                        <input type="text" class="ovpn-profile-name" placeholder="e.g., My Work VPN">
                     </div>
                     <div class="form-group">
                         <label>OpenVPN Configuration File (.ovpn)</label>
                         <input type="file" class="ovpn-file-upload" accept=".ovpn,.conf">
-                        <small class="ovpn-file-status">No file selected.</small>
+                        <span class="ovpn-file-status">No file selected.</span>
                         <textarea class="ovpn-file-content" style="display:none;"></textarea>
                     </div>
-                    <div class="ovpn-auth-container" style="display: none;">
-                        <p><small>This profile requires a username and password.</small></p>
-                        <div class="form-group-grid">
-                            <div class="form-group">
-                                <label>Username</label>
-                                <input type="text" class="ovpn-auth-user" autocomplete="username">
-                            </div>
-                            <div class="form-group">
-                                <label>Password</label>
-                                <input type="password" class="ovpn-auth-pass" autocomplete="current-password">
-                            </div>
+                    <div class="form-group-grid ovpn-auth-container" style="display: none;">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" class="ovpn-auth-user" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" class="ovpn-auth-pass" autocomplete="off">
                         </div>
                     </div>
                 </div>
@@ -417,11 +462,13 @@
                     <div class="form-group">
                         <label>V2Ray URL (VLESS)</label>
                         <input type="text" class="config-input-v2ray-url" placeholder="vless://...">
-                        <small>Paste your full VLESS configuration URL here.</small>
+                        <small>Paste your full VLESS URL here. The extension will parse it automatically.</small>
                     </div>
-                    <div class="v2ray-detected-params" style="display: none;">
+                    <div class="v2ray-detected-params" style="display: none; margin-top: 1em; padding-top: 1em; border-top: 1px solid var(--border-color-light);">
                         <strong>Detected Parameters:</strong>
-                        <ul class="v2ray-params-list"></ul>
+                        <ul class="v2ray-params-list" style="list-style-type: none; padding-left: 1em; font-size: 0.9em; color: var(--text-color-secondary);">
+                            <!-- Parsed params will be shown here -->
+                        </ul>
                     </div>
                 </div>
 

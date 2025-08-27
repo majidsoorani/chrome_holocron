@@ -32,35 +32,38 @@ body {
 /* --- Header --- */
 .header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
 }
 
-.header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--header-color);
-  margin-left: auto; /* Pushes status text to the right */
-  flex-grow: 1;
+.status-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
 }
 
-#connection_status {
-  font-weight: 600;
-  transition: color 0.3s ease;
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--bad-color); /* Default to bad/disconnected */
+    transition: background-color 0.3s ease;
+    flex-shrink: 0;
+}
+.status-dot[data-status="connected"] { background-color: var(--good-color); }
+.status-dot[data-status="disconnected"] { background-color: var(--bad-color); }
+.status-dot[data-status="in-progress"] {
+    background-color: var(--warn-color);
+    animation: pulse-animation 1.5s infinite;
 }
 
-.status-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #666; /* Default/loading color */
-  transition: background-color 0.3s ease;
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
-
-.status-indicator.good { background-color: var(--good-color); }
-.status-indicator.bad { background-color: var(--bad-color); }
-.status-indicator.warn { background-color: var(--warn-color); }
 
 /* --- Details Grid --- */
 .details-grid {
@@ -100,7 +103,7 @@ body {
 .detail-item .value.warn { color: var(--warn-color); }
 
 /* --- Proxy Controls --- */
-.tunnel-controls, .proxy-info {
+.proxy-info {
   background-color: rgba(0,0,0,0.2);
   border-radius: 6px;
   padding: 12px;
@@ -108,19 +111,12 @@ body {
   border-left: 3px solid var(--neutral-color);
 }
 
-
-.tunnel-controls {
-  /* Use warn color for the primary action of connecting/disconnecting */
-  border-left: 3px solid var(--warn-color);
-}
-
-
-.tunnel-controls p, .proxy-info p {
+.proxy-info p {
   margin: 0 0 10px 0;
   min-height: 1em; /* Prevent layout shift when text changes */
 }
 
-.tunnel-controls .buttons, .proxy-info .buttons {
+.proxy-info .buttons {
   display: flex;
   gap: 8px;
   justify-content: center;
@@ -151,22 +147,36 @@ button:active {
     width: 100%; /* Make buttons inside a .buttons div fill the width */
 }
 
-.icon-button {
-  background: none;
-  border: none;
-  padding: 4px;
-  cursor: pointer;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-color);
-  transition: background-color 0.2s ease, color 0.2s ease;
+@keyframes pulse-animation {
+    0% { box-shadow: 0 0 0 0 rgba(229, 192, 123, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(229, 192, 123, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(229, 192, 123, 0); }
 }
 
+.icon-button {
+    background: none;
+    border: none;
+    padding: 4px;
+    font-size: 1.4em; /* Make icon slightly larger */
+    line-height: 1;
+    color: var(--text-color);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
 .icon-button:hover {
-  background-color: var(--button-hover-bg);
-  color: white;
+    background-color: var(--button-hover-bg);
+    color: white;
+}
+.icon-button:disabled {
+    color: var(--text-color);
+    background-color: transparent;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .button-primary { background-color: var(--neutral-color); color: white; }

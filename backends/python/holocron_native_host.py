@@ -17,6 +17,7 @@ import logging.handlers
 import getpass
 import platform
 from pathlib import Path
+from urllib.parse import urlparse
 
 POSIX = os.name == 'posix'
 
@@ -74,23 +75,34 @@ def send_message(message_content):
 def perform_tcp_ping(host, port=443, timeout=2, socks_port=None):
     """Performs a TCP 'ping' by attempting a socket connection."""
     sock = None
+    hostname_to_check = host
     try:
+        # --- Robustness Improvement ---
+        # If a full URL is passed, extract the hostname. This prevents `gaierror`.
+        if '://' in hostname_to_check:
+            parsed_url = urlparse(hostname_to_check)
+            hostname_to_check = parsed_url.hostname
+            if not hostname_to_check:
+                logging.error(f"Could not extract a valid hostname from '{host}'.")
+                return -1, "InvalidHost"
+        # --- End of Improvement ---
+
         sock = socks.socksocket() if socks_port else socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if socks_port:
             sock.set_proxy(socks.SOCKS5, "127.0.0.1", socks_port)
         sock.settimeout(timeout)
-        addr = socket.gethostbyname(host)
+        addr = socket.gethostbyname(hostname_to_check)
         start_time = time.perf_counter()
         sock.connect((addr, port))
         end_time = time.perf_counter()
         latency_ms = int((end_time - start_time) * 1000)
         proxy_msg = f" via SOCKS port {socks_port}" if socks_port else " (direct)"
-        logging.debug(f"TCP ping to {host}:{port}{proxy_msg} successful. Latency: {latency_ms}ms.")
+        logging.debug(f"TCP ping to {hostname_to_check}:{port}{proxy_msg} successful. Latency: {latency_ms}ms.")
         return latency_ms, None
     except (socks.ProxyError, socket.gaierror, socket.timeout, ConnectionRefusedError, OSError) as e:
         error_name = e.__class__.__name__
         proxy_msg = f" via SOCKS port {socks_port}" if socks_port else " (direct)"
-        logging.warning(f"TCP ping to {host}:{port}{proxy_msg} failed: {error_name}")
+        logging.warning(f"TCP ping to '{host}':{port}{proxy_msg} failed: {error_name}")
         return -1, error_name
     finally:
         if sock:
@@ -116,6 +128,43 @@ def perform_web_check(url, socks_port, timeout=10):
         if "SOCKSHTTPSConnectionPool" in str(e):
             return -1, "Failed (Proxy Error)", "ProxyError"
         return -1, "Failed (Connection Error)", "ConnectionError"
+
+def perform_docker_auth_check(socks_port, timeout=10):
+    """
+    Checks the connection to Docker's authentication service and analyzes the response.
+    Returns a tuple: (status_code, status_message, error_type)
+    """
+    url = "https://auth.docker.io/token"
+    proxies = {'https': f'socks5h://127.0.0.1:{socks_port}'} if socks_port else None
+    headers = {'User-Agent': 'HolocronDockerCheck/1.0'}
+    try:
+        response = requests.get(url, proxies=proxies, timeout=timeout, headers=headers)
+
+        # Check for successful token response
+        if response.status_code == 200 and 'application/json' in response.headers.get('Content-Type', ''):
+            try:
+                data = response.json()
+                if 'token' in data:
+                    logging.info(f"Docker auth check successful (via SOCKS {socks_port}): Received token.")
+                    return 200, "OK (Token)", None
+            except json.JSONDecodeError:
+                logging.warning(f"Docker auth check (via SOCKS {socks_port}): Received 200 OK but failed to decode JSON.")
+                return 200, "Fail (JSON)", "JSONDecodeError"
+
+        # Check for the specific 403 block
+        if response.status_code == 403 and "US export control regulations" in response.text:
+            logging.warning(f"Docker auth check (via SOCKS {socks_port}): Connection blocked (403 Forbidden).")
+            return 403, "Blocked (Geo)", "GeoBlock"
+
+        # Handle other non-200 statuses
+        logging.warning(f"Docker auth check (via SOCKS {socks_port}): Received unexpected status {response.status_code}.")
+        return response.status_code, f"Fail (HTTP {response.status_code})", "HTTPError"
+    except requests.exceptions.RequestException as e:
+        error_name = e.__class__.__name__
+        logging.error(f"Docker auth check (via SOCKS {socks_port}) failed with exception: {error_name}", exc_info=True)
+        if "SOCKSHTTPSConnectionPool" in str(e):
+            return -1, "Fail (Proxy)", "ProxyError"
+        return -1, "Fail (Network)", "ConnectionError"
 
 def get_process_using_port(port):
     """
@@ -190,17 +239,24 @@ def get_tunnel_status(config):
     logging.debug(f"Checking for {conn_type} process with identifier: '{identifier}'")
 
     if conn_type == "ssh":
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'username']):
+        lock_file = Path.home() / ".ssh" / f"holocron_tunnel_{identifier}.lock"
+        if lock_file.is_file():
             try:
-                if proc.info['name'] == 'ssh' and proc.info['cmdline'] and proc.info['username'] == getpass.getuser():
-                    cmd_str = " ".join(proc.info['cmdline'])
-                    if f"ControlPath=/tmp/holocron.ssh.socket.{identifier}" in cmd_str:
-                        logging.debug(f"Found matching SSH process with PID: {proc.pid}")
-                        match = re.search(r'-D\s*(\d+)', cmd_str)
-                        socks_port = int(match.group(1)) if match else None
-                        return {"connected": True, "socks_port": socks_port}
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                pass
+                pid = int(lock_file.read_text().strip())
+                proc = psutil.Process(pid)
+                # Verify the process is still running and is an ssh process.
+                if proc.is_running() and proc.name() == 'ssh':
+                    logging.debug(f"Found matching SSH process with PID: {proc.pid} from lock file.")
+                    cmd_str = " ".join(proc.cmdline())
+                    match = re.search(r'-D\s*(\d+)', cmd_str)
+                    socks_port = int(match.group(1)) if match else None
+                    return {"connected": True, "socks_port": socks_port}
+            except (ValueError, psutil.NoSuchProcess, FileNotFoundError):
+                # Handle cases where lock file is stale or PID is gone.
+                logging.warning(f"Stale lock file found for SSH identifier '{identifier}'.")
+                # The function will fall through and return disconnected.
+            except Exception as e:
+                logging.error(f"Error checking SSH status via lock file for identifier '{identifier}': {e}")
     elif conn_type == "openvpn":
         paths = get_ovpn_temp_paths(identifier)
         lock_file = paths["lock"]
@@ -214,7 +270,7 @@ def get_tunnel_status(config):
             except (ValueError, psutil.NoSuchProcess):
                 logging.warning(f"Stale lock file found for OpenVPN identifier '{identifier}'.")
     elif conn_type == "v2ray":
-        lock_file = Path(f"/tmp/holocron_v2ray_{identifier}.lock")
+        lock_file = CONN_LOG_DIR / f"holocron_v2ray_{identifier}.lock"
         if lock_file.is_file():
             try:
                 pid = int(lock_file.read_text().strip())
@@ -604,11 +660,11 @@ def get_log_path_for_config(identifier, conn_type):
 
     # This assumes work_connect.sh will log to a file with this naming convention.
     if conn_type == "ssh":
-        return Path(f"/tmp/holocron_ssh_{identifier}.log") # SSH script still uses /tmp
+        return CONN_LOG_DIR / f"holocron_ssh_{identifier}.log"
     elif conn_type == "openvpn":
         return get_ovpn_temp_paths(identifier)["log"]
     elif conn_type == "v2ray":
-        return Path(f"/tmp/holocron_v2ray_{identifier}.log")
+        return CONN_LOG_DIR / f"holocron_v2ray_{identifier}.log"
     else:
         # Fallback for unknown types
         return log_file
@@ -653,6 +709,7 @@ def handle_test_connection(message):
     config = message.get("config")
     ping_host = message.get("pingHost")
     web_check_url = message.get("webCheckUrl")
+    docker_check_enabled = message.get("dockerCheckEnabled", False)
 
     if not config:
         return {"success": False, "message": "No configuration provided to test."}
@@ -693,19 +750,113 @@ def handle_test_connection(message):
     logging.info(f"Test Connection: Performing checks for '{config.get('name')}' via SOCKS port {socks_port}.")
     web_latency, web_status, web_error = perform_web_check(url=web_check_url, socks_port=socks_port)
     tcp_latency, tcp_error = perform_tcp_ping(host=ping_host, socks_port=socks_port)
-    
+
+    # --- New Docker Check Logic ---
+    docker_check_status_code = None
+    docker_check_status_msg = None
+    docker_check_error = None
+    if docker_check_enabled:
+        logging.info("Docker auth check is enabled for this test.")
+        docker_check_status_code, docker_check_status_msg, docker_check_error = perform_docker_auth_check(socks_port=socks_port)
+    # --- End of New Logic ---
+
     # 4. Stop the tunnel if we started it for the test.
     if not tunnel_was_running:
         logging.info(f"Test Connection: Test complete. Stopping temporary tunnel for '{config.get('name')}'.")
         execute_tunnel_command("stop", config)
 
     # 5. Format and send the response.
-    is_overall_success = web_latency > -1 and tcp_latency > -1 and web_status == "OK"
-    final_message = f"Test completed. Web: {web_latency}ms ({web_status or web_error}), TCP: {tcp_latency}ms." if is_overall_success else "Test failed. See details."
+    is_web_ok = web_latency > -1 and web_status == "OK"
+    is_tcp_ok = tcp_latency > -1
+    is_docker_ok = not docker_check_enabled or (docker_check_status_code == 200 and docker_check_status_msg == "OK (Token)")
+    is_overall_success = is_web_ok and is_tcp_ok and is_docker_ok
+
+    final_message = "Test completed."
     if tunnel_was_running:
         final_message = f"(Tunnel was already running) {final_message}"
 
-    return {"success": is_overall_success, "connected": True, "web_check_latency_ms": web_latency, "web_check_status": web_status or web_error, "tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_error, "message": final_message}
+    response_payload = {
+        "success": is_overall_success,
+        "connected": True,
+        "web_check_latency_ms": web_latency,
+        "web_check_status": web_status or web_error,
+        "tcp_ping_ms": tcp_latency,
+        "tcp_ping_error": tcp_error,
+        "message": final_message,
+        "docker_check_status_code": docker_check_status_code,
+        "docker_check_status_msg": docker_check_status_msg,
+        "docker_check_error": docker_check_error,
+    }
+    return response_payload
+
+def _get_active_network_service():
+    """Finds the active network service on macOS (e.g., 'Wi-Fi' or 'Ethernet')."""
+    if not POSIX or platform.system() != "Darwin":
+        return None, "Unsupported OS for system proxy management."
+
+    try:
+        # This command finds the default route and extracts the interface name (e.g., 'en0')
+        result = subprocess.run(
+            ["route", "-n", "get", "default"],
+            capture_output=True, text=True, check=True, timeout=5
+        )
+        interface_match = re.search(r"interface:\s*(\w+)", result.stdout)
+        if not interface_match:
+            return None, "Could not determine the active network interface."
+        interface = interface_match.group(1)
+
+        # This command lists all services and their corresponding device names in blocks.
+        # We need to find the 'Hardware Port' name for the block that contains our active interface.
+        # Example block:
+        #   Hardware Port: Wi-Fi
+        #   Device: en0
+        #   Ethernet Address: a1:b2:c3:d4:e5:f6
+        result = subprocess.run(
+            ["networksetup", "-listallhardwareports"],
+            capture_output=True, text=True, check=True, timeout=5
+        )
+        # The regex looks for a block starting with "Hardware Port:", captures the service name,
+        # and ensures it's the block for our specific interface device.
+        # `re.MULTILINE` is crucial for `^` to match the start of each line.
+        service_match = re.search(
+            r"^Hardware Port: (.*?)\nDevice: {interface}(?:\n|$)".format(interface=re.escape(interface)),
+            result.stdout,
+            re.MULTILINE
+        )
+        if not service_match:
+            return None, f"Could not find network service for interface '{interface}'."
+        
+        service_name = service_match.group(1).strip()
+        logging.info(f"Active network service found: '{service_name}' on interface '{interface}'.")
+        return service_name, None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        logging.error(f"Error finding active network service: {e}")
+        return None, f"Error finding active network service: {e}"
+
+def handle_set_system_proxy(message):
+    """Sets or clears the system-wide SOCKS proxy on macOS."""
+    service, err = _get_active_network_service()
+    if err:
+        return {"success": False, "message": err}
+
+    enable = message.get("enable", False)
+    try:
+        # Use full paths for reliability and prepend with sudo for permissions.
+        sudo_cmd = ["/usr/bin/sudo"]
+        networksetup_cmd = ["/usr/sbin/networksetup"]
+        if enable:
+            port = message.get("port")
+            subprocess.run(sudo_cmd + networksetup_cmd + ["-setsocksfirewallproxy", service, "127.0.0.1", str(port)], check=True, timeout=5)
+            subprocess.run(sudo_cmd + networksetup_cmd + ["-setsocksfirewallproxystate", service, "on"], check=True, timeout=5)
+            return {"success": True, "message": f"System SOCKS proxy set to 127.0.0.1:{port} on '{service}'."}
+        else:
+            subprocess.run(sudo_cmd + networksetup_cmd + ["-setsocksfirewallproxystate", service, "off"], check=True, timeout=5)
+            subprocess.run(sudo_cmd + networksetup_cmd + ["-setsocksfirewallproxy", service, "", ""], check=True, timeout=5)
+            return {"success": True, "message": f"System SOCKS proxy disabled and cleared on '{service}'."}
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        error_message = f"Failed to modify system proxy settings: {e}. This requires passwordless sudo configuration. See README.md."
+        logging.error(error_message)
+        return {"success": False, "message": error_message}
 
 def main():
     """Main loop to read commands and send status."""
@@ -740,6 +891,8 @@ def main():
                 response = get_logs(identifier=identifier, conn_type=conn_type)
             elif command == "clearLogs":
                 response = clear_logs()
+            elif command == "setSystemProxy":
+                response = handle_set_system_proxy(message)
             else:
                 logging.warning(f"Unknown command received: {command}")
                 continue

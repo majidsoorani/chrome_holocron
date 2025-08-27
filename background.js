@@ -6,9 +6,10 @@ import { IRAN_IP_RANGES_NETMASK } from './iran_ip_ranges.js';
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
 // --- State Variables ---
-let lastStatus = { connected: false }; // Store the last known status
-const GEOIP_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@main/direct/iran-ip.txt'; // For IP ranges (CIDR)
-const GEOSITE_URL = 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@main/direct/iran-domain.txt'; // For domains
+let lastStatus = { connected: false }; // Store the last known status.
+// Use raw GitHub URLs as a fallback for jsDelivr, which can sometimes have caching/availability issues.
+const GEOIP_URL = 'https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/main/direct/iran-ip.txt'; // For IP ranges (CIDR)
+const GEOSITE_URL = 'https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/main/direct/iran-domain.txt'; // For domains
 const GEOIP_UPDATE_COOLDOWN_HOURS = 24;
 
 // --- State Variables ---
@@ -192,27 +193,39 @@ async function updateGeoIpDatabase(force = false) {
  * @param {boolean} force - If true, ignores the cooldown and forces an update.
  */
 async function updateGeoSiteDatabase(force = false) {
-  const { [STORAGE_KEYS.GEOSITE_LAST_UPDATE]: lastUpdate } = await chrome.storage.local.get(STORAGE_KEYS.GEOSITE_LAST_UPDATE);
-  const now = Date.now();
+    const { [STORAGE_KEYS.GEOSITE_LAST_UPDATE]: lastUpdate } = await chrome.storage.local.get(STORAGE_KEYS.GEOSITE_LAST_UPDATE);
+    const now = Date.now();
 
-  if (!force && lastUpdate && (now - lastUpdate < GEOIP_UPDATE_COOLDOWN_HOURS * 60 * 60 * 1000)) {
-    console.log(`GeoSite database update skipped. Last update was less than ${GEOIP_UPDATE_COOLDOWN_HOURS} hours ago.`);
-    return;
-  }
+    if (!force && lastUpdate && (now - lastUpdate < GEOIP_UPDATE_COOLDOWN_HOURS * 60 * 60 * 1000)) {
+        console.log(`GeoSite database update skipped. Last update was less than ${GEOIP_UPDATE_COOLDOWN_HOURS} hours ago.`);
+        return;
+    }
 
-  console.log("Fetching updated GeoSite database for Iran from:", GEOSITE_URL);
-  try {
-    const response = await fetch(GEOSITE_URL, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    console.log("Fetching updated GeoSite database for Iran from:", GEOSITE_URL);
+    try {
+        const response = await fetch(GEOSITE_URL, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
-    const text = await response.text();
-    const domains = text.split('\n').map(line => line.trim()).filter(Boolean);
+        const text = await response.text();
+        const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+        const subdomains = [];
+        const full = [];
 
-    await chrome.storage.local.set({ [STORAGE_KEYS.GEOSITE_DOMAINS]: domains, [STORAGE_KEYS.GEOSITE_LAST_UPDATE]: now });
-    console.log(`Successfully updated and cached GeoSite database with ${domains.length} domains.`);
-  } catch (error) {
-    console.error("Failed to update GeoSite database:", error.message);
-  }
+        lines.forEach(line => {
+            if (line.startsWith('domain:')) {
+                subdomains.push(line.substring(7));
+            } else if (line.startsWith('full:')) {
+                full.push(line.substring(5));
+            }
+            // Silently ignore other formats like 'regexp:' which are not supported in PAC scripts.
+        });
+
+        const domains = { subdomains, full };
+        await chrome.storage.local.set({ [STORAGE_KEYS.GEOSITE_DOMAINS]: domains, [STORAGE_KEYS.GEOSITE_LAST_UPDATE]: now });
+        console.log(`Successfully updated and cached GeoSite database with ${domains.subdomains.length} subdomain rules and ${domains.full.length} full domain rules.`);
+    } catch (error) {
+        console.error("Failed to update GeoSite database:", error.message);
+    }
 }
 
 /**
@@ -376,28 +389,42 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
     }
   }
   // --- Handle state transitions ---
+  const isNowConnected = newStatus.connected;
+
+  if (!wasConnected && isNowConnected) {
+    // A connection was just established. Check if we should auto-apply the proxy.
+    const { [STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT]: autoApply } = await chrome.storage.sync.get({
+      [STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT]: true // Default to true
+    });
+
+    if (autoApply && newStatus.socks_port) {
+      console.log("A new connection was established. Automatically applying proxy settings...");
+      const result = await applyProxySettings(newStatus.socks_port);
+      if (result.success) {
+        console.log("Auto-proxy application successful:", result.message);
+        lastStatus.proxyApplied = true; // For UI feedback
+      } else {
+        console.error("Auto-proxy application failed:", result.message);
+      }
+    }
+  }
+
   // Check if the tunnel has just disconnected.
   const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManagedByHolocron } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
-  if (wasConnected && !newStatus.connected) {
+  if (wasConnected && !isNowConnected) {
     console.log("Tunnel has disconnected. Initiating disconnect sequence.");
     console.warn("Tunnel disconnected. Last status:", lastStatus); // Log the last status for debugging
 
-    // 1. First, clear the browser proxy if we were managing it.
-    // This is critical to restore the user's internet access immediately.
     if (isProxyManagedByHolocron) {
-      console.log("Automatically clearing browser proxy.");
-      const { [STORAGE_KEYS.ORIGINAL_PROXY]: originalProxySettings } = await chrome.storage.local.get(STORAGE_KEYS.ORIGINAL_PROXY);
-      if (originalProxySettings) {
-        await chrome.proxy.settings.set({ value: originalProxySettings, scope: 'regular' });
-      } else {
-        await chrome.proxy.settings.clear({ scope: 'regular' });
-      }
-      await chrome.storage.local.remove([STORAGE_KEYS.ORIGINAL_PROXY, STORAGE_KEYS.IS_PROXY_MANAGED]);
-      console.log("Browser proxy restored to original settings.");
-      lastStatus.proxyCleared = true; // For UI feedback
+        console.log("Automatically clearing proxy on disconnect.");
+        const result = await clearProxySettings();
+        if (result.success) {
+            console.log("Auto-proxy clear successful:", result.message);
+            lastStatus.proxyCleared = true;
+        } else {
+            console.error("Auto-proxy clear failed:", result.message);
+        }
     }
-
-    // 2. Second, check if we should attempt to reconnect.
     const { [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectEnabled } = await chrome.storage.sync.get({
       [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: true // Default to true
     });
@@ -445,6 +472,28 @@ function communicateWithNativeHost(message) {
   });
 }
 
+/**
+ * Wraps a promise with a timeout.
+ * @param {Promise} promise The promise to wrap.
+ * @param {number} ms The timeout in milliseconds.
+ * @returns {Promise} A new promise that rejects if the original promise doesn't resolve in time.
+ */
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Promise timed out after ${ms} ms`));
+    }, ms);
+
+    promise.then(value => {
+      clearTimeout(timer);
+      resolve(value);
+    }).catch(reason => {
+      clearTimeout(timer);
+      reject(reason);
+    });
+  });
+}
+
 async function updateStatus() {
   if (isUpdateInProgress) {
     console.log("Update check already in progress. Skipping.");
@@ -469,12 +518,13 @@ async function updateStatus() {
 
     try {
       // The native host now expects the full configuration object to determine status.
-      const response = await communicateWithNativeHost({
+      // We wrap this in a timeout to prevent the update process from hanging indefinitely.
+      const response = await withTimeout(communicateWithNativeHost({
         command: COMMANDS.GET_STATUS,
         config: connectedConfig,
         pingHost,
         webCheckUrl
-      });
+      }), 15000); // 15-second timeout
       response.activeConfigId = connectedConfig.id; // Add the active ID to the status object
       if (response && response.connected) {
         updateStateAndBroadcast(response);
@@ -493,79 +543,30 @@ async function updateStatus() {
   }
 }
 
-async function applyWebRTCPolicy() {
-    const { [STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY]: policy } = await chrome.storage.sync.get(STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY);
-    // Default to the most restrictive policy for privacy if it's not set.
-    const policyToApply = policy || 'disable_non_proxied_udp';
-    try {
-        await chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: policyToApply });
-        console.log(`WebRTC IP Handling Policy set to: ${policyToApply}`);
-    } catch (e) {
-        console.error("Failed to set WebRTC policy:", e);
+/**
+ * Applies proxy settings based on the provided SOCKS port and stored configurations.
+ * This function generates and applies a PAC script.
+ * @param {number} socksPort The SOCKS port to use for the primary proxy.
+ * @returns {Promise<object>} An object with { success: boolean, message: string }.
+ */
+async function applyProxySettings(socksPort) {
+    if (!socksPort) {
+        return { success: false, message: "SOCKS port not provided." };
     }
-}
-
-// Perform an initial check on browser startup.
-chrome.runtime.onStartup.addListener(() => {
-  updateStatus();
-  updateGeoIpDatabase();
-  updateGeoSiteDatabase();
-  applyWebRTCPolicy();
-});
-
-// Set up the alarm and perform an initial check when the extension is installed.
-chrome.runtime.onInstalled.addListener((details) => {
-  chrome.alarms.create('status-check', { periodInMinutes: 1 });
-  // Add a new alarm for daily GeoIP updates.
-  chrome.alarms.create('database-update', { periodInMinutes: 60 * 24 }); // 24 hours
-
-  // On first install, open the options page to prompt the user for configuration.
-  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    chrome.runtime.openOptionsPage();
-  }
-  updateStatus();
-  updateGeoIpDatabase();
-  updateGeoSiteDatabase();
-  applyWebRTCPolicy();
-});
-
-// Listen for the alarm to trigger subsequent checks.
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'status-check') {
-    updateStatus();
-  } else if (alarm.name === 'database-update') {
-    updateGeoIpDatabase();
-    updateGeoSiteDatabase();
-  }
-});
-
-// Listen for requests from the popup
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.command === COMMANDS.GET_POPUP_STATUS) {
-    sendResponse(lastStatus);
-    updateStatus();
-    return true; // Keep message channel open for an async response.
-  }
-
-  if (request.command === COMMANDS.SET_BROWSER_PROXY) {
-    (async () => {
-      const { socksPort } = request;
-      if (!socksPort) {
-        sendResponse({ success: false, message: "SOCKS port not provided." });
-        return;
-      }
-      try {
+    try {
         // --- Get all necessary data from storage ---
         const {
             [STORAGE_KEYS.CORE_CONFIGURATIONS]: coreConfigs = [],
             [STORAGE_KEYS.PROXY_BYPASS_RULES]: customRules = [],
             [STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED]: geoIpBypassEnabled = true,
             [STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED]: geoSiteBypassEnabled = true,
+            [STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM]: applySystemProxy = false,
         } = await chrome.storage.sync.get([
             STORAGE_KEYS.CORE_CONFIGURATIONS,
             STORAGE_KEYS.PROXY_BYPASS_RULES,
             STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED,
             STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED,
+            STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM,
         ]);
 
         const {
@@ -579,8 +580,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         ]);
 
         if (!activeConfigId) {
-            sendResponse({ success: false, message: "Cannot apply proxy, no active configuration is set." });
-            return;
+            return { success: false, message: "Cannot apply proxy, no active configuration is set." };
         }
 
         // --- Create a PAC script for advanced routing ---
@@ -647,8 +647,7 @@ function FindProxyForURL(url, host) {
     // Bypass for local, non-qualified, and common internal domains.
     if (isPlainHostName(host) ||
       shExpMatch(host, "localhost") ||
-      shExpMatch(host, "*.local") ||
-      shExpMatch(host, "*.ir")) {
+      shExpMatch(host, "*.local")) {
     return DIRECT;
     }
     try {
@@ -691,16 +690,29 @@ function FindProxyForURL(url, host) {
         }
 
         // --- GeoSite Bypass ---
-        if (geoSiteBypassEnabled && storedDomains && storedDomains.length > 0) {
-          pacScript += `
+        if (geoSiteBypassEnabled && storedDomains && (storedDomains.subdomains?.length > 0 || storedDomains.full?.length > 0)) {
+            pacScript += `
     // --- GeoSite Bypass for Iran (domain list) ---
-    const domains = ${JSON.stringify(storedDomains)};
-    for (let i = 0; i < domains.length; i++) {
-        if (shExpMatch(host, domains[i])) {
+    // This is checked before GeoIP because it is more reliable and avoids DNS lookups.
+`;
+            if (storedDomains.subdomains?.length > 0) {
+                pacScript += `    const geoSiteSubdomains = ${JSON.stringify(storedDomains.subdomains)};
+    for (let i = 0; i < geoSiteSubdomains.length; i++) {
+        if (dnsDomainIs(host, geoSiteSubdomains[i])) {
             return DIRECT;
         }
     }
 `;
+            }
+            if (storedDomains.full?.length > 0) {
+                pacScript += `    const geoSiteFullDomains = ${JSON.stringify(storedDomains.full)};
+    for (let i = 0; i < geoSiteFullDomains.length; i++) {
+        if (host === geoSiteFullDomains[i]) {
+            return DIRECT;
+        }
+    }
+`;
+            }
         }
 
         // --- GeoIP Bypass ---
@@ -709,6 +721,9 @@ function FindProxyForURL(url, host) {
           const rangesToUse = (storedRanges && storedRanges.length > 0) ? storedRanges : IRAN_IP_RANGES_NETMASK;
           pacScript += `
     // --- GeoIP Bypass for Iran (IP ranges) ---
+    // This is checked last because dnsResolve() can be slow and unreliable for CDNs.
+    // For services like YouTube, it's better to add a specific custom rule to
+    // route them to a proxy, rather than letting them fall through to this check.
     try {
         const ip = dnsResolve(host);
         if (ip) {
@@ -801,17 +816,37 @@ function FindProxyForURL(url, host) {
           [STORAGE_KEYS.IS_PROXY_MANAGED]: true,
           [STORAGE_KEYS.ORIGINAL_PROXY]: originalRegularSettings.value, // Store only the regular settings
         });
-        sendResponse({ success: true, message: "Browser proxy settings applied." });
-      } catch (e) {
-        sendResponse({ success: false, message: `Failed to set proxy: ${e.message}` });
-      }
-    })();
-    return true;
-  }
 
-  if (request.command === COMMANDS.CLEAR_BROWSER_PROXY) {
-    (async () => {
-      try {
+        let finalMessage = "Browser proxy settings applied.";
+
+        // --- Set System Proxy if Enabled ---
+        if (applySystemProxy) {
+            console.log("Applying system-wide proxy...");
+            const sysProxyResponse = await communicateWithNativeHost({
+                command: COMMANDS.SET_SYSTEM_PROXY,
+                enable: true,
+                port: socksPort
+            });
+            if (sysProxyResponse && sysProxyResponse.success) {
+                finalMessage = "Browser and system proxy settings applied.";
+            } else {
+                const errorMessage = sysProxyResponse.message || "Unknown error setting system proxy.";
+                console.error("Failed to set system proxy:", errorMessage);
+                // We still succeeded in setting the browser proxy, so we send a mixed message.
+                finalMessage = `Browser proxy applied, but system proxy failed: ${errorMessage}`;
+            }
+        }
+        return { success: true, message: finalMessage };
+    } catch (e) {
+        return { success: false, message: `Failed to set proxy: ${e.message}` };
+    }
+}
+
+/**
+ * Clears all browser and system proxy settings managed by the extension.
+ */
+async function clearProxySettings() {
+    try {
         const { [STORAGE_KEYS.ORIGINAL_PROXY]: originalProxySettings } = await chrome.storage.local.get(STORAGE_KEYS.ORIGINAL_PROXY);
         // Clear the regular proxy settings.
         await chrome.proxy.settings.clear({ scope: 'regular' });
@@ -827,12 +862,83 @@ function FindProxyForURL(url, host) {
         }
 
         await chrome.storage.local.remove([STORAGE_KEYS.ORIGINAL_PROXY, STORAGE_KEYS.IS_PROXY_MANAGED]);
-        sendResponse({ success: true, message: "Browser proxy restored." });
-      } catch (e) {
-        sendResponse({ success: false, message: `Failed to clear proxy: ${e.message}` });
-      }
-    })();
-    return true;
+
+        let finalMessage = "Browser proxy restored.";
+
+        // --- Clear System Proxy if it was managed ---
+        const { [STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM]: applySystemProxy } = await chrome.storage.sync.get(STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM);
+        if (applySystemProxy) {
+            console.log("Clearing system-wide proxy...");
+            const sysProxyResponse = await communicateWithNativeHost({
+                command: COMMANDS.SET_SYSTEM_PROXY,
+                enable: false
+            });
+            if (sysProxyResponse && sysProxyResponse.success) {
+                finalMessage = "Browser and system proxy restored.";
+            } else {
+                const errorMessage = sysProxyResponse.message || "Unknown error clearing system proxy.";
+                console.error("Failed to clear system proxy:", errorMessage);
+                finalMessage = `Browser proxy restored, but clearing system proxy failed: ${errorMessage}`;
+            }
+        }
+        return { success: true, message: finalMessage };
+    } catch (e) {
+        return { success: false, message: `Failed to clear proxy: ${e.message}` };
+    }
+}
+
+async function applyWebRTCPolicy() {
+    const { [STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY]: policy } = await chrome.storage.sync.get(STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY);
+    // Default to the most restrictive policy for privacy if it's not set.
+    const policyToApply = policy || 'disable_non_proxied_udp';
+    try {
+        await chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: policyToApply });
+        console.log(`WebRTC IP Handling Policy set to: ${policyToApply}`);
+    } catch (e) {
+        console.error("Failed to set WebRTC policy:", e);
+    }
+}
+
+// Perform an initial check on browser startup.
+chrome.runtime.onStartup.addListener(() => {
+  updateStatus();
+  updateGeoIpDatabase();
+  updateGeoSiteDatabase();
+  applyWebRTCPolicy();
+});
+
+// Set up the alarm and perform an initial check when the extension is installed.
+chrome.runtime.onInstalled.addListener((details) => {
+  chrome.alarms.create('status-check', { periodInMinutes: 1 });
+  // Add a new alarm for daily GeoIP updates.
+  chrome.alarms.create('database-update', { periodInMinutes: 60 * 24 }); // 24 hours
+
+  // On first install, open the options page to prompt the user for configuration.
+  if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
+    chrome.runtime.openOptionsPage();
+  }
+  updateStatus();
+  updateGeoIpDatabase();
+  updateGeoSiteDatabase();
+  applyWebRTCPolicy();
+});
+
+// Listen for the alarm to trigger subsequent checks.
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'status-check') {
+    updateStatus();
+  } else if (alarm.name === 'database-update') {
+    updateGeoIpDatabase();
+    updateGeoSiteDatabase();
+  }
+});
+
+// Listen for requests from the popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.command === COMMANDS.GET_POPUP_STATUS) {
+    sendResponse(lastStatus);
+    updateStatus();
+    return true; // Keep message channel open for an async response.
   }
 
   if (request.command === COMMANDS.MANUAL_DB_UPDATE) {
@@ -864,13 +970,15 @@ function FindProxyForURL(url, host) {
             sendResponse({ success: false, message: "Ping Host cannot be empty." });
             return;
         }
+        const { [STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED]: dockerCheckEnabled } = await chrome.storage.sync.get(STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED);
 
         try {
             const response = await communicateWithNativeHost({
                 command: COMMANDS.TEST_CONNECTION,
                 config: config,
                 pingHost,
-                webCheckUrl
+                webCheckUrl,
+                dockerCheckEnabled: dockerCheckEnabled !== false, // Default to true
             });
 
             // The native host now provides a comprehensive response.
@@ -963,5 +1071,22 @@ function FindProxyForURL(url, host) {
     // No response needed, this is a fire-and-forget.
     return false;
   }
+
+  if (request.command === COMMANDS.SET_BROWSER_PROXY) {
+    (async () => {
+      const response = await applyProxySettings(request.socksPort);
+      sendResponse(response);
+    })();
+    return true;
+  }
+
+  if (request.command === COMMANDS.CLEAR_BROWSER_PROXY) {
+    (async () => {
+      const response = await clearProxySettings();
+      sendResponse(response);
+    })();
+    return true;
+  }
+
   return false; // Explicitly return false for other messages.
 });
