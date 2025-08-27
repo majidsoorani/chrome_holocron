@@ -17,6 +17,9 @@ export const STORAGE_KEYS = {
   OPENROUTER_API_KEY: 'openrouter_api_key',
   OPENROUTER_MODEL: 'openrouter_model',
   OPENROUTER_SYSTEM_MESSAGE: 'openrouter_system_message',
+  APPLY_PROXY_TO_SYSTEM: 'applyProxyToSystem',
+  AUTO_APPLY_PROXY_ON_CONNECT: 'autoApplyProxyOnConnect',
+  DOCKER_AUTH_CHECK_ENABLED: 'dockerAuthCheckEnabled',
 
   // --- Legacy Keys (for migration) ---
   LEGACY_SSH_COMMAND_ID: 'sshCommandIdentifier',
@@ -43,6 +46,7 @@ export const COMMANDS = {
   GET_POPUP_STATUS: 'getPopupStatus',
   SET_BROWSER_PROXY: 'setBrowserProxy',
   CLEAR_BROWSER_PROXY: 'clearBrowserProxy',
+  SET_SYSTEM_PROXY: 'setSystemProxy',
   TEST_CONNECTION: 'testConnection',
   START_TUNNEL: 'startTunnel',
   STOP_TUNNEL: 'stopTunnel',

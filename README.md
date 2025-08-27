@@ -15,6 +15,7 @@ Holocron is a Google Chrome extension designed to seamlessly manage an SSH tunne
 - **Manual Controls**: Easily connect or disconnect the tunnel manually from the extension popup.
 - **Browser Proxy Management**:
     - Apply a SOCKS5 proxy with one click to route your browser traffic through the tunnel.
+    - **(Optional)** Apply the active SOCKS proxy to the entire operating system (macOS only).
     - Includes a smart PAC script to bypass the proxy for local addresses and specific domains (e.g., `*.ir`).
     - Revert to your original proxy settings with a single click.
 - **Highly Configurable**: An intuitive options page allows you to set:
@@ -89,13 +90,14 @@ An installation script is provided to automate the setup process.
 4.  **Enable Passwordless Sudo (Required for macOS)**
     On macOS, the extension needs `sudo` for two operations:
     - To check your Wi-Fi network with `wdutil` (for automatic connection).
-    - To create a network interface for OpenVPN connections.
+    - To create a network interface for OpenVPN connections (`openvpn`).
+    - To set the system-wide proxy (`networksetup`).
 
     To avoid being prompted for a password, you must add rules to the `sudoers` file.
     - Run `sudo visudo` in your terminal.
     - Add the following line at the end of the file, replacing `your_username` with your actual macOS username and `/path/to/openvpn` with the output of `which openvpn`:
     ```
-    your_username ALL=(ALL) NOPASSWD: /usr/bin/wdutil, /path/to/openvpn
+    your_username ALL=(ALL) NOPASSWD: /usr/bin/wdutil, /path/to/openvpn, /usr/sbin/networksetup
     ```
     - **Example**: For a standard Homebrew installation on Apple Silicon, this would be `/opt/homebrew/sbin/openvpn`.
     - Save the file (in `vi`, press `Esc` then type `:wq!` and `Enter`).
@@ -115,6 +117,7 @@ An installation script is provided to automate the setup process.
 - **Never share logs or screenshots without redacting sensitive information.** Logs can contain real IP addresses and hostnames, which is a security risk. Always replace sensitive data with placeholders like `<redacted>` or `bastion.example.com` before sharing.
 - **Use a secrets manager for production credentials.** While this tool uses your local SSH configuration, for any team-based or production environment, SSH keys and other secrets should be managed through a proper secrets management tool.
 - **The default configuration uses safe placeholders.** The initial values in the options page use non-real hostnames like `database.example.com`. This is intentional to protect your infrastructure details.
+- **System-wide proxy modification is a powerful feature.** Enabling it gives the extension permission to change your computer's network settings. Only enable this feature if you understand and accept the security implications.
 
 ## Troubleshooting
 

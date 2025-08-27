@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const reconnectNowButton = document.getElementById('reconnect-now-button');
   const applyProxyButton = document.getElementById('apply-proxy-button');
   const revertProxyButton = document.getElementById('revert-proxy-button');
+  const disablePacButton = document.getElementById('disable-pac-button');
   const webLatencyChartCanvas = document.getElementById('web-latency-chart');
   const tcpPingChartCanvas = document.getElementById('tcp-ping-chart');
     const refreshWebLatencyChartButton = document.getElementById('refresh-web-latency-chart');
@@ -48,10 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiSystemMessageInput = document.getElementById('ai-system-message');
   const aiLiveLogContainer = document.getElementById('ai-live-log-container');
   const aiLiveLogContent = document.getElementById('ai-live-log-content');
+  const applySystemProxyCheckbox = document.getElementById('apply-system-proxy');
+  const autoApplyProxyCheckbox = document.getElementById('auto-apply-proxy');
+  const dockerAuthCheckEnabledCheckbox = document.getElementById('docker-auth-check-enabled');
   const webRtcPolicyToggle = document.getElementById('webrtc-policy-toggle');
   const predefinedModal = document.getElementById('predefined-modal');
   const modalCloseButton = document.getElementById('modal-close-button');
   const predefinedChoices = document.querySelector('.predefined-choices');
+  const exportSettingsButton = document.getElementById('export-settings-button');
+  const importSettingsButton = document.getElementById('import-settings-button');
+  const importFileInput = document.getElementById('import-file-input');
 
 
   // --- Tabbed Interface Logic ---
@@ -77,6 +84,20 @@ document.addEventListener('DOMContentLoaded', () => {
           targetPanel.classList.add('active');
         }
     });
+  }
+
+  function updateAutoApplyCheckboxState() {
+    const parentGroup = autoApplyProxyCheckbox.parentElement;
+    if (applySystemProxyCheckbox.checked) {
+        // If the main setting is enabled, the auto-apply option is usable.
+        autoApplyProxyCheckbox.disabled = false;
+        parentGroup.classList.remove('disabled');
+    } else {
+        // When the main "Apply to OS" is unchecked, disable the auto-apply option
+        // but preserve its checked state for when the user re-enables it.
+        autoApplyProxyCheckbox.disabled = true;
+        parentGroup.classList.add('disabled');
+    }
   }
 
   // --- State ---
@@ -185,6 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const webLatencyValue = configCard.querySelector('.web-latency-value');
     const tcpPingValue = configCard.querySelector('.tcp-ping-value');
     const testStatusValue = configCard.querySelector('.test-status-value');
+    const dockerMetricItem = configCard.querySelector('.docker-metric-item');
+    const dockerAuthValue = configCard.querySelector('.docker-auth-value');
     const testStatusMessage = configCard.querySelector('.test-status-message');
 
     const configId = config.id || crypto.randomUUID();
@@ -429,14 +452,22 @@ document.addEventListener('DOMContentLoaded', () => {
         webLatencyValue.textContent = '--';
         tcpPingValue.textContent = '--';
         testStatusValue.textContent = 'Testing...';
+        dockerAuthValue.textContent = '--';
         testStatusMessage.textContent = 'Sending test request...';
         testStatusMessage.className = 'test-status-message info';
+
+        const dockerCheckEnabled = dockerAuthCheckEnabledCheckbox.checked;
+        if (dockerCheckEnabled) {
+            dockerMetricItem.style.display = 'flex';
+            dockerAuthValue.textContent = 'Testing...';
+        } else {
+            dockerMetricItem.style.display = 'none';
+        }
 
         const configToTest = getConfigPayloadFromElement(configCard);
         const pingHost = pingHostInput.value;
         const webCheckUrl = webCheckUrlInput.value;
-
-        const request = { command: COMMANDS.TEST_CONNECTION, config: configToTest, pingHost, webCheckUrl };
+        const request = { command: COMMANDS.TEST_CONNECTION, config: configToTest, pingHost, webCheckUrl, dockerCheckEnabled };
 
         chrome.runtime.sendMessage(request, (response) => {
             if (chrome.runtime.lastError) {
@@ -460,8 +491,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 tcpPingValue.textContent = formatTcpError(response.tcp_ping_error);
             }
 
+            if (response.docker_check_status_msg !== undefined && response.docker_check_status_msg !== null) {
+                dockerMetricItem.style.display = 'flex';
+                dockerAuthValue.textContent = response.docker_check_status_msg;
+                dockerAuthValue.classList.remove('good', 'bad'); // Reset classes
+                if (response.docker_check_status_code === 200 && response.docker_check_status_msg === "OK (Token)") {
+                    dockerAuthValue.classList.add('good');
+                } else {
+                    dockerAuthValue.classList.add('bad');
+                }
+            } else {
+                dockerMetricItem.style.display = 'none';
+            }
+
             if (response.success) {
-                testStatusValue.textContent = response.web_check_status || 'OK';
+                testStatusValue.textContent = 'OK';
             } else {
                 testStatusValue.textContent = 'Fail';
             }
@@ -829,8 +873,7 @@ function FindProxyForURL(url, host) {
     // Bypass for local, non-qualified, and common internal domains.
     if (isPlainHostName(host) ||
       shExpMatch(host, "localhost") ||
-      shExpMatch(host, "*.local") ||
-      shExpMatch(host, "*.ir")) {
+      shExpMatch(host, "*.local")) {
     return DIRECT;
     }
     try {
@@ -875,9 +918,16 @@ function FindProxyForURL(url, host) {
       pacScript += `
     // --- GeoSite Bypass for Iran (domain list) ---
     // (Preview uses a placeholder list; actual list is loaded from database)
-    const domains = ["*.ir", "example.ir", "another-example.ir", "..."];
-    for (let i = 0; i < domains.length; i++) {
-        if (shExpMatch(host, domains[i])) {
+    // This check is more reliable than GeoIP and is performed first.
+    const geoSiteSubdomains = ["ir", "co.ir", "..."];
+    for (let i = 0; i < geoSiteSubdomains.length; i++) {
+        if (dnsDomainIs(host, geoSiteSubdomains[i])) {
+            return DIRECT;
+        }
+    }
+    const geoSiteFullDomains = ["shop.ir", "..."];
+    for (let i = g = 0; i < geoSiteFullDomains.length; i++) {
+        if (host === geoSiteFullDomains[i]) {
             return DIRECT;
         }
     }
@@ -887,6 +937,8 @@ function FindProxyForURL(url, host) {
     if (geoIpBypassEnabled) {
       pacScript += `
     // --- GeoIP Bypass for Iran (IP ranges) ---
+    // This check is last because dnsResolve() can be unreliable for CDNs.
+    // For services like YouTube, add a custom rule to force them through a proxy.
     // (Preview uses a placeholder list; actual list is loaded from database)
     try {
         const ip = dnsResolve(host);
@@ -1123,6 +1175,9 @@ function FindProxyForURL(url, host) {
       STORAGE_KEYS.OPENROUTER_API_KEY,
       STORAGE_KEYS.OPENROUTER_MODEL,
       STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE,
+      STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM,
+      STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT,
+      STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED,
       // Legacy keys for migration
       STORAGE_KEYS.PING_HOST,
       STORAGE_KEYS.WEB_CHECK_URL,
@@ -1219,6 +1274,17 @@ function FindProxyForURL(url, host) {
       // The toggle is "on" (checked) if the policy is this, or if it's not set at all (first run).
       webRtcPolicyToggle.checked = result[STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY] === 'disable_non_proxied_udp' ||
                                   typeof result[STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY] === 'undefined';
+
+      // --- Populate System Proxy Checkbox ---
+      applySystemProxyCheckbox.checked = result[STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM] === true; // Default to false
+
+      // --- Populate Auto-Apply Proxy Checkbox ---
+      autoApplyProxyCheckbox.checked = result[STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT] !== false; // Default to true
+
+      updateAutoApplyCheckboxState(); // Set initial disabled state based on the main checkbox
+
+      // --- Populate Docker Auth Check ---
+      dockerAuthCheckEnabledCheckbox.checked = result[STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED] !== false; // Default to true
 
 
       // --- Populate Core Configurations UI ---
@@ -1464,6 +1530,9 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.OPENROUTER_API_KEY]: aiApiKeyInput.value.trim(),
       [STORAGE_KEYS.OPENROUTER_MODEL]: aiModelInput.value.trim(),
       [STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE]: aiSystemMessageInput.value.trim(),
+      [STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM]: applySystemProxyCheckbox.checked,
+      [STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT]: autoApplyProxyCheckbox.checked,
+      [STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED]: dockerAuthCheckEnabledCheckbox.checked,
     };
 
     // Replace coreConfigs with the sanitized version for storage.
@@ -1477,9 +1546,10 @@ function FindProxyForURL(url, host) {
       chrome.runtime.sendMessage({ command: COMMANDS.APPLY_WEBRTC_POLICY });
 
       setTimeout(() => {
-        if (statusMessage.textContent === 'Settings saved!')
-        statusMessage.textContent = '';
-        statusMessage.className = '';
+        if (statusMessage && statusMessage.textContent === 'Settings saved!') {
+          statusMessage.textContent = '';
+          statusMessage.className = '';
+        }
       }, 3000);
     });
   }
@@ -1766,8 +1836,14 @@ function FindProxyForURL(url, host) {
   autoReconnectCheckbox.addEventListener('change', () => debouncedSave());
   aiApiKeyInput.addEventListener('input', () => debouncedSave());
   aiModelInput.addEventListener('input', () => debouncedSave());
+  applySystemProxyCheckbox.addEventListener('change', () => {
+    updateAutoApplyCheckboxState();
+    debouncedSave();
+  });
+  autoApplyProxyCheckbox.addEventListener('change', () => debouncedSave());
   aiSystemMessageInput.addEventListener('input', () => debouncedSave());
   globalGeoIpBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
+  dockerAuthCheckEnabledCheckbox.addEventListener('change', () => debouncedSave());
   globalGeoSiteBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
   incognitoProxySelect.addEventListener('change', () => debouncedSave());
   webRtcPolicyToggle.addEventListener('change', () => debouncedSave());
@@ -1844,6 +1920,27 @@ function FindProxyForURL(url, host) {
     chrome.runtime.sendMessage({ command: COMMANDS.CLEAR_BROWSER_PROXY });
   });
 
+  if (disablePacButton) {
+    disablePacButton.addEventListener('click', () => {
+        connectionStatusText.textContent = 'Disabling Proxy...';
+        statusMessage.textContent = 'Clearing proxy settings...';
+        statusMessage.className = 'info';
+        chrome.runtime.sendMessage({ command: COMMANDS.CLEAR_BROWSER_PROXY }, (response) => {
+            if (chrome.runtime.lastError) {
+                statusMessage.textContent = `Error clearing proxy: ${chrome.runtime.lastError.message}`;
+                statusMessage.className = 'error';
+            } else if (response && response.success) {
+                statusMessage.textContent = 'Proxy settings cleared successfully.';
+                statusMessage.className = 'success';
+            } else {
+                statusMessage.textContent = `Failed to clear proxy: ${response ? response.message : 'Unknown error'}`;
+                statusMessage.className = 'error';
+            }
+            requestStatusUpdate();
+        });
+    });
+  }
+
   // Listen for real-time status updates from the background script
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.command === COMMANDS.STATUS_UPDATED) {
@@ -1913,6 +2010,115 @@ function FindProxyForURL(url, host) {
     if (profile) {
       addPredefinedProfile(profile);
     }
+  });
+
+  // --- Import/Export Logic ---
+  exportSettingsButton.addEventListener('click', async () => {
+    try {
+        // Define exactly which keys from sync storage should be exported.
+        // This avoids exporting local state or sensitive data accidentally.
+        const keysToExport = [
+            STORAGE_KEYS.CORE_CONFIGURATIONS,
+            STORAGE_KEYS.PING_HOST,
+            STORAGE_KEYS.WEB_CHECK_URL,
+            STORAGE_KEYS.WIFI_SSIDS,
+            STORAGE_KEYS.AUTO_RECONNECT_ENABLED,
+            STORAGE_KEYS.PROXY_BYPASS_RULES,
+            STORAGE_KEYS.GLOBAL_GEOIP_BYPASS_ENABLED,
+            STORAGE_KEYS.GLOBAL_GEOSITE_BYPASS_ENABLED,
+            STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID,
+            STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY,
+            STORAGE_KEYS.OPENROUTER_MODEL,
+            STORAGE_KEYS.OPENROUTER_SYSTEM_MESSAGE,
+            STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM,
+            STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT,
+            STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED,
+        ];
+
+        const settingsToExport = await chrome.storage.sync.get(keysToExport);
+
+        // Sanitize sensitive data before exporting.
+        if (settingsToExport[STORAGE_KEYS.CORE_CONFIGURATIONS]) {
+            // Create a deep copy to avoid modifying the in-memory state.
+            const sanitizedConfigs = JSON.parse(JSON.stringify(settingsToExport[STORAGE_KEYS.CORE_CONFIGURATIONS]));
+            sanitizedConfigs.forEach(config => {
+                if (config.type === 'openvpn') {
+                    delete config.ovpnPass; // Remove password before exporting
+                }
+            });
+            settingsToExport[STORAGE_KEYS.CORE_CONFIGURATIONS] = sanitizedConfigs;
+        }
+
+        const settingsJson = JSON.stringify(settingsToExport, null, 2);
+        const blob = new Blob([settingsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const date = new Date().toISOString().split('T')[0];
+        a.download = `holocron-settings-${date}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        statusMessage.textContent = 'Settings exported successfully.';
+        statusMessage.className = 'success';
+    } catch (error) {
+        console.error('Failed to export settings:', error);
+        statusMessage.textContent = `Error exporting settings: ${error.message}`;
+        statusMessage.className = 'error';
+    }
+  });
+
+  importSettingsButton.addEventListener('click', () => {
+    importFileInput.click();
+  });
+
+  importFileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const importedSettings = JSON.parse(e.target.result);
+
+            // Basic validation to ensure it's not a random JSON file.
+            if (!importedSettings || typeof importedSettings !== 'object' || !importedSettings[STORAGE_KEYS.CORE_CONFIGURATIONS]) {
+                throw new Error('Invalid or corrupted settings file. Missing "coreConfigurations".');
+            }
+
+            if (!confirm('This will overwrite ALL your current settings. This action cannot be undone. Are you sure you want to continue?')) {
+                importFileInput.value = ''; // Clear the file input
+                return;
+            }
+
+            // Clear all existing sync data to ensure a clean import.
+            chrome.storage.sync.clear(() => {
+                if (chrome.runtime.lastError) {
+                    throw new Error(`Failed to clear old settings: ${chrome.runtime.lastError.message}`);
+                }
+                // Set the new settings from the imported file.
+                chrome.storage.sync.set(importedSettings, () => {
+                    if (chrome.runtime.lastError) {
+                        throw new Error(`Failed to import settings: ${chrome.runtime.lastError.message}`);
+                    }
+                    statusMessage.textContent = 'Settings imported successfully! The page will now reload.';
+                    statusMessage.className = 'success';
+                    setTimeout(() => location.reload(), 2000);
+                });
+            });
+
+        } catch (error) {
+            console.error('Failed to import settings:', error);
+            statusMessage.textContent = `Error importing settings: ${error.message}`;
+            statusMessage.className = 'error';
+        } finally {
+            // Clear the file input so the same file can be selected again if needed.
+            importFileInput.value = '';
+        }
+    };
+    reader.readAsText(file);
   });
 
 
