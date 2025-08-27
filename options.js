@@ -356,7 +356,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const remark = urlObject.hash.substring(1);
             if (remark) {
                 const li = document.createElement('li');
-                li.innerHTML = `• <strong>Remark:</strong> ${decodeURIComponent(remark)}`;
+                li.append('• ');
+                const strong = document.createElement('strong');
+                strong.textContent = 'Remark:';
+                li.append(strong, ' ', decodeURIComponent(remark));
                 v2rayParamsList.appendChild(li);
                 hasParams = true;
             }
