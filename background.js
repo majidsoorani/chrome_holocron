@@ -665,28 +665,38 @@ function FindProxyForURL(url, host) {
         if (customRules.length > 0) {
             pacScript += `
     // --- Custom Bypass & Routing Rules ---
-    // Rules you have defined to route specific domains.
-    const customRules = ${JSON.stringify(customRules, null, 4)};
-
-    for (let i = 0; i < customRules.length; i++) {
-        const rule = customRules[i];
-        if (shExpMatch(host, rule.domain)) {
-            // Rule target is "DIRECT" -> bypass the proxy.
-            if (rule.target === "DIRECT") {
-                return DIRECT;
-            }
-            // Find the proxy variable for the targeted configuration.
+    // These are checked first to ensure they take precedence.
 `;
-            proxyDefinitions.forEach(def => {
-                pacScript += `            if (rule.target === "${def.id}") { return ${def.variable}; }\n`;
+            // Group rules by target for efficiency
+            const rulesByTarget = {};
+            customRules.forEach(rule => {
+                // Only include rules that are explicitly enabled.
+                if (rule.enabled !== false) {
+                    if (!rulesByTarget[rule.target]) {
+                        rulesByTarget[rule.target] = [];
+                    }
+                    rulesByTarget[rule.target].push(rule.domain);
+                }
             });
-            pacScript += `
-            // If the rule targets a configuration that doesn't have a SOCKS proxy
-            // or is otherwise unhandled, bypass it for safety.
-            return DIRECT;
-        }
-    }
-`;
+
+            // Function to generate shExpMatch conditions
+            const genConditions = domains => domains.map(d => `shExpMatch(host, "${d}")`).join(' ||\n        ');
+
+            // Handle DIRECT rules
+            if (rulesByTarget.DIRECT) {
+                pacScript += `    if (${genConditions(rulesByTarget.DIRECT)}) {\n        return DIRECT;\n    }\n`;
+            }
+            // Handle rules targeting the default active proxy
+            if (rulesByTarget.PROXY) {
+                pacScript += `    if (${genConditions(rulesByTarget.PROXY)}) {\n        return PROXY;\n    }\n`;
+            }
+
+            // Handle rules for specific proxy configurations
+            proxyDefinitions.forEach(def => {
+                if (rulesByTarget[def.id]) {
+                    pacScript += `    if (${genConditions(rulesByTarget[def.id])}) {\n        return ${def.variable};\n    }\n`;
+                }
+            });
         }
 
         // --- GeoSite Bypass ---
@@ -916,6 +926,20 @@ chrome.runtime.onInstalled.addListener((details) => {
   // On first install, open the options page to prompt the user for configuration.
   if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
     chrome.runtime.openOptionsPage();
+    // Add default rules for common problematic sites on first install
+    (async () => {
+        const { [STORAGE_KEYS.PROXY_BYPASS_RULES]: existingRules } = await chrome.storage.sync.get(STORAGE_KEYS.PROXY_BYPASS_RULES);
+        if (!existingRules || existingRules.length === 0) { // Set only if no rules exist
+            const defaultRules = [
+                { domain: "*.youtube.com", target: "PROXY", enabled: true },
+                { domain: "*.googlevideo.com", target: "PROXY", enabled: true },
+                { domain: "*.ytimg.com", target: "PROXY", enabled: true },
+                { domain: "*.ggpht.com", target: "PROXY", enabled: true }
+            ];
+            await chrome.storage.sync.set({ [STORAGE_KEYS.PROXY_BYPASS_RULES]: defaultRules });
+            console.log("Set default proxy rules for YouTube.");
+        }
+    })();
   }
   updateStatus();
   updateGeoIpDatabase();

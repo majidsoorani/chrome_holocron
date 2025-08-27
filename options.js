@@ -597,6 +597,12 @@ document.addEventListener('DOMContentLoaded', () => {
     enabledCheckbox.checked = rule.enabled !== false;
     domainInput.value = rule.domain || '';
 
+    // The 'DIRECT' and 'Default Active Proxy' options are in the template.
+    // We only need to add the configuration-specific proxy options.
+    while (targetSelect.options.length > 2) {
+        targetSelect.remove(2);
+    }
+
     // Populate the select dropdown from the cached list of configs
     coreConfigsForSelect.forEach(config => {
         const option = document.createElement('option');
@@ -890,28 +896,31 @@ function FindProxyForURL(url, host) {
     if (customRules.length > 0) {
       pacScript += `
     // --- Custom Bypass & Routing Rules ---
-    // Rules you have defined to route specific domains.
-    const customRules = ${JSON.stringify(customRules, null, 4)};
-
-    for (let i = 0; i < customRules.length; i++) {
-        const rule = customRules[i];
-        if (shExpMatch(host, rule.domain)) {
-            // Rule target is "DIRECT" -> bypass the proxy.
-            if (rule.target === "DIRECT") {
-                return DIRECT;
-            }
-            // Find the proxy variable for the targeted configuration.
+    // These are checked first to ensure they take precedence.
 `;
-      proxyDefinitions.forEach(def => {
-        pacScript += `            if (rule.target === "${def.id}") { return ${def.variable}; }\n`;
+      const rulesByTarget = {};
+      customRules.forEach(rule => {
+          if (!rulesByTarget[rule.target]) {
+              rulesByTarget[rule.target] = [];
+          }
+          rulesByTarget[rule.target].push(rule.domain);
       });
-      pacScript += `
-            // If the rule targets a configuration that doesn't have a SOCKS proxy
-            // or is otherwise unhandled, bypass it for safety.
-            return DIRECT;
-        }
-    }
-`;
+
+      const genConditions = domains => domains.map(d => `shExpMatch(host, "${d}")`).join(' ||\n        ');
+
+      if (rulesByTarget.DIRECT) {
+          pacScript += `    if (${genConditions(rulesByTarget.DIRECT)}) {\n        return DIRECT;\n    }\n`;
+      }
+      if (rulesByTarget.PROXY) {
+          pacScript += `    if (${genConditions(rulesByTarget.PROXY)}) {\n        return PROXY;\n    }\n`;
+      }
+
+      proxyDefinitions.forEach(def => {
+          if (rulesByTarget[def.id]) {
+              pacScript += `    if (${genConditions(rulesByTarget[def.id])}) {\n        return ${def.variable};\n    }\n`;
+          }
+      });
+
     }
 
     if (geoSiteBypassEnabled) {
@@ -980,9 +989,9 @@ function FindProxyForURL(url, host) {
     // 2. Update all existing dropdowns in the proxy rules
     document.querySelectorAll('#proxy-bypass-rules-list .bypass-target-select').forEach(select => {
         const currentValue = select.value;
-        // Clear all but the first 'DIRECT' option
-        while (select.options.length > 1) {
-            select.remove(1);
+        // Clear all but the first two options ('DIRECT' and 'Default Active Proxy')
+        while (select.options.length > 2) {
+            select.remove(2);
         }
         // Repopulate with the latest list of configs
         coreConfigsForSelect.forEach(config => {
