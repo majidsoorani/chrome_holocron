@@ -173,6 +173,18 @@
                                 <label for="auto-apply-proxy">Automatically apply proxy when tunnel connects</label>
                                 <small>When enabled, the proxy will be set automatically after a successful connection.</small>
                             </div>
+                            <div class="form-group checkbox-group">
+                                <input type="checkbox" id="http-proxy-enabled" name="http-proxy-enabled">
+                                <label for="http-proxy-enabled">Enable local HTTP Proxy Forwarder</label>
+                            </div>
+                            <div class="form-group" id="http-proxy-port-group" style="display: none;">
+                                <label for="http-proxy-port">HTTP Proxy Port</label>
+                                <input type="number" id="http-proxy-port" name="http-proxy-port" min="1" max="65535" placeholder="e.g., 8888">
+                                <small>
+                                    The local port for the HTTP proxy. Your CLI tools can use this by setting an environment variable, e.g.,
+                                    <code class="inline-code">export https_proxy=http://127.0.0.1:8888</code>
+                                </small>
+                            </div>
                             <div class="settings-grid two-column">
                                 <div class="settings-column">
                                     <div class="form-group checkbox-group">

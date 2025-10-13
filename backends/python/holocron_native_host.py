@@ -52,6 +52,7 @@ OPENVPN_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "openvpn_connect.sh"
 V2RAY_SCRIPT_PATH = SCRIPT_DIR.parent / "sh" / "v2ray_connect.sh"
 CONN_LOG_DIR = log_dir / "connections"
 CONN_LOG_DIR.mkdir(exist_ok=True)
+HTTP_PROXY_LOCK_FILE = CONN_LOG_DIR / "holocron_http_proxy.lock"
 
 
 
@@ -402,6 +403,20 @@ def execute_tunnel_command(command, config):
                 if status.get("connected"):
                     logging.info(f"Successfully started and verified tunnel '{identifier}'.")
                     return {"success": True, "message": "Tunnel started and verified."}
+                    # --- Start HTTP Proxy Forwarder if enabled ---
+                    if config.get("httpProxyEnabled") and status.get("socks_port"):
+                        http_port = config.get("httpProxyPort", 8888)
+                        logging.info(f"HTTP proxy forwarder is enabled. Attempting to start on port {http_port}.")
+                        if get_process_using_port(http_port):
+                             logging.warning(f"Port {http_port} is already in use. Cannot start HTTP proxy forwarder.")
+                        else:
+                            _start_http_proxy_forwarder(
+                                upstream_socks_port=status.get("socks_port"),
+                                http_listen_port=http_port
+                            )
+                    
+                    return {"success": True, "message": "Tunnel started and verified."}
+
                 else:
                     logging.error(f"Verification failed. Tunnel '{identifier}' is not running after start command.")
                     log_path = get_log_path_for_config(identifier, "ssh")
@@ -427,6 +442,7 @@ def execute_tunnel_command(command, config):
 
         elif command == "stop":
             # The existing logic for stop is sufficient.
+            _stop_http_proxy_forwarder()
             result = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10, check=False)
             if result.returncode != 0:
                 return {"success": False, "message": result.stderr.strip() or result.stdout.strip()}
@@ -550,6 +566,18 @@ def execute_tunnel_command(command, config):
                         if success_pattern.search(line):
                             logging.info("OpenVPN 'Initialization Sequence Completed' found in log.")
                             lock_file.write_text(str(process.pid))
+                            # --- Start HTTP Proxy Forwarder if enabled ---
+                            socks_port = get_ovpn_socks_port(config.get('ovpnFileContent'))
+                            if config.get("httpProxyEnabled") and socks_port:
+                                http_port = config.get("httpProxyPort", 8888)
+                                logging.info(f"HTTP proxy forwarder is enabled. Attempting to start on port {http_port}.")
+                                if get_process_using_port(http_port):
+                                    logging.warning(f"Port {http_port} is already in use. Cannot start HTTP proxy forwarder.")
+                                else:
+                                    _start_http_proxy_forwarder(
+                                        upstream_socks_port=socks_port,
+                                        http_listen_port=http_port
+                                    )
                             stderr_log_file.unlink(missing_ok=True) # Clean up on success
                             return {"success": True, "message": f"OpenVPN tunnel started with PID {process.pid}."}
                         
@@ -594,6 +622,7 @@ def execute_tunnel_command(command, config):
                 return {"success": False, "message": f"A critical error occurred while starting OpenVPN: {e}"}
 
         elif command == "stop":
+            _stop_http_proxy_forwarder()
             if not lock_file.is_file():
                 return {"success": True, "message": "Tunnel already stopped."}
             try:
@@ -643,6 +672,20 @@ def execute_tunnel_command(command, config):
                 logging.error(f"V2Ray script failed. Exit code: {result.returncode}. Output: {error_output}")
                 return {"success": False, "message": f"Failed to {command} V2Ray tunnel: {error_output}"}
 
+            # --- Start HTTP Proxy Forwarder if enabled ---
+            if command == "start" and config.get("httpProxyEnabled"):
+                # V2Ray script uses a hardcoded SOCKS port
+                socks_port = 10808
+                http_port = config.get("httpProxyPort", 8888)
+                logging.info(f"HTTP proxy forwarder is enabled. Attempting to start on port {http_port}.")
+                if get_process_using_port(http_port):
+                    logging.warning(f"Port {http_port} is already in use. Cannot start HTTP proxy forwarder.")
+                else:
+                    _start_http_proxy_forwarder(
+                        upstream_socks_port=socks_port,
+                        http_listen_port=http_port
+                    )
+
             return {"success": True, "message": result.stdout.strip() or "V2Ray tunnel command executed successfully."}
         except subprocess.TimeoutExpired:
             logging.error(f"Timeout: The command '{command}' for V2Ray tunnel '{identifier}' took too long.")
@@ -652,6 +695,55 @@ def execute_tunnel_command(command, config):
             return {"success": False, "message": f"An unexpected error occurred with V2Ray: {e}"}
     else:
         return {"success": False, "message": f"Unknown connection type: {conn_type}"}
+
+def _start_http_proxy_forwarder(upstream_socks_port, http_listen_port):
+    """Starts proxy.py to forward HTTP traffic to the upstream SOCKS proxy."""
+    if HTTP_PROXY_LOCK_FILE.is_file():
+        logging.warning("HTTP proxy forwarder lock file exists. Attempting to clean up before starting.")
+        _stop_http_proxy_forwarder()
+
+    # Find the python executable from the current virtual environment
+    python_exec = sys.executable
+    
+    cmd = [
+        python_exec,
+        "-m", "proxy",
+        "--hostname", "127.0.0.1",
+        "--port", str(http_listen_port),
+        "--proxy", f"socks5://127.0.0.1:{upstream_socks_port}",
+        "--log-level", "WARNING" # Keep logs clean unless debugging
+    ]
+    
+    logging.info(f"Starting HTTP proxy forwarder: {' '.join(cmd)}")
+    
+    try:
+        process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        HTTP_PROXY_LOCK_FILE.write_text(str(process.pid))
+        logging.info(f"HTTP proxy forwarder started with PID {process.pid}.")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to start HTTP proxy forwarder: {e}", exc_info=True)
+        return False
+
+def _stop_http_proxy_forwarder():
+    """Stops the proxy.py process if it's running."""
+    if not HTTP_PROXY_LOCK_FILE.is_file():
+        return
+
+    try:
+        pid = int(HTTP_PROXY_LOCK_FILE.read_text().strip())
+        if psutil.pid_exists(pid):
+            logging.info(f"Stopping HTTP proxy forwarder with PID {pid}.")
+            p = psutil.Process(pid)
+            p.terminate()
+            p.wait(timeout=2)
+    except (psutil.Error, ValueError, IOError, subprocess.TimeoutExpired) as e:
+        logging.warning(f"Error stopping HTTP proxy forwarder process: {e}")
+    finally:
+        # Always remove the lock file
+        HTTP_PROXY_LOCK_FILE.unlink(missing_ok=True)
+        logging.info("Cleaned up HTTP proxy forwarder lock file.")
+
 
 def get_log_path_for_config(identifier, conn_type):
     """Determines the log file path for a given configuration."""

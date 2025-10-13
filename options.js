@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const autoApplyProxyCheckbox = document.getElementById('auto-apply-proxy');
   const dockerAuthCheckEnabledCheckbox = document.getElementById('docker-auth-check-enabled');
   const webRtcPolicyToggle = document.getElementById('webrtc-policy-toggle');
+  const httpProxyEnabledCheckbox = document.getElementById('http-proxy-enabled');
+  const httpProxyPortGroup = document.getElementById('http-proxy-port-group');
+  const httpProxyPortInput = document.getElementById('http-proxy-port');
   const predefinedModal = document.getElementById('predefined-modal');
   const modalCloseButton = document.getElementById('modal-close-button');
   const predefinedChoices = document.querySelector('.predefined-choices');
@@ -582,6 +585,8 @@ document.addEventListener('DOMContentLoaded', () => {
               proxyPort: details.querySelector('.config-input-external-port')?.value.trim() || '',
           });
       }
+      config.httpProxyEnabled = httpProxyEnabledCheckbox.checked;
+      config.httpProxyPort = parseInt(httpProxyPortInput.value, 10);
       return config;
   }
 
@@ -1187,6 +1192,9 @@ function FindProxyForURL(url, host) {
       STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM,
       STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT,
       STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED,
+      // New keys for HTTP proxy
+      STORAGE_KEYS.HTTP_PROXY_ENABLED,
+      STORAGE_KEYS.HTTP_PROXY_PORT,
       // Legacy keys for migration
       STORAGE_KEYS.PING_HOST,
       STORAGE_KEYS.WEB_CHECK_URL,
@@ -1295,6 +1303,14 @@ function FindProxyForURL(url, host) {
       // --- Populate Docker Auth Check ---
       dockerAuthCheckEnabledCheckbox.checked = result[STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED] !== false; // Default to true
 
+      // --- Populate HTTP Proxy Forwarder Settings ---
+      httpProxyEnabledCheckbox.checked = result[STORAGE_KEYS.HTTP_PROXY_ENABLED] === true; // Default false
+      httpProxyPortInput.value = result[STORAGE_KEYS.HTTP_PROXY_PORT] || '8888';
+      httpProxyPortGroup.style.display = httpProxyEnabledCheckbox.checked ? 'block' : 'none';
+      httpProxyEnabledCheckbox.addEventListener('change', () => {
+          httpProxyPortGroup.style.display = httpProxyEnabledCheckbox.checked ? 'block' : 'none';
+          debouncedSave();
+      });
 
       // --- Populate Core Configurations UI ---
       coreConfigListContainer.innerHTML = ''; // Clear existing
@@ -1542,6 +1558,8 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM]: applySystemProxyCheckbox.checked,
       [STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT]: autoApplyProxyCheckbox.checked,
       [STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED]: dockerAuthCheckEnabledCheckbox.checked,
+      [STORAGE_KEYS.HTTP_PROXY_ENABLED]: httpProxyEnabledCheckbox.checked,
+      [STORAGE_KEYS.HTTP_PROXY_PORT]: parseInt(httpProxyPortInput.value, 10) || 8888,
     };
 
     // Replace coreConfigs with the sanitized version for storage.
@@ -1854,6 +1872,8 @@ function FindProxyForURL(url, host) {
   globalGeoIpBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
   dockerAuthCheckEnabledCheckbox.addEventListener('change', () => debouncedSave());
   globalGeoSiteBypassCheckbox.addEventListener('change', () => { updatePacScriptPreview(); debouncedSave(); });
+  httpProxyEnabledCheckbox.addEventListener('change', () => debouncedSave());
+  httpProxyPortInput.addEventListener('input', () => debouncedSave());
   incognitoProxySelect.addEventListener('change', () => debouncedSave());
   webRtcPolicyToggle.addEventListener('change', () => debouncedSave());
   updateDbButton.addEventListener('click', () => {
@@ -2042,6 +2062,9 @@ function FindProxyForURL(url, host) {
             STORAGE_KEYS.APPLY_PROXY_TO_SYSTEM,
             STORAGE_KEYS.AUTO_APPLY_PROXY_ON_CONNECT,
             STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED,
+            // New keys for HTTP proxy
+            STORAGE_KEYS.HTTP_PROXY_ENABLED,
+            STORAGE_KEYS.HTTP_PROXY_PORT,
         ];
 
         const settingsToExport = await chrome.storage.sync.get(keysToExport);

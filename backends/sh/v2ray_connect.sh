@@ -247,7 +247,31 @@ EOF
                 ]
             },
             "streamSettings": {
-                ${STREAM_SETTINGS_CONTENT}
+                "network": "${TYPE:-tcp}",
+                "security": "${SECURITY:-none}"
+                $(
+                    if [ "$SECURITY" = "tls" ] || [ "$SECURITY" = "xtls" ]; then
+                        ALPN_JSON_ARRAY="\"h2\", \"http/1.1\"" # Default
+                        if [ -n "$ALPN" ]; then
+                            ALPN_JSON_ARRAY=$(echo "$ALPN" | $SED_CMD 's/[^,][^,]*/"&"/g')
+                        fi
+                        echo ","
+                        echo "\"${SECURITY}Settings\": {"
+                        echo "    \"serverName\": \"${SNI:-$DOMAIN}\","
+                        echo "    \"fingerprint\": \"${FP:-chrome}\","
+                        echo "    \"alpn\": [${ALPN_JSON_ARRAY}]"
+                        echo "}"
+                    fi
+                )
+                $(
+                    if [ "$TYPE" = "ws" ]; then
+                        echo ","
+                        echo "\"wsSettings\": {"
+                        echo "    \"path\": \"${PATH:-/}\","
+                        echo "    \"headers\": { \"Host\": \"${HOST:-${SNI:-$DOMAIN}}\" }"
+                        echo "}"
+                    fi
+                )
             }
         }
     ]

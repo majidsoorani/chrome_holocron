@@ -23,6 +23,7 @@ PYTHON_SCRIPT_PATH="$PROJECT_ROOT/backends/python/holocron_native_host.py"
 MANIFEST_TEMPLATE_PATH="$PROJECT_ROOT/com.holocron.native_host.json.template"
 FINAL_MANIFEST_PATH="$CHROME_NATIVE_HOSTS_DIR/$NATIVE_HOST_NAME.json"
 REQUIREMENTS_PATH="$PROJECT_ROOT/requirements.txt"
+VENV_DIR="$PROJECT_ROOT/.venv"
 
 # --- Pre-flight Checks ---
 echo "🔎 Checking for Python interpreter..."
@@ -84,6 +85,12 @@ if [ -n "$OPENVPN_EXEC" ]; then
     fi
 fi
 
+# Check for networksetup (for system-wide proxy)
+if ! sudo -n -l /usr/sbin/networksetup &> /dev/null; then
+    missing_sudo_rules+=("networksetup (for applying system-wide proxy)")
+    required_paths+=("/usr/sbin/networksetup")
+fi
+
 if [ ${#missing_sudo_rules[@]} -gt 0 ]; then
     echo "
 🔴 ACTION REQUIRED: Passwordless Sudo Configuration
@@ -109,7 +116,6 @@ fi
 
 # --- Step 1: Setup Python Virtual Environment ---
 echo "🔧 Setting up Python virtual environment..."
-VENV_DIR="$PROJECT_ROOT/.venv"
 if [ ! -d "$VENV_DIR" ]; then
     "$PYTHON_EXEC" -m venv "$VENV_DIR"
     echo "✅ Virtual environment created at: $VENV_DIR"
@@ -118,6 +124,13 @@ else
 fi
 # From now on, use the Python interpreter from the virtual environment
 PYTHON_EXEC="$VENV_DIR/bin/python"
+
+echo "✍️  Ensuring proxy.py dependency is in requirements.txt..."
+if ! grep -q "proxy.py" "$REQUIREMENTS_PATH"; then
+    # Prepend a newline to ensure this is always on a new line.
+    echo -e "\nproxy.py>=2.4.4" >> "$REQUIREMENTS_PATH"
+    echo "✅ Added proxy.py to requirements.txt"
+fi
 
 echo "🔎 Checking for required Python packages..."
 if [ -f "$REQUIREMENTS_PATH" ]; then
@@ -139,8 +152,14 @@ echo "✅ Scripts are now executable."
 
 # --- Step 3: Update paths in the launcher script ---
 echo "✍️  Updating paths in launcher script..."
-sed -i.bak "s|__PYTHON_EXEC_PATH__|$PYTHON_EXEC|" "$LAUNCHER_SCRIPT_PATH"
-sed -i.bak "s|__PYTHON_SCRIPT_PATH__|$PYTHON_SCRIPT_PATH|" "$LAUNCHER_SCRIPT_PATH"
+# Check if placeholders exist before attempting to replace them. This makes the script safer to re-run.
+if ! grep -q "__PYTHON_EXEC_PATH__" "$LAUNCHER_SCRIPT_PATH" || ! grep -q "__PYTHON_SCRIPT_PATH__" "$LAUNCHER_SCRIPT_PATH"; then
+    echo "⚠️  Warning: Launcher script placeholders not found. The script may have been configured already."
+    echo "   If you are having issues, please restore the placeholders in '$LAUNCHER_SCRIPT_PATH' and re-run."
+else
+    sed -i.bak "s|__PYTHON_EXEC_PATH__|$PYTHON_EXEC|" "$LAUNCHER_SCRIPT_PATH"
+    sed -i.bak "s|__PYTHON_SCRIPT_PATH__|$PYTHON_SCRIPT_PATH|" "$LAUNCHER_SCRIPT_PATH"
+fi
 rm "${LAUNCHER_SCRIPT_PATH}.bak"
 echo "✅ Launcher script configured."
 

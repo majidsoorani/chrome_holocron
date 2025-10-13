@@ -1,3 +1,4 @@
 psutil
 requests
 pysocks
+proxy.py>=2.4.4
