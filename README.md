@@ -19,6 +19,7 @@ Holocron is a Google Chrome extension designed to seamlessly manage an SSH tunne
     - Includes a smart PAC script to bypass the proxy for local addresses and specific domains (e.g., `*.ir`).
     - Revert to your original proxy settings with a single click.
 - **Highly Configurable**: An intuitive options page allows you to set:
+    - Multiple connection profiles (SSH, OpenVPN, V2Ray, External).
     - SSH connection details (user, host).
     - Custom port forwarding rules (local, remote, and dynamic/SOCKS).
     - Hosts and URLs for latency checks.

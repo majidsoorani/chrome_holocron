@@ -393,6 +393,26 @@ document.addEventListener('DOMContentLoaded', () => {
     connectButton.addEventListener('click', () => {
         const type = typeSelect.value;
         if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
+
+        // For external proxies, there's no log to poll. Just send the command.
+        if (type === 'external') {
+            const configPayload = getConfigPayloadFromElement(configCard);
+            statusMessage.textContent = `Activating external proxy "${configPayload.name}"...`;
+            statusMessage.className = 'info';
+            connectButton.disabled = true;
+
+            chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL, config: configPayload }, (response) => {
+                if (response && !response.success) {
+                    statusMessage.textContent = `Failed to activate: ${response.message}`;
+                    statusMessage.className = 'error';
+                    connectButton.disabled = false; // Re-enable on failure
+                }
+                // On success, the background script will trigger a full status update,
+                // which will correctly update the button states.
+            });
+            return;
+        }
+
         details.style.display = 'block'; // Show details to reveal log
         liveLogContainer.style.display = 'block';
         liveLogContent.textContent = 'Initiating connection...';
@@ -448,7 +468,8 @@ document.addEventListener('DOMContentLoaded', () => {
         delete configLogPollIntervals[configId];
         statusMessage.textContent = `Disconnecting...`;
         statusMessage.className = 'info';
-        chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL });
+        const configPayload = getConfigPayloadFromElement(configCard);
+        chrome.runtime.sendMessage({ command: COMMANDS.STOP_TUNNEL, config: configPayload });
     });
 
     testConfigButton.addEventListener('click', () => {
@@ -460,6 +481,10 @@ document.addEventListener('DOMContentLoaded', () => {
         testStatusMessage.className = 'test-status-message info';
 
         const dockerCheckEnabled = dockerAuthCheckEnabledCheckbox.checked;
+        const configToTest = getConfigPayloadFromElement(configCard);
+        const pingHost = pingHostInput.value;
+        const webCheckUrl = webCheckUrlInput.value;
+
         if (dockerCheckEnabled) {
             dockerMetricItem.style.display = 'flex';
             dockerAuthValue.textContent = 'Testing...';
@@ -467,10 +492,13 @@ document.addEventListener('DOMContentLoaded', () => {
             dockerMetricItem.style.display = 'none';
         }
 
-        const configToTest = getConfigPayloadFromElement(configCard);
-        const pingHost = pingHostInput.value;
-        const webCheckUrl = webCheckUrlInput.value;
         const request = { command: COMMANDS.TEST_CONNECTION, config: configToTest, pingHost, webCheckUrl, dockerCheckEnabled };
+
+        // For external proxies, there's no log to poll. Just send the command.
+        if (configToTest.type === 'external') {
+            chrome.runtime.sendMessage(request, handleTestResponse);
+            return;
+        }
 
         chrome.runtime.sendMessage(request, (response) => {
             if (chrome.runtime.lastError) {
@@ -478,7 +506,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 testStatusValue.textContent = 'Error';
                 return;
             }
+            handleTestResponse(response);
+        });
 
+        function handleTestResponse(response) {
             testStatusMessage.textContent = response.message;
             testStatusMessage.className = `test-status-message ${response.success ? 'success' : 'error'}`;
 
@@ -512,7 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 testStatusValue.textContent = 'Fail';
             }
-        });
+        }
     });
 
     // --- Port Forwarding Management ---

@@ -268,6 +268,15 @@ function getIdentifierForConfig(config) {
  * @returns {Promise<object>} A promise that resolves with the response from the native host.
  */
 async function attemptConnection(config) {
+    // --- Handle External Proxies ---
+    // External proxies don't start a tunnel process. "Connecting" just means
+    // making it the active configuration. We return a success message and
+    // the background script will then proceed to apply the proxy settings.
+    if (config.type === 'external') {
+        console.log(`Activating external proxy configuration: "${config.name}"`);
+        await chrome.storage.local.set({ [STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID]: config.id });
+        return { success: true, message: `External proxy "${config.name}" is now active.` };
+    }
     console.log(`Attempting to connect with configuration: "${config.name}" of type ${config.type}`);
 
     const identifier = getIdentifierForConfig(config);
@@ -516,6 +525,23 @@ async function updateStatus() {
       [STORAGE_KEYS.WEB_CHECK_URL]: 'https://gemini.google.com/app'
     });
 
+    // --- Handle External Proxy Status Check ---
+    if (connectedConfig.type === 'external') {
+        const socksPort = parseInt(connectedConfig.proxyPort, 10);
+        const proxyHost = connectedConfig.proxyHost;
+        if (!socksPort || !proxyHost) {
+            updateStateAndBroadcast({ connected: false, activeConfigId: null }, `External proxy "${connectedConfig.name}" has an invalid host or port.`);
+            return;
+        }
+        // For external proxies, "connected" means the proxy is responsive.
+        const [webResult, tcpResult] = await Promise.all([
+            communicateWithNativeHost({ command: 'webCheck', url: webCheckUrl, socks_port: socksPort, socks_host: proxyHost }),
+            communicateWithNativeHost({ command: 'tcpPing', host: pingHost, socks_port: socksPort, socks_host: proxyHost })
+        ]);
+        const status = { connected: true, activeConfigId: connectedConfig.id, socks_port: socksPort, web_check_latency_ms: webResult.latency, web_check_status: webResult.status, tcp_ping_ms: tcpResult.latency };
+        updateStateAndBroadcast(status);
+        return;
+    }
     try {
       // The native host now expects the full configuration object to determine status.
       // We wrap this in a timeout to prevent the update process from hanging indefinitely.
@@ -1030,6 +1056,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 response = await tryToConnectToEnabledConfigs();
             }
         } else { // STOP_TUNNEL
+          // --- Handle External Proxy Disconnect ---
+          if (request.config && request.config.type === 'external') {
+              console.log(`Deactivating external proxy: "${request.config.name}"`);
+              await chrome.storage.local.remove(STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID);
+              sendResponse({ success: true, message: "External proxy deactivated." });
+              setTimeout(updateStatus, 500); // Trigger a UI refresh
+              return;
+          }
           const connectedConfig = await getCurrentlyConnectedConfig();
           if (!connectedConfig) {
             sendResponse({ success: true, message: "No active tunnel to stop." });

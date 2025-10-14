@@ -73,7 +73,7 @@ def send_message(message_content):
     sys.stdout.buffer.write(encoded_content)
     sys.stdout.buffer.flush()
 
-def perform_tcp_ping(host, port=443, timeout=2, socks_port=None):
+def perform_tcp_ping(host, port=443, timeout=2, socks_port=None, socks_host="127.0.0.1"):
     """Performs a TCP 'ping' by attempting a socket connection."""
     sock = None
     hostname_to_check = host
@@ -90,7 +90,7 @@ def perform_tcp_ping(host, port=443, timeout=2, socks_port=None):
 
         sock = socks.socksocket() if socks_port else socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if socks_port:
-            sock.set_proxy(socks.SOCKS5, "127.0.0.1", socks_port)
+            sock.set_proxy(socks.SOCKS5, socks_host, socks_port)
         sock.settimeout(timeout)
         addr = socket.gethostbyname(hostname_to_check)
         start_time = time.perf_counter()
@@ -109,11 +109,11 @@ def perform_tcp_ping(host, port=443, timeout=2, socks_port=None):
         if sock:
             sock.close()
 
-def perform_web_check(url, socks_port, timeout=10):
+def perform_web_check(url, socks_port, timeout=10, socks_host="127.0.0.1"):
     """Performs an HTTP HEAD request, optionally through a SOCKS5 proxy."""
     if not url or not url.startswith(('http://', 'https://')):
         return -1, "Invalid URL", "ConfigurationError"
-    proxies = {'http': f'socks5h://127.0.0.1:{socks_port}', 'https': f'socks5h://127.0.0.1:{socks_port}'} if socks_port else None
+    proxies = {'http': f'socks5h://{socks_host}:{socks_port}', 'https': f'socks5h://{socks_host}:{socks_port}'} if socks_port else None
     headers = {'User-Agent': 'HolocronStatusCheck/1.0'}
     try:
         start_time = time.perf_counter()
@@ -130,13 +130,13 @@ def perform_web_check(url, socks_port, timeout=10):
             return -1, "Failed (Proxy Error)", "ProxyError"
         return -1, "Failed (Connection Error)", "ConnectionError"
 
-def perform_docker_auth_check(socks_port, timeout=10):
+def perform_docker_auth_check(socks_port, timeout=10, socks_host="127.0.0.1"):
     """
     Checks the connection to Docker's authentication service and analyzes the response.
     Returns a tuple: (status_code, status_message, error_type)
     """
     url = "https://auth.docker.io/token"
-    proxies = {'https': f'socks5h://127.0.0.1:{socks_port}'} if socks_port else None
+    proxies = {'https': f'socks5h://{socks_host}:{socks_port}'} if socks_port else None
     headers = {'User-Agent': 'HolocronDockerCheck/1.0'}
     try:
         response = requests.get(url, proxies=proxies, timeout=timeout, headers=headers)
@@ -402,7 +402,6 @@ def execute_tunnel_command(command, config):
                 status = get_tunnel_status(config)
                 if status.get("connected"):
                     logging.info(f"Successfully started and verified tunnel '{identifier}'.")
-                    return {"success": True, "message": "Tunnel started and verified."}
                     # --- Start HTTP Proxy Forwarder if enabled ---
                     if config.get("httpProxyEnabled") and status.get("socks_port"):
                         http_port = config.get("httpProxyPort", 8888)
@@ -414,7 +413,7 @@ def execute_tunnel_command(command, config):
                                 upstream_socks_port=status.get("socks_port"),
                                 http_listen_port=http_port
                             )
-                    
+
                     return {"success": True, "message": "Tunnel started and verified."}
 
                 else:
@@ -808,6 +807,46 @@ def handle_test_connection(message):
     if not ping_host or not web_check_url:
         return {"success": False, "message": "Ping Host and Web Check URL must be provided for testing."}
 
+    # --- Handle External Proxy Test ---
+    # External proxies do not have a tunnel process to start/stop.
+    # We perform the checks directly against the configured proxy.
+    if config.get("type") == "external":
+        logging.info(f"Test Connection: Performing direct checks for external proxy '{config.get('name')}'.")
+        proxy_protocol = config.get("proxyProtocol", "SOCKS5")
+        proxy_host = config.get("proxyHost")
+        proxy_port_str = config.get("proxyPort")
+
+        if not proxy_host or not proxy_port_str:
+            return {"success": False, "message": "External proxy configuration is missing a host or port."}
+
+        try:
+            proxy_port = int(proxy_port_str)
+        except (ValueError, TypeError):
+            return {"success": False, "message": f"Invalid port '{proxy_port_str}' for external proxy."}
+
+        # Currently, only SOCKS5 is supported for health checks.
+        if proxy_protocol != "SOCKS5":
+            return {"success": False, "connected": True, "message": f"Testing for '{proxy_protocol}' external proxies is not yet supported. Only SOCKS5 can be tested."}
+
+        web_latency, web_status, web_error = perform_web_check(url=web_check_url, socks_port=proxy_port, socks_host=proxy_host)
+        tcp_latency, tcp_error = perform_tcp_ping(host=ping_host, socks_port=proxy_port, socks_host=proxy_host)
+
+        docker_check_status_code, docker_check_status_msg, docker_check_error = (None, None, None)
+        if docker_check_enabled:
+            docker_check_status_code, docker_check_status_msg, docker_check_error = perform_docker_auth_check(socks_port=proxy_port, socks_host=proxy_host)
+
+        is_web_ok = web_latency > -1 and web_status == "OK"
+        is_tcp_ok = tcp_latency > -1
+        is_docker_ok = not docker_check_enabled or (docker_check_status_code == 200 and docker_check_status_msg == "OK (Token)")
+        is_overall_success = is_web_ok and is_tcp_ok and is_docker_ok
+
+        return {
+            "success": is_overall_success, "connected": True, "message": "External proxy test completed.",
+            "web_check_latency_ms": web_latency, "web_check_status": web_status or web_error,
+            "tcp_ping_ms": tcp_latency, "tcp_ping_error": tcp_error,
+            "docker_check_status_code": docker_check_status_code, "docker_check_status_msg": docker_check_status_msg, "docker_check_error": docker_check_error,
+        }
+
     # 1. Check current status and decide if we need to start/stop later.
     status_before_test = get_tunnel_status(config)
     tunnel_was_running = status_before_test.get("connected")
@@ -849,7 +888,7 @@ def handle_test_connection(message):
     docker_check_error = None
     if docker_check_enabled:
         logging.info("Docker auth check is enabled for this test.")
-        docker_check_status_code, docker_check_status_msg, docker_check_error = perform_docker_auth_check(socks_port=socks_port)
+        docker_check_status_code, docker_check_status_msg, docker_check_error = perform_docker_auth_check(socks_port=socks_port, socks_host="127.0.0.1")
     # --- End of New Logic ---
 
     # 4. Stop the tunnel if we started it for the test.
@@ -968,12 +1007,20 @@ def main():
                 config = message.get("config")
                 status = get_tunnel_status(config)
                 response = status
-                if status["connected"] and status.get("socks_port"):
-                    web_latency, web_status, _ = perform_web_check(url=message.get("webCheckUrl"), socks_port=status["socks_port"])
-                    tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=status["socks_port"])
-                    response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "tcp_ping_ms": tcp_latency})
+                if status.get("connected") and status.get("socks_port"):
+                    # For external proxies, we must use the configured host.
+                    # For tunnel-based proxies, the host is always 127.0.0.1.
+                    is_external = config.get("type") == "external"
+                    proxy_host = config.get("proxyHost") if is_external else "127.0.0.1"
+
+                    if proxy_host:
+                        web_latency, web_status, _ = perform_web_check(url=message.get("webCheckUrl"), socks_port=status["socks_port"], socks_host=proxy_host)
+                        tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=status["socks_port"], socks_host=proxy_host)
+                        response.update({"web_check_latency_ms": web_latency, "web_check_status": web_status, "tcp_ping_ms": tcp_latency})
+                    else:
+                        response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (No Proxy Host)", "tcp_ping_ms": -1})
                 else:
-                    tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=None)
+                    tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), socks_port=None) # Direct ping
                     response.update({"web_check_latency_ms": -1, "web_check_status": "N/A (Tunnel Down)", "tcp_ping_ms": tcp_latency})
             elif command == "testConnection":
                 response = handle_test_connection(message)
@@ -985,6 +1032,13 @@ def main():
                 response = clear_logs()
             elif command == "setSystemProxy":
                 response = handle_set_system_proxy(message)
+            elif command == "webCheck":
+                # This command is now aware of the host for external checks
+                latency, status, error = perform_web_check(url=message.get("url"), socks_port=message.get("socks_port"), socks_host=message.get("socks_host", "127.0.0.1"))
+                response = {"latency": latency, "status": status, "error": error}
+            elif command == "tcpPing":
+                latency, error = perform_tcp_ping(host=message.get("host"), socks_port=message.get("socks_port"), socks_host=message.get("socks_host", "127.0.0.1"))
+                response = {"latency": latency, "error": error}
             else:
                 logging.warning(f"Unknown command received: {command}")
                 continue
