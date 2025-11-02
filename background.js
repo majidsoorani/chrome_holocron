@@ -534,11 +534,20 @@ async function updateStatus() {
             return;
         }
         // For external proxies, "connected" means the proxy is responsive.
+        const proxy_config_for_check = {
+            command: 'getStatus',
+            config: connectedConfig,
+            pingHost,
+            webCheckUrl
+        };
+
         const [webResult, tcpResult] = await Promise.all([
-            communicateWithNativeHost({ command: 'webCheck', url: webCheckUrl, socks_port: socksPort, socks_host: proxyHost }),
-            communicateWithNativeHost({ command: 'tcpPing', host: pingHost, socks_port: socksPort, socks_host: proxyHost })
+            communicateWithNativeHost({ command: 'webCheck', url: webCheckUrl, proxy_port: socksPort, proxy_host: proxyHost, proxy_protocol: connectedConfig.proxyProtocol }),
+            communicateWithNativeHost({ command: 'tcpPing', host: pingHost, proxy_port: socksPort, proxy_host: proxyHost, proxy_protocol: connectedConfig.proxyProtocol })
         ]);
-        const status = { connected: true, activeConfigId: connectedConfig.id, socks_port: socksPort, web_check_latency_ms: webResult.latency, web_check_status: webResult.status, tcp_ping_ms: tcpResult.latency };
+        const isConnected = webResult.latency > -1 || tcpResult.latency > -1;
+
+        const status = { connected: isConnected, activeConfigId: connectedConfig.id, socks_port: socksPort, web_check_latency_ms: webResult.latency, web_check_status: webResult.status, tcp_ping_ms: tcpResult.latency };
         updateStateAndBroadcast(status);
         return;
     }

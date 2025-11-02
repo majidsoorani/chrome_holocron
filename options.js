@@ -496,7 +496,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // For external proxies, there's no log to poll. Just send the command.
         if (configToTest.type === 'external') {
-            chrome.runtime.sendMessage(request, handleTestResponse);
+            // For external proxies, the native host needs the full config to know the protocol, host, and port.
+            // The 'request' object already contains this under the 'config' key.
+            chrome.runtime.sendMessage(request, (response) => {
+                if (chrome.runtime.lastError) {
+                    testStatusMessage.textContent = `Error: ${chrome.runtime.lastError.message}`;
+                    testStatusValue.textContent = 'Error';
+                } else handleTestResponse(response);
+            });
             return;
         }
 
