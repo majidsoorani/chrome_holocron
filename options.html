@@ -58,14 +58,71 @@
             pointer-events: none;
             user-select: none;
         }
+        
+        /* Proxy Mode Selector Styles */
+        .proxy-mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            border: 2px solid #ddd;
+        }
+        
+        .proxy-mode-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 6px 12px;
+            background: white;
+            border-radius: 4px;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .proxy-mode-label:hover {
+            background: #f9f9f9;
+            border-color: #bbb;
+        }
+        
+        .proxy-mode-label input[type="radio"]:checked + span {
+            font-weight: 700;
+            color: #2196F3;
+        }
+        
+        .proxy-mode-label:has(input[type="radio"]:checked) {
+            background: #e3f2fd;
+            border-color: #2196F3;
+            box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <span id="connection-status-dot" class="status-dot"></span>
-                <span id="connection-status-text">Loading...</span>
-                <button id="connection-action-button" class="icon-button" title="Refresh Status">⏻</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <span id="connection-status-dot" class="status-dot"></span>
+                    <span id="connection-status-text">Loading...</span>
+                    <button id="connection-action-button" class="icon-button" title="Refresh Status">⏻</button>
+                </div>
+                
+                <!-- Proxy Mode Selector -->
+                <div class="proxy-mode-selector">
+                    <span style="font-weight: bold; color: #555;">🔧 Proxy Mode:</span>
+                    <label class="proxy-mode-label">
+                        <input type="radio" name="proxy-mode" value="local" id="proxy-mode-local" checked>
+                        <span>💻 Local (Laptop)</span>
+                    </label>
+                    <label class="proxy-mode-label" id="proxy-mode-passwall2-label" style="display: none;">
+                        <input type="radio" name="proxy-mode" value="passwall2" id="proxy-mode-passwall2">
+                        <span>🏠 Passwall2 (Router)</span>
+                    </label>
+                </div>
+            </div>
+            
             <h1>Holocron Settings</h1>
             <p>Configure the SSH tunnel and proxy behavior.</p>
             <div id="status-message"></div>
@@ -122,6 +179,11 @@
                                     <input type="checkbox" id="auto-reconnect-enabled" name="auto-reconnect-enabled">
                                     <label for="auto-reconnect-enabled">Enable Auto-Reconnect</label>
                                     <small>Automatically try to restart the tunnel if it disconnects.</small>
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <input type="checkbox" id="auto-select-best-proxy" name="auto-select-best-proxy">
+                                    <label for="auto-select-best-proxy">Auto-Select Best Proxy</label>
+                                    <small>When multiple proxies are enabled and running, test TCP ping and switch to the fastest one. Only tests proxies that are already active.</small>
                                 </div>
                                 <div class="form-group" id="manual-reconnect-container" style="display: none;">
                                     <label for="reconnect-now-button">Manual Reconnect</label>
@@ -261,6 +323,88 @@
                             </div>
                         </section>
                         <section class="card">
+                            <h2>🏠 Passwall2 Router Settings</h2>
+                            <p style="background: #e3f2fd; padding: 12px; border-radius: 6px; border-left: 4px solid #2196F3; margin-bottom: 15px;">
+                                <strong>ℹ️ Configure your OpenWrt router connection:</strong> These settings are used when you switch to Passwall2 mode at the top of the page. 
+                                Make sure your router has Passwall2 installed and SSH access enabled.
+                            </p>
+                            
+                            <div class="form-group">
+                                <label for="router-ip">Router IP Address or Hostname</label>
+                                <input type="text" id="router-ip" name="router-ip" placeholder="e.g., 192.168.1.1 or openwrt.local">
+                                <small>The IP address or hostname of your OpenWrt router</small>
+                            </div>
+                            
+                            <div class="form-group-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="form-group">
+                                    <label for="router-ssh-user">SSH Username</label>
+                                    <input type="text" id="router-ssh-user" name="router-ssh-user" placeholder="root" value="root">
+                                    <small>Usually "root" for OpenWrt</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="router-ssh-port">SSH Port</label>
+                                    <input type="number" id="router-ssh-port" name="router-ssh-port" placeholder="22" value="22" min="1" max="65535">
+                                    <small>Default is 22</small>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="router-ssh-password">SSH Password (Optional)</label>
+                                <input type="password" id="router-ssh-password" name="router-ssh-password" placeholder="Leave empty if using SSH key">
+                                <small>Your router's SSH password. Leave empty if using key-based authentication.</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="router-ssh-key-path">SSH Key Path (Optional)</label>
+                                <input type="text" id="router-ssh-key-path" name="router-ssh-key-path" placeholder="e.g., ~/.ssh/openwrt_key">
+                                <small>Path to your SSH private key file (alternative to password)</small>
+                            </div>
+                            
+                            <div style="margin-top: 20px;">
+                                <button type="button" id="test-router-connection-btn" class="button" style="background: #2196F3; margin-right: 10px;">
+                                    🔌 Test Router Connection
+                                </button>
+                                <span id="router-test-status" style="font-weight: bold;"></span>
+                            </div>
+                            
+                            <div style="background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 4px solid #FF9800; margin-top: 15px;">
+                                <p style="margin: 0; font-size: 0.9em; color: #856404;">
+                                    <strong>💡 Tip:</strong> After configuring and testing these settings, the "Passwall2 (Router)" mode will become available 
+                                    at the top of the page to manage your router's proxies directly from this extension.
+                                </p>
+                            </div>
+                        </section>
+                        
+                        <!-- Passwall2 Proxy Management -->
+                        <section class="card" id="global-passwall2-management">
+                            <h2>🔧 Passwall2 Proxy Management</h2>
+                            <p><small>Manage proxies on your OpenWrt router running Passwall2. Make sure to configure and test router settings above first.</small></p>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <div>
+                                    <strong>Service Status:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: #666; margin-left: 8px;">Not Connected</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="passwall2-refresh-btn button" style="background: #2196F3;">🔄 Refresh List</button>
+                                </div>
+                            </div>
+                            
+                            <div class="passwall2-proxies-container">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <h3 style="margin: 0; font-size: 1.1em;">Configured Proxies on Router:</h3>
+                                    <span class="passwall2-proxy-count" style="color: #666; font-size: 0.9em;">0 proxies</span>
+                                </div>
+                                <div class="passwall2-proxies-list" style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: white;">
+                                    <div style="text-align: center; padding: 40px; color: #999;">
+                                        <div style="font-size: 56px; margin-bottom: 15px;">🔌</div>
+                                        <div style="font-size: 1.1em; margin-bottom: 8px;">Not Connected</div>
+                                        <div style="font-size: 0.9em;">Click "Refresh List" to connect to your router and load Passwall2 proxies</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        
+                        <section class="card">
                             <h2>Privacy Controls</h2>
                              <div class="form-group checkbox-group">
                                 <input type="checkbox" id="webrtc-policy-toggle" name="webrtc-policy-toggle">
@@ -392,8 +536,212 @@
                             <option value="ssh">SSH Tunnel</option>
                             <option value="openvpn">OpenVPN</option>
                             <option value="v2ray">V2Ray</option>
+                            <option value="protonvpn">ProtonVPN Auto</option>
                             <option value="external">External Proxy</option>
                         </select>
+                        <small style="color: #666; margin-top: 4px; display: block;">💡 To use Passwall2 (OpenWrt Router), switch to Passwall2 mode at the top of the page</small>
+                    </div>
+                </div>
+
+                <!-- ProtonVPN Specific Fields -->
+                <div class="protonvpn-settings" style="display: none;">
+                    <div class="form-group">
+                        <label>ProtonVPN Credentials</label>
+                        <div class="form-group-grid">
+                            <input type="text" class="config-input-protonvpn-username" placeholder="ProtonVPN Username">
+                            <input type="password" class="config-input-protonvpn-password" placeholder="ProtonVPN Password">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Protocol Type</label>
+                        <select class="config-input-protonvpn-protocol">
+                            <option value="openvpn-tcp">OpenVPN (TCP) - Best for censored regions</option>
+                            <option value="openvpn-udp">OpenVPN (UDP) - Faster</option>
+                            <option value="wireguard">WireGuard - Fastest</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Server Selection Strategy</label>
+                        <select class="config-input-protonvpn-strategy">
+                            <option value="fastest">Fastest (auto-select based on latency)</option>
+                            <option value="random">Random accessible server</option>
+                            <option value="specific">Specific country/server</option>
+                        </select>
+                    </div>
+                    <div class="form-group protonvpn-specific-server" style="display: none;">
+                        <label>Preferred Server</label>
+                        <input type="text" class="config-input-protonvpn-server" placeholder="e.g., FR, SG, nl-04, 146.70.152.2">
+                        <small>Country code (FR, SG), server name (nl-04), or IP address</small>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" class="config-input-protonvpn-free-only">
+                            Only use FREE servers
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Server Discovery Schedule</label>
+                        <select class="config-input-protonvpn-update-interval">
+                            <option value="manual">Manual only</option>
+                            <option value="hourly">Every hour</option>
+                            <option value="every6hours">Every 6 hours</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                        </select>
+                    </div>
+                    <div class="button-group" style="margin-top: 1em;">
+                        <button class="protonvpn-discover-now" type="button">🔍 Discover Servers Now</button>
+                        <button class="protonvpn-view-servers" type="button">📋 View Available Servers</button>
+                    </div>
+                    <div class="protonvpn-status" style="margin-top: 1em; padding: 10px; background: #f0f0f0; border-radius: 4px; display: none;">
+                        <strong>Discovery Status:</strong>
+                        <div class="protonvpn-status-text"></div>
+                        <div class="protonvpn-servers-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- Passwall2 (OpenWrt Router) Specific Fields -->
+                <div class="passwall2-settings" style="display: none;">
+                    <p style="background: #e7f3fe; padding: 12px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #2196F3;">
+                        <strong>ℹ️ About Passwall2 Mode:</strong> This connects to your OpenWrt router and manages Passwall2 directly. 
+                        All traffic will be routed through your router's Passwall2 service. You can manage proxies on the router from this interface.
+                    </p>
+                    
+                    <div class="form-group-grid">
+                        <div class="form-group">
+                            <label>OpenWrt Router IP/Hostname</label>
+                            <input type="text" class="config-input-passwall2-host" placeholder="e.g., 192.168.1.1 or openwrt.local">
+                        </div>
+                        <div class="form-group">
+                            <label>SSH Username</label>
+                            <input type="text" class="config-input-passwall2-user" placeholder="e.g., root" value="root">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group-grid">
+                        <div class="form-group">
+                            <label>SSH Password (Optional)</label>
+                            <input type="password" class="config-input-passwall2-password" placeholder="Leave empty if using SSH key">
+                        </div>
+                        <div class="form-group">
+                            <label>SSH Key Path (Optional)</label>
+                            <input type="text" class="config-input-passwall2-key-path" placeholder="e.g., ~/.ssh/openwrt_key">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group-grid">
+                        <div class="form-group">
+                            <label>Router's SOCKS Port</label>
+                            <input type="number" class="config-input-passwall2-socks-port" placeholder="e.g., 1080" value="1080">
+                            <small>The SOCKS port that Passwall2 listens on (configured in router)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Router's HTTP Port (Optional)</label>
+                            <input type="number" class="config-input-passwall2-http-port" placeholder="e.g., 1081">
+                            <small>HTTP proxy port if enabled in Passwall2</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Passwall2 Management Interface -->
+                    <div class="passwall2-management-section">
+                        <hr style="margin: 20px 0; border: 1px solid #ddd;">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="margin: 0;">🔧 Passwall2 Proxy Management</h4>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" class="passwall2-refresh-btn" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">🔄 Refresh List</button>
+                                <button type="button" class="passwall2-add-proxy-btn" style="padding: 8px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">➕ Add New Proxy</button>
+                            </div>
+                        </div>
+                        
+                        <div class="passwall2-status-display" style="padding: 12px; background: #f5f5f5; border-radius: 4px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>Service Status:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: #666;">Not Connected</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button type="button" class="passwall2-start-service-btn" style="padding: 6px 14px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">▶️ Start</button>
+                                    <button type="button" class="passwall2-stop-service-btn" style="padding: 6px 14px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">⏹️ Stop</button>
+                                    <button type="button" class="passwall2-restart-service-btn" style="padding: 6px 14px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer;">🔄 Restart</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="passwall2-proxies-container">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h5 style="margin: 0;">Configured Proxies on Router:</h5>
+                                <span class="passwall2-proxy-count" style="color: #666; font-size: 0.9em;">0 proxies</span>
+                            </div>
+                            <div class="passwall2-proxies-list" style="max-height: 450px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: white;">
+                                <div style="text-align: center; padding: 30px; color: #999;">
+                                    <div style="font-size: 48px; margin-bottom: 10px;">🔌</div>
+                                    <div>Click "Refresh List" to connect to your router and load Passwall2 proxies</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Add Proxy Modal (will be shown when Add New Proxy is clicked) -->
+                        <div class="passwall2-add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
+                            <div style="background: white; padding: 30px; border-radius: 8px; max-width: 650px; width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                                <h3 style="margin-top: 0; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">➕ Add New Proxy to Passwall2</h3>
+                                
+                                <div class="form-group">
+                                    <label style="font-weight: bold;">Proxy Type</label>
+                                    <select class="passwall2-proxy-type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                        <option value="SS">Shadowsocks</option>
+                                        <option value="SSR">ShadowsocksR</option>
+                                        <option value="V2ray">V2Ray/VMess</option>
+                                        <option value="Xray">Xray/VLESS</option>
+                                        <option value="Trojan">Trojan</option>
+                                        <option value="Trojan-Go">Trojan-Go</option>
+                                        <option value="Hysteria">Hysteria</option>
+                                        <option value="Socks">SOCKS5</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label style="font-weight: bold;">Configuration URL (Recommended)</label>
+                                    <input type="text" class="passwall2-proxy-url" placeholder="ss://... or vmess://... or trojan://..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <small style="color: #666; display: block; margin-top: 4px;">📋 Paste your subscription URL here - fields below will auto-fill</small>
+                                </div>
+                                
+                                <div style="text-align: center; margin: 15px 0; color: #999;">
+                                    <strong>OR configure manually:</strong>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Remarks/Name</label>
+                                    <input type="text" class="passwall2-proxy-remarks" placeholder="e.g., US Server 1" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                </div>
+                                
+                                <div class="form-group-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label>Server Address</label>
+                                        <input type="text" class="passwall2-proxy-address" placeholder="e.g., 1.2.3.4 or server.example.com" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Port</label>
+                                        <input type="number" class="passwall2-proxy-port" placeholder="443" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div class="form-group">
+                                        <label>Encryption/Method</label>
+                                        <input type="text" class="passwall2-proxy-method" placeholder="e.g., aes-256-gcm" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Password/UUID</label>
+                                        <input type="text" class="passwall2-proxy-password" placeholder="Password or UUID" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
+                                    <button type="button" class="passwall2-save-proxy-btn" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">💾 Save to Router</button>
+                                    <button type="button" class="passwall2-cancel-add-btn" style="flex: 1; padding: 12px; background: #999; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">❌ Cancel</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -454,7 +802,10 @@
                     </div>
                     <div class="form-group">
                         <label>OpenVPN Configuration File (.ovpn)</label>
-                        <input type="file" class="ovpn-file-upload" accept=".ovpn,.conf">
+                        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 5px;">
+                            <input type="file" class="ovpn-file-upload" accept=".ovpn,.conf" style="flex: 1;">
+                            <button type="button" class="ovpn-download-button" style="padding: 5px 15px; white-space: nowrap;">📥 Download</button>
+                        </div>
                         <span class="ovpn-file-status">No file selected.</span>
                         <textarea class="ovpn-file-content" style="display:none;"></textarea>
                     </div>
@@ -467,6 +818,11 @@
                             <label>Password</label>
                             <input type="password" class="ovpn-auth-pass" autocomplete="off">
                         </div>
+                    </div>
+                    <div class="form-group ovpn-key-passphrase-container" style="display: none;">
+                        <label>Private Key Passphrase</label>
+                        <input type="password" class="ovpn-key-passphrase" autocomplete="off" placeholder="Leave empty if key is not encrypted">
+                        <small>Only needed if your .ovpn file contains an encrypted private key</small>
                     </div>
                 </div>
 
@@ -504,6 +860,7 @@
     </template>
 
     <script src="vendor/chart.js"></script>
+    <script type="module" src="protonvpn_manager.js"></script>
     <script type="module" src="options.js"></script>
 
     <!-- Modal for Predefined Profiles -->

@@ -1113,9 +1113,9 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
     try:
         if action == "list_proxies":
             logger.info(f"[list_proxies] Starting proxy list operation")
-            # Get all nodes from Passwall2 UCI config with their properties
+            # Get all nodes from Passwall2 UCI config
             # Support both indexed (@nodes[0]) and named (nodeId=nodes) formats
-            remote_cmd = "uci show passwall2 | grep -E '(^passwall2\\.[^.@]+=(nodes|shunt_rules)|\\.(type|remarks|address|port|protocol|enabled)=)'"
+            remote_cmd = "uci show passwall2 | grep '=nodes' && /etc/init.d/passwall2 status"
             ssh_cmd.append(remote_cmd)
             
             logger.info(f"[list_proxies] SSH command: {' '.join(ssh_cmd)}")
@@ -1532,6 +1532,9 @@ def handle_test_connection(message):
         "host": "127.0.0.1",
         "port": socks_port
     }
+        logging.info(f"Test Connection: Test complete. Stopping temporary tunnel for '{config.get('name')}'.")
+        execute_tunnel_command("stop", config)
+
     # 5. Format and send the response.
     is_web_ok = web_latency > -1 and web_status == "OK"
     is_tcp_ok = tcp_latency > -1
@@ -1752,103 +1755,6 @@ def handle_test_router_connection(message):
         logging.error(f"Router connection test error: {e}", exc_info=True)
         return {"success": False, "message": f"Test failed: {str(e)}"}
 
-def execute_router_command(router_command, config):
-    """
-    Execute arbitrary command on OpenWrt router via SSH.
-    
-    Args:
-        router_command: The command to execute on the router
-        config: Dict containing router connection details (ip, user, password/keyPath)
-        
-    Returns:
-        Dict with success status, output, and error message
-    """
-    try:
-        if not router_command:
-            return {"success": False, "message": "No command provided"}
-        
-        if not config:
-            return {"success": False, "message": "Router configuration is required"}
-        
-        router_ip = config.get("ip")
-        ssh_user = config.get("user", "root")
-        ssh_port = config.get("port", 22)
-        ssh_password = config.get("password", "")
-        ssh_key_path = config.get("keyPath", "")
-        
-        if not router_ip:
-            return {"success": False, "message": "Router IP is required"}
-        
-        # Build SSH command
-        ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null"]
-        
-        # Add port if not default
-        if ssh_port and ssh_port != 22:
-            ssh_cmd.extend(["-p", str(ssh_port)])
-        
-        # Add key if provided
-        if ssh_key_path and ssh_key_path.strip():
-            expanded_key_path = os.path.expanduser(ssh_key_path)
-            if expanded_key_path.endswith('.pub'):
-                expanded_key_path = expanded_key_path[:-4]
-            
-            if os.path.exists(expanded_key_path):
-                ssh_cmd.extend(["-i", expanded_key_path])
-            else:
-                return {"success": False, "message": f"SSH key not found: {expanded_key_path}"}
-        
-        # Add user@host
-        ssh_cmd.append(f"{ssh_user}@{router_ip}")
-        
-        # Add the actual command to execute
-        ssh_cmd.append(router_command)
-        
-        # If password is provided and no key, use sshpass
-        if ssh_password and not ssh_key_path:
-            if shutil.which("sshpass"):
-                ssh_cmd = ["sshpass", "-p", ssh_password] + ssh_cmd
-            else:
-                return {
-                    "success": False, 
-                    "message": "Password authentication requires 'sshpass'. Please install it or use SSH key authentication."
-                }
-        
-        logging.info(f"Executing router command: {router_command}")
-        
-        # Execute the command
-        result = subprocess.run(
-            ssh_cmd,
-            capture_output=True,
-            text=True,
-            timeout=60  # Longer timeout for commands that might take time
-        )
-        
-        output = result.stdout.strip()
-        error = result.stderr.strip()
-        
-        if result.returncode == 0:
-            logging.info(f"Router command executed successfully")
-            return {
-                "success": True,
-                "output": output,
-                "message": "Command executed successfully"
-            }
-        else:
-            logging.warning(f"Router command failed with code {result.returncode}: {error}")
-            return {
-                "success": False,
-                "output": output,
-                "error": error,
-                "message": f"Command failed with exit code {result.returncode}"
-            }
-            
-    except subprocess.TimeoutExpired:
-        logging.error(f"Router command timed out: {router_command}")
-        return {"success": False, "message": "Command execution timed out"}
-    except Exception as e:
-        logging.error(f"Router command execution error: {e}", exc_info=True)
-        return {"success": False, "message": f"Error: {str(e)}"}
-
 def main():
     """Main loop to read commands and send status."""
     while True:
@@ -1939,10 +1845,6 @@ def main():
                 response = execute_passwall2_command(action, config, proxy_id, proxy_data)
             elif command == "testRouterConnection":
                 response = handle_test_router_connection(message)
-            elif command == "executeRouterCommand":
-                router_command = message.get("routerCommand")
-                config = message.get("config")
-                response = execute_router_command(router_command, config)
             else:
                 logging.warning(f"Unknown command received: {command}")
                 continue

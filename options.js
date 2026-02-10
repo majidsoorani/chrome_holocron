@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const proxyBypassRuleTemplate = document.getElementById('proxy-bypass-rule-template');
   const addProxyRuleButton = document.getElementById('add-proxy-rule-button');
   const autoReconnectCheckbox = document.getElementById('auto-reconnect-enabled');
+  const autoSelectBestProxyCheckbox = document.getElementById('auto-select-best-proxy');
   const wifiListContainer = document.getElementById('wifi-networks-list');
   const addWifiButton = document.getElementById('add-wifi-button');
   const ruleTemplate = document.getElementById('port-forward-rule-template');
@@ -62,6 +63,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const exportSettingsButton = document.getElementById('export-settings-button');
   const importSettingsButton = document.getElementById('import-settings-button');
   const importFileInput = document.getElementById('import-file-input');
+  
+  // --- Router Settings Elements ---
+  const routerIpInput = document.getElementById('router-ip');
+  const routerSshUserInput = document.getElementById('router-ssh-user');
+  const routerSshPortInput = document.getElementById('router-ssh-port');
+  const routerSshPasswordInput = document.getElementById('router-ssh-password');
+  const routerSshKeyPathInput = document.getElementById('router-ssh-key-path');
+  const testRouterConnectionBtn = document.getElementById('test-router-connection-btn');
+  const routerTestStatus = document.getElementById('router-test-status');
+  const proxyModePasswall2Label = document.getElementById('proxy-mode-passwall2-label');
 
 
   // --- Tabbed Interface Logic ---
@@ -150,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- Core Configuration Management ---
-  function createConfigElement(config = {}, activeConfigId, startInEditMode = false) {
+  async function createConfigElement(config = {}, activeConfigId, startInEditMode = false) {
     const content = coreConfigTemplate.content.cloneNode(true);
     const configCard = content.querySelector('.config-card');
     const details = configCard.querySelector('.config-details');
@@ -187,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const ovpnAuthContainer = openvpnSettings.querySelector('.ovpn-auth-container');
     const ovpnAuthUser = openvpnSettings.querySelector('.ovpn-auth-user');
     const ovpnAuthPass = openvpnSettings.querySelector('.ovpn-auth-pass');
+    const ovpnKeyPassphraseContainer = openvpnSettings.querySelector('.ovpn-key-passphrase-container');
+    const ovpnKeyPassphrase = openvpnSettings.querySelector('.ovpn-key-passphrase');
 
     // V2Ray settings
     const v2raySettings = details.querySelector('.v2ray-settings');
@@ -199,6 +212,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const externalProtocolSelect = externalSettings.querySelector('.config-input-external-protocol');
     const externalHostInput = externalSettings.querySelector('.config-input-external-host');
     const externalPortInput = externalSettings.querySelector('.config-input-external-port');
+
+    // Passwall2 (OpenWrt Router) settings
+    const passwall2Settings = details.querySelector('.passwall2-settings');
+    const passwall2HostInput = passwall2Settings?.querySelector('.config-input-passwall2-host');
+    const passwall2UserInput = passwall2Settings?.querySelector('.config-input-passwall2-user');
+    const passwall2PasswordInput = passwall2Settings?.querySelector('.config-input-passwall2-password');
+    const passwall2KeyPathInput = passwall2Settings?.querySelector('.config-input-passwall2-key-path');
+    const passwall2SocksPortInput = passwall2Settings?.querySelector('.config-input-passwall2-socks-port');
+    const passwall2HttpPortInput = passwall2Settings?.querySelector('.config-input-passwall2-http-port');
+    
+    // Passwall2 management elements
+    const passwall2RefreshBtn = passwall2Settings?.querySelector('.passwall2-refresh-btn');
+    const passwall2AddProxyBtn = passwall2Settings?.querySelector('.passwall2-add-proxy-btn');
+    const passwall2StatusDisplay = passwall2Settings?.querySelector('.passwall2-status-display');
+    const passwall2StatusText = passwall2Settings?.querySelector('.passwall2-status-text');
+    const passwall2StartServiceBtn = passwall2Settings?.querySelector('.passwall2-start-service-btn');
+    const passwall2StopServiceBtn = passwall2Settings?.querySelector('.passwall2-stop-service-btn');
+    const passwall2RestartServiceBtn = passwall2Settings?.querySelector('.passwall2-restart-service-btn');
+    const passwall2ProxiesList = passwall2Settings?.querySelector('.passwall2-proxies-list');
+    const passwall2ProxyCount = passwall2Settings?.querySelector('.passwall2-proxy-count');
+    const passwall2AddModal = passwall2Settings?.querySelector('.passwall2-add-modal');
+    const passwall2SaveProxyBtn = passwall2Settings?.querySelector('.passwall2-save-proxy-btn');
+    const passwall2CancelAddBtn = passwall2Settings?.querySelector('.passwall2-cancel-add-btn');
+
+    // ProtonVPN settings
+    const protonvpnSettings = details.querySelector('.protonvpn-settings');
+    let protonvpnUsernameInput, protonvpnPasswordInput, protonvpnProtocolSelect, protonvpnStrategySelect;
+    let protonvpnServerInput, protonvpnFreeOnlyCheckbox, protonvpnUpdateIntervalSelect;
+    let protonvpnDiscoverButton, protonvpnViewServersButton, protonvpnStatusDiv, protonvpnStatusText, protonvpnServersList;
+    let protonvpnSpecificServerGroup;
+    
+    if (protonvpnSettings) {
+        protonvpnUsernameInput = protonvpnSettings.querySelector('.config-input-protonvpn-username');
+        protonvpnPasswordInput = protonvpnSettings.querySelector('.config-input-protonvpn-password');
+        protonvpnProtocolSelect = protonvpnSettings.querySelector('.config-input-protonvpn-protocol');
+        protonvpnStrategySelect = protonvpnSettings.querySelector('.config-input-protonvpn-strategy');
+        protonvpnServerInput = protonvpnSettings.querySelector('.config-input-protonvpn-server');
+        protonvpnFreeOnlyCheckbox = protonvpnSettings.querySelector('.config-input-protonvpn-free-only');
+        protonvpnUpdateIntervalSelect = protonvpnSettings.querySelector('.config-input-protonvpn-update-interval');
+        protonvpnDiscoverButton = protonvpnSettings.querySelector('.protonvpn-discover-now');
+        protonvpnViewServersButton = protonvpnSettings.querySelector('.protonvpn-view-servers');
+        protonvpnStatusDiv = protonvpnSettings.querySelector('.protonvpn-status');
+        protonvpnStatusText = protonvpnSettings.querySelector('.protonvpn-status-text');
+        protonvpnServersList = protonvpnSettings.querySelector('.protonvpn-servers-list');
+        protonvpnSpecificServerGroup = protonvpnSettings.querySelector('.protonvpn-specific-server');
+    }
 
     // Live Log viewer
     const liveLogContainer = details.querySelector('.config-live-log-container');
@@ -219,8 +278,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Helper to check if OVPN profile needs auth ---
     const checkOvpnForAuth = (content) => {
         const needsAuth = /^\s*auth-user-pass\s*$/m.test(content || '');
+        const hasEncryptedKey = /BEGIN ENCRYPTED PRIVATE KEY|BEGIN RSA PRIVATE KEY/.test(content || '');
+        
         ovpnAuthContainer.style.display = needsAuth ? 'flex' : 'none';
-        return needsAuth;
+        ovpnKeyPassphraseContainer.style.display = hasEncryptedKey ? 'block' : 'none';
+        
+        return needsAuth || hasEncryptedKey;
     };
 
     // --- Type Switching ---
@@ -230,16 +293,33 @@ document.addEventListener('DOMContentLoaded', () => {
         openvpnSettings.style.display = 'none';
         v2raySettings.style.display = 'none';
         externalSettings.style.display = 'none';
+        const passwall2Settings = details.querySelector('.passwall2-settings');
+        if (passwall2Settings) passwall2Settings.style.display = 'none';
+        const protonvpnSettings = details.querySelector('.protonvpn-settings');
+        if (protonvpnSettings) protonvpnSettings.style.display = 'none';
 
         if (type === 'ssh') sshSettings.style.display = 'block';
         else if (type === 'openvpn') openvpnSettings.style.display = 'block';
         else if (type === 'v2ray') v2raySettings.style.display = 'block';
         else if (type === 'external') externalSettings.style.display = 'block';
+        else if (type === 'passwall2' && passwall2Settings) passwall2Settings.style.display = 'block';
+        else if (type === 'protonvpn' && protonvpnSettings) protonvpnSettings.style.display = 'block';
     };
 
     typeSelect.addEventListener('change', () => {
         toggleSettingsVisibility();
         debouncedSave();
+        
+        // Re-apply proxy mode filter when type changes
+        const proxyModePasswall2Radio = document.getElementById('proxy-mode-passwall2');
+        const currentMode = proxyModePasswall2Radio && proxyModePasswall2Radio.checked ? 'passwall2' : 'local';
+        
+        // Small delay to ensure the type change is saved first
+        setTimeout(() => {
+          if (window.filterConfigsByProxyMode) {
+            window.filterConfigsByProxyMode(currentMode);
+          }
+        }, 100);
     });
 
     // Populate fields
@@ -253,13 +333,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // OpenVPN fields
     if (ovpnProfileNameInput) ovpnProfileNameInput.value = config.ovpnProfileName || '';
-    if (ovpnFileContent) ovpnFileContent.value = config.ovpnFileContent || '';
+    
+    // Handle ovpn content that might be stored in local storage (for large files)
+    let ovpnContent = config.ovpnFileContent || '';
+    if (!ovpnContent && config.ovpnFileContentRef) {
+        // Load from local storage if stored separately
+        const result = await chrome.storage.local.get(config.ovpnFileContentRef);
+        ovpnContent = result[config.ovpnFileContentRef] || '';
+    }
+    
+    if (ovpnFileContent) ovpnFileContent.value = ovpnContent;
     if (ovpnAuthUser) ovpnAuthUser.value = config.ovpnUser || '';
     if (ovpnAuthPass) ovpnAuthPass.value = config.ovpnPass || '';
-    if (config.ovpnFileContent && ovpnFileStatus) {
-        ovpnFileStatus.textContent = `Saved profile loaded. Upload a new file to replace it.`;
+    if (ovpnKeyPassphrase) ovpnKeyPassphrase.value = config.ovpnKeyPassphrase || '';
+    if (ovpnContent && ovpnFileStatus) {
+        ovpnFileStatus.textContent = `✓ Configuration loaded. Upload a new file to replace it or click Download to save it.`;
+        ovpnFileStatus.style.color = 'var(--success-color, #28a745)';
     }
-    checkOvpnForAuth(config.ovpnFileContent); // Check on initial load
+    checkOvpnForAuth(ovpnContent); // Check on initial load
 
     // V2Ray fields
     // This check prevents a crash if the element doesn't exist in the template.
@@ -269,6 +360,540 @@ document.addEventListener('DOMContentLoaded', () => {
     if (externalProtocolSelect) externalProtocolSelect.value = config.proxyProtocol || 'SOCKS5';
     if (externalHostInput) externalHostInput.value = config.proxyHost || '127.0.0.1';
     if (externalPortInput) externalPortInput.value = config.proxyPort || '';
+
+    // Passwall2 fields
+    if (passwall2HostInput) passwall2HostInput.value = config.passwall2Host || '';
+    if (passwall2UserInput) passwall2UserInput.value = config.passwall2User || 'root';
+    if (passwall2PasswordInput) passwall2PasswordInput.value = config.passwall2Password || '';
+    if (passwall2KeyPathInput) passwall2KeyPathInput.value = config.passwall2KeyPath || '';
+    if (passwall2SocksPortInput) passwall2SocksPortInput.value = config.passwall2SocksPort || '1080';
+    if (passwall2HttpPortInput) passwall2HttpPortInput.value = config.passwall2HttpPort || '';
+    
+    // Passwall2 Management Functions
+    const getPasswall2Config = () => ({
+        id: configId,
+        passwall2Host: passwall2HostInput?.value || '',
+        passwall2User: passwall2UserInput?.value || 'root',
+        passwall2Password: passwall2PasswordInput?.value || '',
+        passwall2KeyPath: passwall2KeyPathInput?.value || '',
+        passwall2SocksPort: passwall2SocksPortInput?.value || '1080',
+        passwall2HttpPort: passwall2HttpPortInput?.value || ''
+    });
+    
+    // Refresh Passwall2 proxies list
+    if (passwall2RefreshBtn) {
+        passwall2RefreshBtn.addEventListener('click', async () => {
+            passwall2RefreshBtn.disabled = true;
+            passwall2RefreshBtn.textContent = '🔄 Loading...';
+            passwall2ProxiesList.innerHTML = '<div style="text-align: center; padding: 20px;">Connecting to router...</div>';
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.PASSWALL2,
+                    action: 'list_proxies',
+                    config: getPasswall2Config()
+                });
+                
+                if (response.success) {
+                    passwall2StatusText.textContent = response.service_status || 'Running';
+                    passwall2StatusText.style.color = response.service_status === 'running' ? '#4CAF50' : '#f44336';
+                    
+                    if (response.proxies && response.proxies.length > 0) {
+                        if (passwall2ProxyCount) {
+                            passwall2ProxyCount.textContent = `${response.proxies.length} ${response.proxies.length === 1 ? 'proxy' : 'proxies'}`;
+                        }
+                        
+                        passwall2ProxiesList.innerHTML = response.proxies.map(proxy => `
+                            <div class="passwall2-proxy-item" data-id="${proxy.id}" style="padding: 14px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s;" onmouseover="this.style.background='#f9f9f9'" onmouseout="this.style.background='white'">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: bold; margin-bottom: 6px; font-size: 1.05em;">
+                                        ${proxy.enabled ? '<span style="color: #4CAF50;">✅</span>' : '<span style="color: #999;">⭕</span>'} 
+                                        ${proxy.remarks || proxy.name || 'Unnamed Proxy'}
+                                        ${proxy.enabled ? '<span style="background: #4CAF50; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75em; margin-left: 8px;">ACTIVE</span>' : ''}
+                                    </div>
+                                    <div style="font-size: 0.9em; color: #666; display: flex; gap: 15px;">
+                                        <span><strong>Type:</strong> ${proxy.type}</span>
+                                        <span><strong>Server:</strong> ${proxy.address}:${proxy.port}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        // Add event listeners to toggle/delete buttons
+                        passwall2ProxiesList.querySelectorAll('.passwall2-toggle-proxy').forEach(btn => {
+                            btn.addEventListener('click', () => togglePasswall2Proxy(btn.dataset.id, btn.dataset.enabled === 'true'));
+                        });
+                        
+                        passwall2ProxiesList.querySelectorAll('.passwall2-delete-proxy').forEach(btn => {
+                            btn.addEventListener('click', () => deletePasswall2Proxy(btn.dataset.id));
+                        });
+                    } else {
+                        if (passwall2ProxyCount) passwall2ProxyCount.textContent = '0 proxies';
+                        passwall2ProxiesList.innerHTML = `
+                            <div style="text-align: center; padding: 40px; color: #999;">
+                                <div style="font-size: 56px; margin-bottom: 15px;">📭</div>
+                                <div style="font-size: 1.1em; margin-bottom: 8px;">No proxies configured on router</div>
+                                <div style="font-size: 0.9em;">Click "Add New Proxy" to add your first proxy to Passwall2</div>
+                            </div>`;
+                    }
+                } else {
+                    passwall2ProxiesList.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #f44336;">
+                            <div style="font-size: 56px; margin-bottom: 15px;">❌</div>
+                            <div style="font-weight: bold; margin-bottom: 8px;">Connection Failed</div>
+                            <div style="font-size: 0.9em;">${response.message || 'Could not connect to OpenWrt router'}</div>
+                        </div>`;
+                    passwall2StatusText.textContent = 'Error';
+                    passwall2StatusText.style.color = '#f44336';
+                }
+            } catch (error) {
+                passwall2ProxiesList.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #f44336;">
+                        <div style="font-size: 56px; margin-bottom: 15px;">⚠️</div>
+                        <div style="font-weight: bold; margin-bottom: 8px;">Error</div>
+                        <div style="font-size: 0.9em;">${error.message}</div>
+                    </div>`;
+            } finally {
+                passwall2RefreshBtn.disabled = false;
+                passwall2RefreshBtn.textContent = '🔄 Refresh List';
+            }
+        });
+    }
+    
+    // Toggle proxy enable/disable
+    const togglePasswall2Proxy = async (proxyId, currentlyEnabled) => {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                command: COMMANDS.PASSWALL2,
+                action: currentlyEnabled ? 'disable_proxy' : 'enable_proxy',
+                config: getPasswall2Config(),
+                proxyId: proxyId
+            });
+            
+            if (response.success) {
+                // Refresh the list
+                passwall2RefreshBtn.click();
+            } else {
+                alert(`Failed to ${currentlyEnabled ? 'disable' : 'enable'} proxy: ${response.message}`);
+            }
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        }
+    };
+    
+    // Delete proxy
+    const deletePasswall2Proxy = async (proxyId) => {
+        if (!confirm('Are you sure you want to delete this proxy from Passwall2?\n\nThis will permanently remove it from your router.')) return;
+        
+        try {
+            const response = await chrome.runtime.sendMessage({
+                command: COMMANDS.PASSWALL2,
+                action: 'delete_proxy',
+                config: getPasswall2Config(),
+                proxyId: proxyId
+            });
+            
+            if (response.success) {
+                // Refresh the list
+                passwall2RefreshBtn.click();
+            } else {
+                alert(`Failed to delete proxy: ${response.message}`);
+            }
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        }
+    };
+    
+    // Start/Stop/Restart Passwall2 service
+    if (passwall2StartServiceBtn) {
+        passwall2StartServiceBtn.addEventListener('click', async () => {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.PASSWALL2,
+                    action: 'start_service',
+                    config: getPasswall2Config()
+                });
+                
+                if (response.success) {
+                    passwall2StatusText.textContent = 'Running';
+                    passwall2StatusText.style.color = '#4CAF50';
+                    alert('✅ Passwall2 service started successfully');
+                } else {
+                    alert(`❌ Failed to start service: ${response.message}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+    }
+    
+    if (passwall2StopServiceBtn) {
+        passwall2StopServiceBtn.addEventListener('click', async () => {
+            if (!confirm('Stop Passwall2 service?\n\nThis will disconnect all active proxies on the router.')) return;
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.PASSWALL2,
+                    action: 'stop_service',
+                    config: getPasswall2Config()
+                });
+                
+                if (response.success) {
+                    passwall2StatusText.textContent = 'Stopped';
+                    passwall2StatusText.style.color = '#f44336';
+                    alert('✅ Passwall2 service stopped');
+                } else {
+                    alert(`❌ Failed to stop service: ${response.message}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+    }
+    
+    if (passwall2RestartServiceBtn) {
+        passwall2RestartServiceBtn.addEventListener('click', async () => {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.PASSWALL2,
+                    action: 'restart_service',
+                    config: getPasswall2Config()
+                });
+                
+                if (response.success) {
+                    passwall2StatusText.textContent = 'Restarting...';
+                    passwall2StatusText.style.color = '#FF9800';
+                    alert('✅ Passwall2 service restarted');
+                    setTimeout(() => passwall2RefreshBtn.click(), 2000);
+                } else {
+                    alert(`❌ Failed to restart service: ${response.message}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+    }
+    
+    // Add new proxy modal
+    if (passwall2AddProxyBtn) {
+        passwall2AddProxyBtn.addEventListener('click', () => {
+            passwall2AddModal.style.display = 'flex';
+        });
+    }
+    
+    if (passwall2CancelAddBtn) {
+        passwall2CancelAddBtn.addEventListener('click', () => {
+            passwall2AddModal.style.display = 'none';
+        });
+    }
+    
+    // Save new proxy
+    if (passwall2SaveProxyBtn) {
+        passwall2SaveProxyBtn.addEventListener('click', async () => {
+            const proxyData = {
+                type: passwall2AddModal.querySelector('.passwall2-proxy-type').value,
+                remarks: passwall2AddModal.querySelector('.passwall2-proxy-remarks').value,
+                address: passwall2AddModal.querySelector('.passwall2-proxy-address').value,
+                port: passwall2AddModal.querySelector('.passwall2-proxy-port').value,
+                method: passwall2AddModal.querySelector('.passwall2-proxy-method').value,
+                password: passwall2AddModal.querySelector('.passwall2-proxy-password').value,
+                url: passwall2AddModal.querySelector('.passwall2-proxy-url').value
+            };
+            
+            if (!proxyData.remarks && !proxyData.url) {
+                alert('⚠️ Please provide at least a name for the proxy');
+                return;
+            }
+            
+            if (!proxyData.url && (!proxyData.address || !proxyData.port)) {
+                alert('⚠️ Please either:\n• Paste a configuration URL, OR\n• Fill in Server Address and Port manually');
+                return;
+            }
+            
+            passwall2SaveProxyBtn.disabled = true;
+            passwall2SaveProxyBtn.textContent = '💾 Saving to router...';
+            
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.PASSWALL2,
+                    action: 'add_proxy',
+                    config: getPasswall2Config(),
+                    proxyData: proxyData
+                });
+                
+                if (response.success) {
+                    passwall2AddModal.style.display = 'none';
+                    // Clear form
+                    passwall2AddModal.querySelectorAll('input').forEach(input => input.value = '');
+                    // Refresh list
+                    passwall2RefreshBtn.click();
+                    alert('✅ Proxy added successfully to Passwall2!');
+                } else {
+                    alert(`❌ Failed to add proxy: ${response.message}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                passwall2SaveProxyBtn.disabled = false;
+                passwall2SaveProxyBtn.textContent = '💾 Save to Router';
+            }
+        });
+    }
+
+    // ProtonVPN fields
+    if (protonvpnUsernameInput) protonvpnUsernameInput.value = config.protonvpnUsername || '';
+    if (protonvpnPasswordInput) protonvpnPasswordInput.value = config.protonvpnPassword || '';
+    if (protonvpnProtocolSelect) protonvpnProtocolSelect.value = config.protonvpnProtocol || 'openvpn-tcp';
+    if (protonvpnStrategySelect) {
+        protonvpnStrategySelect.value = config.protonvpnStrategy || 'fastest';
+        // Toggle specific server input based on strategy
+        protonvpnStrategySelect.addEventListener('change', () => {
+            if (protonvpnSpecificServerGroup) {
+                protonvpnSpecificServerGroup.style.display = 
+                    protonvpnStrategySelect.value === 'specific' ? 'block' : 'none';
+            }
+            debouncedSave();
+        });
+        if (protonvpnSpecificServerGroup) {
+            protonvpnSpecificServerGroup.style.display = 
+                config.protonvpnStrategy === 'specific' ? 'block' : 'none';
+        }
+    }
+    if (protonvpnServerInput) protonvpnServerInput.value = config.protonvpnServer || '';
+    if (protonvpnFreeOnlyCheckbox) protonvpnFreeOnlyCheckbox.checked = config.protonvpnFreeOnly === true;
+    if (protonvpnUpdateIntervalSelect) protonvpnUpdateIntervalSelect.value = config.protonvpnUpdateInterval || 'daily';
+
+    // ProtonVPN discover button handler
+    if (protonvpnDiscoverButton) {
+        protonvpnDiscoverButton.addEventListener('click', async () => {
+            protonvpnDiscoverButton.disabled = true;
+            protonvpnDiscoverButton.textContent = '🔄 Discovering...';
+            protonvpnStatusDiv.style.display = 'block';
+            protonvpnStatusText.textContent = 'Scanning ProtonVPN servers for accessibility...';
+            protonvpnServersList.innerHTML = '';
+            
+            try {
+                // Send discovery request to background script
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.DISCOVER_PROTONVPN_SERVERS,
+                    configId: configId,
+                    freeOnly: protonvpnFreeOnlyCheckbox?.checked || false
+                });
+                
+                // Handle undefined or null response
+                if (!response) {
+                    throw new Error('No response from background script. Make sure the extension is properly loaded.');
+                }
+                
+                if (response.success && response.servers) {
+                    protonvpnStatusText.textContent = `Found ${response.servers.length} accessible servers - Click "Create Config" to add as OpenVPN proxy:`;
+                    protonvpnServersList.innerHTML = response.servers.map((s, index) => 
+                        `<div style="padding: 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                ${s.flag} ${s.country} ${s.name}${s.isFree ? ' [FREE]' : ''} - ${s.latency}ms (Ports: ${s.ports.join(', ')})
+                            </div>
+                            <button class="protonvpn-create-config-btn" data-server-index="${index}" 
+                                    style="padding: 5px 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                ➕ Create Config
+                            </button>
+                        </div>`
+                    ).join('');
+                    
+                    // Store servers temporarily for creating configs
+                    window.discoveredProtonVPNServers = response.servers;
+                    
+                    // Add click handlers for create config buttons
+                    document.querySelectorAll('.protonvpn-create-config-btn').forEach(btn => {
+                        btn.addEventListener('click', async (e) => {
+                            const serverIndex = parseInt(e.target.getAttribute('data-server-index'));
+                            const server = window.discoveredProtonVPNServers[serverIndex];
+                            await createProtonVPNConfig(server);
+                        });
+                    });
+                    
+                    debouncedSave();
+                } else {
+                    protonvpnStatusText.textContent = 'No accessible servers found. ' + (response.error || response.message || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('ProtonVPN discovery error:', error);
+                protonvpnStatusText.textContent = 'Discovery failed: ' + error.message;
+            } finally {
+                protonvpnDiscoverButton.disabled = false;
+                protonvpnDiscoverButton.textContent = '🔍 Discover Servers Now';
+            }
+        });
+    }
+
+    // ProtonVPN view servers button handler
+    if (protonvpnViewServersButton) {
+        protonvpnViewServersButton.addEventListener('click', async () => {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    command: COMMANDS.GET_PROTONVPN_SERVERS,
+                    configId: configId
+                });
+                
+                // Handle undefined or null response
+                if (!response) {
+                    throw new Error('No response from background script. Make sure the extension is properly loaded.');
+                }
+                
+                if (response.success && response.servers && response.servers.length > 0) {
+                    protonvpnStatusDiv.style.display = 'block';
+                    protonvpnStatusText.textContent = `${response.servers.length} cached servers (last updated: ${new Date(response.lastUpdate).toLocaleString()}):`;
+                    protonvpnServersList.innerHTML = response.servers.map(s => 
+                        `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+                            ${s.flag} ${s.country} ${s.name}${s.isFree ? ' [FREE]' : ''} - ${s.latency}ms
+                        </div>`
+                    ).join('');
+                } else {
+                    alert('No cached servers found. Click "Discover Servers Now" to scan for accessible servers.');
+                }
+            } catch (error) {
+                console.error('ProtonVPN view servers error:', error);
+                alert('Failed to load servers: ' + error.message);
+            }
+        });
+    }
+
+    /**
+     * Create a new OpenVPN configuration from a discovered ProtonVPN server
+     */
+    async function createProtonVPNConfig(server) {
+        try {
+            // Get ProtonVPN credentials from the current config card
+            const username = protonvpnUsernameInput?.value?.trim();
+            const password = protonvpnPasswordInput?.value?.trim();
+            
+            if (!username || !password) {
+                alert('Please enter your ProtonVPN username and password first.');
+                return;
+            }
+            
+            // Generate OpenVPN config content
+            const ovpnConfig = generateProtonVPNOpenVPNConfig(server);
+            
+            // Create a new configuration
+            const newConfig = {
+                id: generateUUID(),
+                name: `ProtonVPN ${server.country} ${server.name}${server.isFree ? ' [FREE]' : ''}`,
+                type: 'openvpn',
+                enabled: false,
+                ovpnUser: username,
+                ovpnPass: password,
+                metadata: {
+                    createdFrom: 'protonvpn-discovery',
+                    server: server,
+                    createdAt: new Date().toISOString()
+                }
+            };
+            
+            // Store the large ovpn file content separately in local storage to avoid quota issues
+            // chrome.storage.sync has 8KB/item limit, chrome.storage.local has 10MB total limit
+            const ovpnContentKey = `ovpn_content_${newConfig.id}`;
+            await chrome.storage.local.set({ [ovpnContentKey]: ovpnConfig });
+            
+            // Add reference to the stored content
+            newConfig.ovpnFileContentRef = ovpnContentKey;
+            
+            // Get current configurations
+            const result = await chrome.storage.sync.get(STORAGE_KEYS.CORE_CONFIGURATIONS);
+            const coreConfigs = result[STORAGE_KEYS.CORE_CONFIGURATIONS] || [];
+            
+            // Add new configuration
+            coreConfigs.push(newConfig);
+            
+            // Save to storage
+            await chrome.storage.sync.set({ [STORAGE_KEYS.CORE_CONFIGURATIONS]: coreConfigs });
+            
+            // Show success message
+            alert(`✅ Created new OpenVPN configuration: "${newConfig.name}"\n\nYou can now find it in your configurations list and enable it to connect.`);
+            
+            // Reload the page to show the new config
+            window.location.reload();
+            
+        } catch (error) {
+            console.error('Error creating ProtonVPN config:', error);
+            alert('Failed to create configuration: ' + error.message);
+        }
+    }
+    
+    /**
+     * Generate OpenVPN configuration content for ProtonVPN server
+     */
+    function generateProtonVPNOpenVPNConfig(server) {
+        const port = 443; // Use port 443 for censorship bypass
+        const proto = 'tcp';
+        
+        // Minimal config with embedded CA certificate
+        // Note: ProtonVPN requires auth-user-pass for OpenVPN/IKEv2 credentials
+        return `client
+dev tun
+proto ${proto}
+remote ${server.ip} ${port}
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+cipher AES-256-GCM
+auth SHA512
+tls-version-min 1.2
+verb 3
+pull-filter ignore "ifconfig-ipv6"
+pull-filter ignore "route-ipv6"
+remote-cert-tls server
+auth-user-pass
+script-security 2
+dhcp-option DNS 10.2.0.1
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIFszCCA5ugAwIBAgIBATANBgkqhkiG9w0BAQ0FADBnMQswCQYDVQQGEwJDSDEP
+MA0GA1UECAwGR2VuZXZhMRAwDgYDVQQHDAdWZXJuaWVyMRYwFAYDVQQKDA1Qcm90
+b25WUE4gQUcxHTAbBgNVBAMMFFByb3RvblZQTiBSb290IENBIDIwHhcNMjExMDE4
+MTIxNzM2WhcNMzExMDE4MTIxNzM2WjBnMQswCQYDVQQGEwJDSDEPMA0GA1UECAwG
+R2VuZXZhMRAwDgYDVQQHDAdWZXJuaWVyMRYwFAYDVQQKDA1Qcm90b25WUE4gQUcx
+HTAbBgNVBAMMFFByb3RvblZQTiBSb290IENBIDIwggIiMA0GCSqGSIb3DQEBAQUA
+A4ICDwAwggIKAoICAQDDNwG6FLN1bKLXDVXp4fzKmAF2KLdhGh7CWIIbTaD3eXzH
+WLKo6FKYVXlLiXu2wVxuHCVwcaWiWiRV48pI6YbXzWqA6k1jnZoUGMywmIPJ5OsP
+KMvBEm82BaY9y3y4cEJhH8OQYkGJFUGVzWvI+JGtH1LdNElPCvhBr8KeI4RqCcBy
+oFqBNZkBIgzhVcJFgNcTpDrXCYlO7cRKLxqFo0YvBLLaVBxrLHgMqJGvON9xNvgO
+MLNL+PQKPGp3SBNrXvGMd7MF9GKTfM3IfQVz3Vc9rLiRWqpJVJTCrCa4FHwU9z0u
+fqLJxGz3aA2pqMN3tIVvMJWQ5p9qMYmvYdGr0k8rqCwlXQsUOiEkVKPwYmPgVjmD
+sJ8L8r0GQxNrIhP6ecLHHOZNQ9Mm2jJGNvBCPD/qfq8TfPXDLNHWhRPWYpNPV8xR
+sQA8HcFR7Lx+OPBNiZKPJPp7e1B7HKPqQ8VbSHT9Fc5iBT8ZNMM7JKkV8lSF/Hy2
+t0w3QNXXm8DXRDmBDqJSwULkTHLjqLnqF2nVGhDtJQWW7hDQF+Qhx5Q8TJl8Ujkd
+LbJdqGy3SkDiJ8c2pqDLTpqCqaLZpTaVE6NBSjDgALQPkCPMvR3s9eAQJLdH6BWN
+UqWV1kjRCqKHWK0pPBEPBNPhZJ7gvXWP0C1qXNKnXqaivYFNZ1rD1fhkCxqQHwID
+AQABo2MwYTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4E
+FgQU7B/fKfvQNHMpB8wGQ4GwA1Uc33owHwYDVR0jBBgwFoAU7B/fKfvQNHMpB8wG
+Q4GwA1Uc33owDQYJKoZIhvcNAQENBQADggIBABqG6jP5cJNFkLaFNJPy1s5JqSEG
+1kzPhYRKROCvRLYVFPTNhcW3sUbMQOjTRRSjQG9LCKSFCmEeZcxVEtMIspVrjmMk
+GDhJoL2kMPcGZlGPJCUa3rBjGYv4gPYPu6y1rxJIaJhh7hxUL/H4eUMBJYR0BpJd
+7Hq8xpNHqLLw8xfDMEgdnlRDQBJGgN1NvKKyxTr3S5qHG+GJMJ/RKlCLPklHDZ/i
+7WpDdCLJPi9mPGvXrQn8pqDWcW/pVqJp1WmXFHIQBXPVzCbHvE9dJyQcFHDlmBJb
+S5Yh0mJRfVqJmNTKH7hElOlF6jXlDHJW8MzKTKzXALbhJlF9VEkqz0Nh1mfEuKvC
+0VnqkPXKBSL7pxQpPpGNp5x7K0MrLdCkqHfRYmKmHmTmWPYqFqmJ1dI0xYB8Ywhs
+pYnLYH9Kpci+pYGPGpOFdJaFcTPZ8EeZmEF8gccU+HMWM3M6nF3g8UpJV2nKAQ2P
+LjgWLjUlNvHXD6CUJ2j6z5R8xQVJN7vGGJqPjJmqYBNNLMw5L8SfJ7n0QnK9dRxr
+dHWc3GPUIJ2xKjQN2aLaLdIEPGPVQvO3A6DuOL3MQfUTGZM2LTTdBMJTWNXFQvJP
+9O6RBpQCPPFPvJdLZcLFQvJLJQcJRZLFGJVGSUXfShm7nW3FNqFYQvqTwNO2lhqX
+YFqzPcAaAH9qkYB3
+-----END CERTIFICATE-----
+</ca>
+`;
+    }
+    
+    /**
+     * Generate a UUID for new configurations
+     */
+    function generateUUID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
 
 
     // Listen for changes to the enabled state to update the PAC script preview
@@ -300,7 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    duplicateButton.addEventListener('click', () => {
+    duplicateButton.addEventListener('click', async () => {
       const newConfig = {
         id: crypto.randomUUID(),
         name: `${nameInput.value.trim()} (copy)`,
@@ -314,25 +939,59 @@ document.addEventListener('DOMContentLoaded', () => {
         v2rayUrl: v2rayUrlInput.value.trim(),
         portForwards: (config.portForwards || []).map(p => ({...p})), // Deep copy
       };
-      const newElement = createConfigElement(newConfig, null, true);
+      const newElement = await createConfigElement(newConfig, null, true);
       configCard.after(newElement);
       updateAllProxyRuleDropdownsAndPreview();
       debouncedSave();
     });
 
-    // OVPN File handling
+    // OVPN File handling - Upload/Replace
     ovpnFileUpload.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
             ovpnFileContent.value = e.target.result;
-            ovpnFileStatus.textContent = `File selected: ${file.name}`;
+            ovpnFileStatus.textContent = `File replaced: ${file.name}`;
             checkOvpnForAuth(e.target.result);
             debouncedSave();
         };
         reader.readAsText(file);
     });
+
+    // OVPN File Download button
+    const ovpnDownloadButton = openvpnSettings.querySelector('.ovpn-download-button');
+    if (ovpnDownloadButton) {
+        ovpnDownloadButton.addEventListener('click', () => {
+            const content = ovpnFileContent.value;
+            if (!content || !content.trim()) {
+                alert('No OpenVPN configuration to download. Please upload a .ovpn file first.');
+                return;
+            }
+            
+            // Create filename from config name or use default
+            const configName = nameInput.value.trim() || 'config';
+            const filename = `${configName.replace(/[^a-z0-9_-]/gi, '_')}.ovpn`;
+            
+            // Create blob and download
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Show feedback
+            const originalText = ovpnDownloadButton.textContent;
+            ovpnDownloadButton.textContent = '✓ Downloaded';
+            setTimeout(() => {
+                ovpnDownloadButton.textContent = originalText;
+            }, 2000);
+        });
+    }
 
 
     nameInput.addEventListener('input', () => {
@@ -342,7 +1001,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     // Add debounced save to all other inputs
     // Using .filter(Boolean) safely removes any null elements from the list before adding listeners.
-    [sshUserInput, sshHostInput, sshRemoteCommandInput, ovpnProfileNameInput, ovpnAuthUser, ovpnAuthPass, v2rayUrlInput, externalProtocolSelect, externalHostInput, externalPortInput].filter(Boolean).forEach(input => {
+    [
+        sshUserInput, sshHostInput, sshRemoteCommandInput, 
+        ovpnProfileNameInput, ovpnAuthUser, ovpnAuthPass, ovpnKeyPassphrase, 
+        v2rayUrlInput, 
+        externalProtocolSelect, externalHostInput, externalPortInput,
+        passwall2HostInput, passwall2UserInput, passwall2PasswordInput, passwall2KeyPathInput, passwall2SocksPortInput, passwall2HttpPortInput,
+        protonvpnUsernameInput, protonvpnPasswordInput, protonvpnProtocolSelect, protonvpnStrategySelect, protonvpnServerInput, protonvpnFreeOnlyCheckbox, protonvpnUpdateIntervalSelect
+    ].filter(Boolean).forEach(input => {
         input.addEventListener('input', debouncedSave);
     });
     const parseAndDisplayV2RayUrl = (url) => {
@@ -393,6 +1059,37 @@ document.addEventListener('DOMContentLoaded', () => {
     connectButton.addEventListener('click', () => {
         const type = typeSelect.value;
         if (configLogPollIntervals[configId]) clearInterval(configLogPollIntervals[configId]);
+
+        // For Passwall2, auto-connect to router and load proxies
+        if (type === 'passwall2') {
+            const configPayload = getConfigPayloadFromElement(configCard);
+            statusMessage.textContent = `Connecting to Passwall2 router "${configPayload.name}"...`;
+            statusMessage.className = 'info';
+            connectButton.disabled = true;
+            
+            // Expand the details panel to show Passwall2 management
+            details.style.display = 'block';
+            
+            chrome.runtime.sendMessage({ command: COMMANDS.START_TUNNEL, config: configPayload }, async (response) => {
+                if (response && response.success) {
+                    statusMessage.textContent = `Connected to Passwall2 router. Loading proxies...`;
+                    statusMessage.className = 'success';
+                    
+                    // Automatically trigger the refresh button to load proxies from router
+                    if (passwall2RefreshBtn) {
+                        setTimeout(() => {
+                            passwall2RefreshBtn.click();
+                        }, 500); // Small delay to ensure connection is fully established
+                    }
+                } else if (response && !response.success) {
+                    statusMessage.textContent = `Failed to connect: ${response.message}`;
+                    statusMessage.className = 'error';
+                    connectButton.disabled = false;
+                }
+                // On success, the background script will trigger a full status update
+            });
+            return;
+        }
 
         // For external proxies, there's no log to poll. Just send the command.
         if (type === 'external') {
@@ -611,16 +1308,44 @@ document.addEventListener('DOMContentLoaded', () => {
               ovpnFileContent: details.querySelector('.ovpn-file-content')?.value || '',
               ovpnUser: details.querySelector('.ovpn-auth-user')?.value || '',
               ovpnPass: details.querySelector('.ovpn-auth-pass')?.value || '',
+              ovpnKeyPassphrase: details.querySelector('.ovpn-key-passphrase')?.value || '',
           });
       } else if (type === 'v2ray') {
           Object.assign(config, {
               v2rayUrl: details.querySelector('.config-input-v2ray-url')?.value.trim() || '',
+          });
+      } else if (type === 'openwrt_passwall2') {
+          Object.assign(config, {
+              openwrtMode: details.querySelector('.config-input-openwrt-mode')?.value || 'backend',
+              openwrtHost: details.querySelector('.config-input-openwrt-host')?.value.trim() || '',
+              openwrtUser: details.querySelector('.config-input-openwrt-user')?.value.trim() || 'root',
+              sshKeyPath: details.querySelector('.config-input-ssh-key-path')?.value.trim() || '',
+              openwrtSocksPort: details.querySelector('.config-input-openwrt-socks-port')?.value || '1080',
+          });
+      } else if (type === 'passwall2') {
+          Object.assign(config, {
+              passwall2Host: details.querySelector('.config-input-passwall2-host')?.value.trim() || '',
+              passwall2User: details.querySelector('.config-input-passwall2-user')?.value.trim() || 'root',
+              passwall2Password: details.querySelector('.config-input-passwall2-password')?.value || '',
+              passwall2KeyPath: details.querySelector('.config-input-passwall2-key-path')?.value.trim() || '',
+              passwall2SocksPort: details.querySelector('.config-input-passwall2-socks-port')?.value || '1080',
+              passwall2HttpPort: details.querySelector('.config-input-passwall2-http-port')?.value.trim() || '',
           });
       } else if (type === 'external') {
            Object.assign(config, {
               proxyProtocol: details.querySelector('.config-input-external-protocol')?.value || 'SOCKS5',
               proxyHost: details.querySelector('.config-input-external-host')?.value.trim() || '',
               proxyPort: details.querySelector('.config-input-external-port')?.value.trim() || '',
+          });
+      } else if (type === 'protonvpn') {
+          Object.assign(config, {
+              protonvpnUsername: details.querySelector('.config-input-protonvpn-username')?.value.trim() || '',
+              protonvpnPassword: details.querySelector('.config-input-protonvpn-password')?.value || '',
+              protonvpnProtocol: details.querySelector('.config-input-protonvpn-protocol')?.value || 'openvpn-tcp',
+              protonvpnStrategy: details.querySelector('.config-input-protonvpn-strategy')?.value || 'fastest',
+              protonvpnServer: details.querySelector('.config-input-protonvpn-server')?.value.trim() || '',
+              protonvpnFreeOnly: details.querySelector('.config-input-protonvpn-free-only')?.checked || false,
+              protonvpnUpdateInterval: details.querySelector('.config-input-protonvpn-update-interval')?.value || 'daily',
           });
       }
       config.httpProxyEnabled = httpProxyEnabledCheckbox.checked;
@@ -881,19 +1606,25 @@ function FindProxyForURL(url, host) {
             pacScript += `    const ${proxyVar} = "${pacProtocol} ${host}:${port}"; // For "${configName}"\n`;
             proxyDefinitions.push({ id: configId, variable: proxyVar });
         }
+      } else if (configType === 'v2ray') {
+        // V2Ray uses a hardcoded SOCKS5 port 10808
+        pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:10808"; // For "${configName}"\n`;
+        proxyDefinitions.push({ id: configId, variable: proxyVar });
       } else {
-        // This handles ssh, openvpn, v2ray which rely on port forwarding rules
+        // This handles ssh, openvpn which rely on port forwarding rules
         const portForwardingList = item.querySelector('.port-forwarding-rules-list');
-        portForwardingList.querySelectorAll('.rule-item').forEach(ruleEl => {
-            const type = ruleEl.querySelector('.rule-type').value;
-            if (type === 'D') {
-                const port = ruleEl.querySelector('.rule-local-port').value;
-                if (port) {
-                    pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${port}"; // For "${configName}"\n`;
-                    proxyDefinitions.push({ id: configId, variable: proxyVar });
-                }
-            }
-        });
+        if (portForwardingList) {
+          portForwardingList.querySelectorAll('.rule-item').forEach(ruleEl => {
+              const type = ruleEl.querySelector('.rule-type').value;
+              if (type === 'D') {
+                  const port = ruleEl.querySelector('.rule-local-port').value;
+                  if (port) {
+                      pacScript += `    const ${proxyVar} = "SOCKS5 127.0.0.1:${port}"; // For "${configName}"\n`;
+                      proxyDefinitions.push({ id: configId, variable: proxyVar });
+                  }
+              }
+          });
+        }
       }
     });
 
@@ -1211,9 +1942,39 @@ function FindProxyForURL(url, host) {
       }
   }
 
+  // --- Router Settings Validation ---
+  function checkRouterSettingsAndUpdateUI() {
+    const hasRouterIp = routerIpInput && routerIpInput.value.trim() !== '';
+    const hasRouterUser = routerSshUserInput && routerSshUserInput.value.trim() !== '';
+    
+    // Show Passwall2 radio option if IP and username are filled
+    // Authentication (password or key) is optional - user can add it later or test will prompt
+    const isRouterConfigured = hasRouterIp && hasRouterUser;
+    
+    if (proxyModePasswall2Label) {
+      if (isRouterConfigured) {
+        proxyModePasswall2Label.style.display = 'inline-block';
+      } else {
+        proxyModePasswall2Label.style.display = 'none';
+        // If Passwall2 mode was selected but router is not configured anymore, switch back to local
+        const proxyModeLocalRadio = document.getElementById('proxy-mode-local');
+        const proxyModePasswall2Radio = document.getElementById('proxy-mode-passwall2');
+        if (proxyModePasswall2Radio && proxyModePasswall2Radio.checked) {
+          if (proxyModeLocalRadio) {
+            proxyModeLocalRadio.checked = true;
+            // Trigger the change event to update the UI
+            proxyModeLocalRadio.dispatchEvent(new Event('change'));
+          }
+        }
+      }
+    }
+    
+    return isRouterConfigured;
+  }
+
   // --- Settings Load/Save ---
 
-  function loadSettings() {
+  async function loadSettings() {
     // Define the keys we expect to find in sync storage. This is more robust
     // than using Object.values(STORAGE_KEYS), which might contain local keys or
     const syncKeysToGet = [
@@ -1233,12 +1994,20 @@ function FindProxyForURL(url, host) {
       // New keys for HTTP proxy
       STORAGE_KEYS.HTTP_PROXY_ENABLED,
       STORAGE_KEYS.HTTP_PROXY_PORT,
+      // Router settings
+      STORAGE_KEYS.ROUTER_IP,
+      STORAGE_KEYS.ROUTER_SSH_USER,
+      STORAGE_KEYS.ROUTER_SSH_PORT,
+      STORAGE_KEYS.ROUTER_SSH_PASSWORD,
+      STORAGE_KEYS.ROUTER_SSH_KEY_PATH,
       // Legacy keys for migration
       STORAGE_KEYS.PING_HOST,
       STORAGE_KEYS.WEB_CHECK_URL,
       STORAGE_KEYS.AUTO_RECONNECT_ENABLED,
       STORAGE_KEYS.LEGACY_PORT_FORWARDS,
       STORAGE_KEYS.WIFI_SSIDS,
+      'proxyMode', // Proxy mode preference (local vs passwall2)
+      STORAGE_KEYS.AUTO_SELECT_BEST_PROXY,
     ];
 
     chrome.storage.sync.get(syncKeysToGet, (result) => {
@@ -1247,6 +2016,19 @@ function FindProxyForURL(url, host) {
         statusMessage.textContent = 'Error loading settings. Check the extension console for details.';
         statusMessage.className = 'error';
         return;
+      }
+
+      // Load proxy mode preference (default: local)
+      const savedProxyMode = result.proxyMode || 'local';
+      const proxyModeLocalRadio = document.getElementById('proxy-mode-local');
+      const proxyModePasswall2Radio = document.getElementById('proxy-mode-passwall2');
+      
+      if (proxyModeLocalRadio && proxyModePasswall2Radio) {
+        if (savedProxyMode === 'passwall2') {
+          proxyModePasswall2Radio.checked = true;
+        } else {
+          proxyModeLocalRadio.checked = true;
+        }
       }
 
       let coreConfigs = result[STORAGE_KEYS.CORE_CONFIGURATIONS];
@@ -1311,6 +2093,7 @@ function FindProxyForURL(url, host) {
       pingHostInput.value = result[STORAGE_KEYS.PING_HOST] || 'youtube.com';
       webCheckUrlInput.value = result[STORAGE_KEYS.WEB_CHECK_URL] || 'https://gemini.google.com/app';
       autoReconnectCheckbox.checked = result[STORAGE_KEYS.AUTO_RECONNECT_ENABLED] !== false; // Default to true
+      autoSelectBestProxyCheckbox.checked = result[STORAGE_KEYS.AUTO_SELECT_BEST_PROXY] === true; // Default to false
 
       wifiListContainer.innerHTML = ''; // Clear existing Wi-Fi networks
       const wifiSsids = result[STORAGE_KEYS.WIFI_SSIDS] || [];
@@ -1350,19 +2133,44 @@ function FindProxyForURL(url, host) {
           debouncedSave();
       });
 
+      // --- Populate Router Settings ---
+      if (routerIpInput) routerIpInput.value = result[STORAGE_KEYS.ROUTER_IP] || '';
+      if (routerSshUserInput) routerSshUserInput.value = result[STORAGE_KEYS.ROUTER_SSH_USER] || 'root';
+      if (routerSshPortInput) routerSshPortInput.value = result[STORAGE_KEYS.ROUTER_SSH_PORT] || '22';
+      if (routerSshPasswordInput) routerSshPasswordInput.value = result[STORAGE_KEYS.ROUTER_SSH_PASSWORD] || '';
+      if (routerSshKeyPathInput) routerSshKeyPathInput.value = result[STORAGE_KEYS.ROUTER_SSH_KEY_PATH] || '';
+
       // --- Populate Core Configurations UI ---
       coreConfigListContainer.innerHTML = ''; // Clear existing
       coreConfigsForSelect = []; // Reset cache
-      if (coreConfigs && coreConfigs.length > 0) {
-        coreConfigs.forEach(config => {
-          // Cache for dropdowns in other sections
-          coreConfigsForSelect.push({ id: config.id, name: config.name });
-          const el = createConfigElement(config, null);
-          coreConfigListContainer.appendChild(el);
-        });
-      } else {
-        coreConfigListContainer.appendChild(createConfigElement({}, null, true)); // Add a blank one for new users, in edit mode
-      }
+      
+      // Use async IIFE to load configs with async createConfigElement
+      (async () => {
+        if (coreConfigs && coreConfigs.length > 0) {
+          for (const config of coreConfigs) {
+            // Cache for dropdowns in other sections
+            coreConfigsForSelect.push({ id: config.id, name: config.name });
+            const el = await createConfigElement(config, null);
+            coreConfigListContainer.appendChild(el);
+          }
+        } else {
+          const el = await createConfigElement({}, null, true);
+          coreConfigListContainer.appendChild(el); // Add a blank one for new users, in edit mode
+        }
+        
+        // Apply proxy mode filter after configs are loaded
+        window.filterConfigsByProxyMode(savedProxyMode);
+        
+        // If Passwall2 mode is active, load proxies from router
+        if (savedProxyMode === 'passwall2') {
+          setTimeout(() => {
+            const passwall2RefreshBtn = document.querySelector('.passwall2-refresh-btn');
+            if (passwall2RefreshBtn) {
+              passwall2RefreshBtn.click();
+            }
+          }, 500); // Small delay to ensure UI is ready
+        }
+      })();
 
       // --- Populate Incognito Proxy Dropdown ---
       incognitoProxySelect.innerHTML = '<option value="">-- Use Regular Proxy Settings --</option>'; // Clear and add default
@@ -1390,6 +2198,16 @@ function FindProxyForURL(url, host) {
 
       // Check and update UI based on incognito permissions
       checkAndSetIncognitoControls();
+      
+      // Check router settings and update Passwall2 radio button visibility
+      checkRouterSettingsAndUpdateUI();
+
+      // Request current latency measurements from background script
+      chrome.runtime.sendMessage({ command: COMMANDS.GET_LATENCIES }, (response) => {
+        if (response && response.latencies) {
+          updateLatencyDisplay(response.latencies);
+        }
+      });
     });
 
     // Load and display database statuses from local storage
@@ -1515,6 +2333,15 @@ function FindProxyForURL(url, host) {
         } else if (!url.startsWith('vless://')) {
             showError(v2rayUrlInput, 'URL must start with vless://');
         }
+      } else if (type === 'protonvpn') {
+        const protonvpnUsernameInput = item.querySelector('.config-input-protonvpn-username');
+        const protonvpnPasswordInput = item.querySelector('.config-input-protonvpn-password');
+        if (!protonvpnUsernameInput?.value.trim()) {
+            showError(protonvpnUsernameInput, 'ProtonVPN username is required.');
+        }
+        if (!protonvpnPasswordInput?.value) {
+            showError(protonvpnPasswordInput, 'ProtonVPN password is required.');
+        }
       }
     });
 
@@ -1574,7 +2401,6 @@ function FindProxyForURL(url, host) {
     const settingsToStore = JSON.parse(JSON.stringify(coreConfigs));
     settingsToStore.forEach(config => {
         if (config.type === 'openvpn') {
-            delete config.ovpnUser;
             delete config.ovpnPass;
         }
     });
@@ -1585,6 +2411,7 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrlInput.value,
       [STORAGE_KEYS.WIFI_SSIDS]: wifiSsids,
       [STORAGE_KEYS.AUTO_RECONNECT_ENABLED]: autoReconnectCheckbox.checked,
+      [STORAGE_KEYS.AUTO_SELECT_BEST_PROXY]: autoSelectBestProxyCheckbox.checked,
       [STORAGE_KEYS.PROXY_BYPASS_RULES]: proxyBypassRules,
       [STORAGE_KEYS.INCOGNITO_PROXY_CONFIG_ID]: incognitoProxySelect.value,
       [STORAGE_KEYS.WEBRTC_IP_HANDLING_POLICY]: webRtcPolicyToggle.checked ? 'disable_non_proxied_udp' : 'default',
@@ -1598,6 +2425,12 @@ function FindProxyForURL(url, host) {
       [STORAGE_KEYS.DOCKER_AUTH_CHECK_ENABLED]: dockerAuthCheckEnabledCheckbox.checked,
       [STORAGE_KEYS.HTTP_PROXY_ENABLED]: httpProxyEnabledCheckbox.checked,
       [STORAGE_KEYS.HTTP_PROXY_PORT]: parseInt(httpProxyPortInput.value, 10) || 8888,
+      // Router settings
+      [STORAGE_KEYS.ROUTER_IP]: routerIpInput?.value.trim() || '',
+      [STORAGE_KEYS.ROUTER_SSH_USER]: routerSshUserInput?.value.trim() || 'root',
+      [STORAGE_KEYS.ROUTER_SSH_PORT]: parseInt(routerSshPortInput?.value, 10) || 22,
+      [STORAGE_KEYS.ROUTER_SSH_PASSWORD]: routerSshPasswordInput?.value || '',
+      [STORAGE_KEYS.ROUTER_SSH_KEY_PATH]: routerSshKeyPathInput?.value.trim() || '',
     };
 
     // Replace coreConfigs with the sanitized version for storage.
@@ -1638,8 +2471,14 @@ function FindProxyForURL(url, host) {
 
 
   // --- Event Listeners ---
-  addConfigButton.addEventListener('click', () => {
-    const newEl = createConfigElement({}, null, true);
+  addConfigButton.addEventListener('click', async () => {
+    // Get current proxy mode
+    const proxyModePasswall2Radio = document.getElementById('proxy-mode-passwall2');
+    const isPasswall2Mode = proxyModePasswall2Radio && proxyModePasswall2Radio.checked;
+    
+    // Create config with appropriate type based on mode
+    const newConfig = isPasswall2Mode ? { type: 'passwall2' } : {};
+    const newEl = await createConfigElement(newConfig, null, true);
     coreConfigListContainer.appendChild(newEl);
     updateAllProxyRuleDropdownsAndPreview();
     debouncedSave();
@@ -1899,6 +2738,7 @@ function FindProxyForURL(url, host) {
   pingHostInput.addEventListener('input', () => debouncedSave());
   webCheckUrlInput.addEventListener('input', () => debouncedSave());
   autoReconnectCheckbox.addEventListener('change', () => debouncedSave());
+  autoSelectBestProxyCheckbox.addEventListener('change', () => debouncedSave());
   aiApiKeyInput.addEventListener('input', () => debouncedSave());
   aiModelInput.addEventListener('input', () => debouncedSave());
   applySystemProxyCheckbox.addEventListener('change', () => {
@@ -1914,6 +2754,82 @@ function FindProxyForURL(url, host) {
   httpProxyPortInput.addEventListener('input', () => debouncedSave());
   incognitoProxySelect.addEventListener('change', () => debouncedSave());
   webRtcPolicyToggle.addEventListener('change', () => debouncedSave());
+  
+  // Router settings event listeners - check and update UI when settings change
+  if (routerIpInput) routerIpInput.addEventListener('input', () => { 
+    checkRouterSettingsAndUpdateUI(); 
+    debouncedSave(); 
+  });
+  if (routerSshUserInput) routerSshUserInput.addEventListener('input', () => { 
+    checkRouterSettingsAndUpdateUI(); 
+    debouncedSave(); 
+  });
+  if (routerSshPortInput) routerSshPortInput.addEventListener('input', () => debouncedSave());
+  if (routerSshPasswordInput) routerSshPasswordInput.addEventListener('input', () => { 
+    checkRouterSettingsAndUpdateUI(); 
+    debouncedSave(); 
+  });
+  if (routerSshKeyPathInput) routerSshKeyPathInput.addEventListener('input', () => { 
+    checkRouterSettingsAndUpdateUI(); 
+    debouncedSave(); 
+  });
+  
+  // Test router connection button
+  if (testRouterConnectionBtn) {
+    testRouterConnectionBtn.addEventListener('click', async () => {
+      if (!routerIpInput || !routerIpInput.value.trim()) {
+        routerTestStatus.textContent = '❌ Please enter router IP address';
+        routerTestStatus.style.color = '#f44336';
+        return;
+      }
+      
+      if (!routerSshUserInput || !routerSshUserInput.value.trim()) {
+        routerTestStatus.textContent = '❌ Please enter SSH username';
+        routerTestStatus.style.color = '#f44336';
+        return;
+      }
+      
+      // Note: Authentication (password or key) is optional - SSH might work with default keys
+      // or the user might have already set up key-based auth
+      
+      testRouterConnectionBtn.disabled = true;
+      testRouterConnectionBtn.textContent = '🔄 Testing...';
+      routerTestStatus.textContent = 'Testing connection...';
+      routerTestStatus.style.color = '#2196F3';
+      
+      const routerConfig = {
+        ip: routerIpInput.value.trim(),
+        user: routerSshUserInput.value.trim(),
+        port: parseInt(routerSshPortInput?.value || '22', 10),
+        password: routerSshPasswordInput?.value || '',
+        keyPath: routerSshKeyPathInput?.value.trim() || '',
+      };
+      
+      chrome.runtime.sendMessage(
+        { command: COMMANDS.TEST_ROUTER_CONNECTION, config: routerConfig },
+        (response) => {
+          testRouterConnectionBtn.disabled = false;
+          testRouterConnectionBtn.textContent = '🔌 Test Router Connection';
+          
+          if (chrome.runtime.lastError) {
+            routerTestStatus.textContent = `❌ Error: ${chrome.runtime.lastError.message}`;
+            routerTestStatus.style.color = '#f44336';
+            return;
+          }
+          
+          if (response && response.success) {
+            routerTestStatus.textContent = '✅ Connection successful! Passwall2 mode is ready.';
+            routerTestStatus.style.color = '#4CAF50';
+            checkRouterSettingsAndUpdateUI(); // Update UI to show Passwall2 option
+          } else {
+            routerTestStatus.textContent = `❌ ${response?.message || 'Connection failed'}`;
+            routerTestStatus.style.color = '#f44336';
+          }
+        }
+      );
+    });
+  }
+  
   updateDbButton.addEventListener('click', () => {
     updateDbButton.textContent = 'Updating...';
     updateDbButton.disabled = true;
@@ -2008,11 +2924,40 @@ function FindProxyForURL(url, host) {
     });
   }
 
+  // Update latency display for all config cards
+  function updateLatencyDisplay(latencies) {
+    if (!latencies || typeof latencies !== 'object') return;
+    
+    // Iterate through all config cards and update their latency displays
+    document.querySelectorAll('.config-card').forEach(card => {
+      const configId = card.dataset.id;
+      if (!configId || !latencies[configId]) return;
+      
+      const latencyData = latencies[configId];
+      const webLatencyValue = card.querySelector('.web-latency-value');
+      const tcpPingValue = card.querySelector('.tcp-ping-value');
+      
+      if (webLatencyValue && latencyData.web_latency !== undefined) {
+        webLatencyValue.textContent = latencyData.web_latency > 0 
+          ? `${latencyData.web_latency}ms` 
+          : '--';
+      }
+      
+      if (tcpPingValue && latencyData.tcp_latency !== undefined) {
+        tcpPingValue.textContent = latencyData.tcp_latency > 0 
+          ? `${latencyData.tcp_latency}ms` 
+          : '--';
+      }
+    });
+  }
+
   // Listen for real-time status updates from the background script
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.command === COMMANDS.STATUS_UPDATED) {
       updateConnectionUI(request.status);
       updateCharts(request.status);
+    } else if (request.command === COMMANDS.LATENCIES_UPDATED) {
+      updateLatencyDisplay(request.latencies);
     }
   });
 
@@ -2032,7 +2977,7 @@ function FindProxyForURL(url, host) {
     }
   });
 
-  function addPredefinedProfile(profileType) {
+  async function addPredefinedProfile(profileType) {
     let config = {};
     if (profileType === 'tor') {
       config = {
@@ -2064,7 +3009,7 @@ function FindProxyForURL(url, host) {
     }
 
     if (config.name) {
-      const newEl = createConfigElement(config, null, true);
+      const newEl = await createConfigElement(config, null, true);
       coreConfigListContainer.appendChild(newEl);
       updateAllProxyRuleDropdownsAndPreview();
       debouncedSave();
@@ -2191,9 +3136,183 @@ function FindProxyForURL(url, host) {
     reader.readAsText(file);
   });
 
+  // --- Global Passwall2 Management ---
+  function getGlobalRouterConfig() {
+    return {
+      passwall2Host: routerIpInput?.value.trim() || '',
+      passwall2User: routerSshUserInput?.value.trim() || 'root',
+      passwall2Port: routerSshPortInput?.value.trim() || '22',
+      passwall2Password: routerSshPasswordInput?.value.trim() || '',
+      passwall2KeyPath: routerSshKeyPathInput?.value.trim() || '',
+      passwall2SocksPort: '1080',
+      passwall2HttpPort: ''
+    };
+  }
+
+  function setupGlobalPasswall2Management() {
+    const globalRefreshButtons = document.querySelectorAll('.passwall2-refresh-btn');
+    const passwall2ProxiesList = document.querySelector('.passwall2-proxies-list');
+    const passwall2StatusText = document.querySelector('.passwall2-status-text');
+    const passwall2ProxyCount = document.querySelector('.passwall2-proxy-count');
+    
+    console.log('[Passwall2] Setup: Found', globalRefreshButtons.length, 'refresh buttons');
+    console.log('[Passwall2] Setup: ProxiesList element:', passwall2ProxiesList);
+    console.log('[Passwall2] Setup: StatusText element:', passwall2StatusText);
+    
+    globalRefreshButtons.forEach(refreshBtn => {
+      if (refreshBtn.dataset.listenerAdded) {
+        console.log('[Passwall2] Skipping button - already has listener');
+        return;
+      }
+      refreshBtn.dataset.listenerAdded = 'true';
+      console.log('[Passwall2] Adding listener to refresh button');
+      
+      refreshBtn.addEventListener('click', async () => {
+        console.log('[Passwall2] Refresh button clicked!');
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '🔄 Loading...';
+        if (passwall2ProxiesList) {
+          passwall2ProxiesList.innerHTML = '<div style="text-align: center; padding: 20px;">Connecting to router...</div>';
+        }
+        
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          console.log('[Passwall2] Router config:', routerConfig);
+          
+          console.log('[Passwall2] Sending message to background...');
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'list_proxies',
+            config: routerConfig
+          });
+          
+          console.log('[Passwall2] Response received:', response);
+          
+          console.log('[Passwall2] Checking response.success:', response.success);
+          console.log('[Passwall2] Checking response.proxies:', response.proxies);
+          
+          if (response.success && response.proxies && response.proxies.length > 0) {
+            console.log('[Passwall2] Success! Found', response.proxies.length, 'proxies');
+            if (passwall2StatusText) {
+              passwall2StatusText.textContent = response.service_status || 'Running';
+              passwall2StatusText.style.color = response.service_status === 'running' ? '#4CAF50' : '#f44336';
+            }
+            if (passwall2ProxyCount) {
+              passwall2ProxyCount.textContent = `${response.proxies.length} ${response.proxies.length === 1 ? 'proxy' : 'proxies'}`;
+            }
+            if (passwall2ProxiesList) {
+              console.log('[Passwall2] Rendering proxy list...');
+              passwall2ProxiesList.innerHTML = response.proxies.map(proxy => `
+                <div style="padding: 14px; border-bottom: 1px solid #eee;">
+                  <div style="font-weight: bold; margin-bottom: 6px;">
+                    ${proxy.enabled ? '✅' : '⭕'} ${proxy.remarks || proxy.name || 'Unnamed'}
+                  </div>
+                  <div style="font-size: 0.9em; color: #666;">
+                    <strong>Type:</strong> ${proxy.type} | <strong>Server:</strong> ${proxy.address}:${proxy.port}
+                  </div>
+                </div>
+              `).join('');
+            }
+          } else {
+            console.warn('[Passwall2] No proxies or error. Success:', response.success, 'Error:', response.error);
+            if (passwall2ProxiesList) {
+              const errorMsg = response.error ? `<div>Error: ${response.error}</div>` : '<div>No proxies found on router</div>';
+              passwall2ProxiesList.innerHTML = `<div style="text-align: center; padding: 40px; color: #999;">
+                <div style="font-size: 56px;">📭</div>
+                ${errorMsg}
+              </div>`;
+            }
+          }
+        } catch (error) {
+          console.error('[Passwall2] Exception caught:', error);
+          if (passwall2ProxiesList) {
+            passwall2ProxiesList.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;">
+              <div>Error: ${error.message}</div>
+            </div>`;
+          }
+        } finally {
+          console.log('[Passwall2] Finally block - restoring button');
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = '🔄 Refresh List';
+        }
+      });
+    });
+  }
+
+  // --- Proxy Mode Switching ---
+  window.filterConfigsByProxyMode = function(mode) {
+    const allConfigCards = document.querySelectorAll('.config-card');
+    
+    allConfigCards.forEach(card => {
+      const configId = card.dataset.id;
+      if (!configId) return;
+      
+      // Find the config type from the details
+      const typeSelect = card.querySelector('.config-type-select');
+      if (!typeSelect) return;
+      
+      const configType = typeSelect.value;
+      
+      if (mode === 'passwall2') {
+        // In Passwall2 mode, only show Passwall2 type configs
+        if (configType === 'passwall2') {
+          card.style.display = 'block';
+        } else {
+          card.style.display = 'none';
+        }
+      } else {
+        // In Local mode, show everything EXCEPT Passwall2
+        if (configType === 'passwall2') {
+          card.style.display = 'none';
+        } else {
+          card.style.display = 'block';
+        }
+      }
+    });
+    
+    // Update the "Add Configuration" button text based on mode
+    const addConfigButton = document.getElementById('add-config-button');
+    if (addConfigButton) {
+      if (mode === 'passwall2') {
+        addConfigButton.textContent = '+ Add Passwall2 Router Configuration';
+      } else {
+        addConfigButton.textContent = '+ Add Custom Configuration';
+      }
+    }
+  };
+  
+  // Add event listeners for proxy mode radio buttons
+  const proxyModeLocalRadio = document.getElementById('proxy-mode-local');
+  const proxyModePasswall2Radio = document.getElementById('proxy-mode-passwall2');
+  
+  if (proxyModeLocalRadio && proxyModePasswall2Radio) {
+    proxyModeLocalRadio.addEventListener('change', () => {
+      if (proxyModeLocalRadio.checked) {
+        window.filterConfigsByProxyMode('local');
+        chrome.storage.sync.set({ proxyMode: 'local' });
+      }
+    });
+    
+    proxyModePasswall2Radio.addEventListener('change', async () => {
+      if (proxyModePasswall2Radio.checked) {
+        // Switch to Passwall2 mode and load proxies from router
+        window.filterConfigsByProxyMode('passwall2');
+        chrome.storage.sync.set({ proxyMode: 'passwall2' });
+        
+        // Automatically load Passwall2 proxies from router
+        const passwall2RefreshBtn = document.querySelector('.passwall2-refresh-btn');
+        if (passwall2RefreshBtn) {
+          // Trigger a click on the refresh button to load proxies
+          passwall2RefreshBtn.click();
+        }
+      }
+    });
+  }
+
 
   // --- Initial Load ---
   loadSettings();
+  setupGlobalPasswall2Management();
   requestStatusUpdate();
   // Add visibility change listener for live log
   document.addEventListener('visibilitychange', handleVisibilityChange);

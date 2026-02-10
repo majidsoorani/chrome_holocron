@@ -12,6 +12,13 @@ export const COMMANDS = {
   MANUAL_DB_UPDATE: 'manualDbUpdate',
   APPLY_WEBRTC_POLICY: 'applyWebrtcPolicy',
   SET_SYSTEM_PROXY: 'setSystemProxy',
+  PASSWALL2: 'passwall2',
+  LATENCIES_UPDATED: 'latenciesUpdated',
+  GET_LATENCIES: 'getLatencies',
+  TEST_ROUTER_CONNECTION: 'testRouterConnection',
+  // ProtonVPN commands
+  DISCOVER_PROTONVPN_SERVERS: 'discoverProtonVPNServers',
+  GET_PROTONVPN_SERVERS: 'getProtonVPNServers',
 };
 
 export const STORAGE_KEYS = {
@@ -21,6 +28,7 @@ export const STORAGE_KEYS = {
   PING_HOST: 'pingHost',
   WEB_CHECK_URL: 'webCheckUrl',
   AUTO_RECONNECT_ENABLED: 'autoReconnectEnabled',
+  AUTO_SELECT_BEST_PROXY: 'autoSelectBestProxy',
   DOCKER_AUTH_CHECK_ENABLED: 'dockerAuthCheckEnabled',
 
   // --- Proxy & Routing (sync) ---
@@ -38,6 +46,13 @@ export const STORAGE_KEYS = {
   OPENROUTER_API_KEY: 'openrouterApiKey',
   OPENROUTER_MODEL: 'openrouterModel',
   OPENROUTER_SYSTEM_MESSAGE: 'openrouterSystemMessage',
+  
+  // --- Passwall2 Global Router Settings (sync) ---
+  ROUTER_IP: 'routerIp',
+  ROUTER_SSH_USER: 'routerSshUser',
+  ROUTER_SSH_PORT: 'routerSshPort',
+  ROUTER_SSH_PASSWORD: 'routerSshPassword',
+  ROUTER_SSH_KEY_PATH: 'routerSshKeyPath',
 
   // --- Runtime State (local) ---
   CURRENTLY_ACTIVE_CONFIG_ID: 'currentlyActiveConfigId',
@@ -48,6 +63,8 @@ export const STORAGE_KEYS = {
   GEOIP_LAST_UPDATE: 'geoipLastUpdate',
   GEOSITE_DOMAINS: 'geositeDomains',
   GEOSITE_LAST_UPDATE: 'geositeLastUpdate',
+  PROTONVPN_DISCOVERED_SERVERS: 'protonvpnDiscoveredServers',
+  PROTONVPN_LAST_DISCOVERY: 'protonvpnLastDiscovery',
 
   // --- Legacy Keys (for migration) ---
   LEGACY_SSH_USER: 'sshUser',

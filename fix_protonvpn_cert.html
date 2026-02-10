@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix ProtonVPN Certificate</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .danger {
+            background: #f44336;
+        }
+        .danger:hover {
+            background: #da190b;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .info {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix ProtonVPN Certificate in Chrome Storage</h1>
+        <p>This tool will update all ProtonVPN OpenVPN configurations with the correct certificate.</p>
+        
+        <button id="listBtn">1. List ProtonVPN Configs</button>
+        <button id="fixBtn" disabled>2. Fix All Certificates</button>
+        <button id="deleteBtn" class="danger" disabled>3. Delete All ProtonVPN Configs</button>
+        
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const output = document.getElementById('output');
+        const listBtn = document.getElementById('listBtn');
+        const fixBtn = document.getElementById('fixBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+
+        const CORRECT_CA_CERT = `-----BEGIN CERTIFICATE-----
+MIIFszCCA5ugAwIBAgIBATANBgkqhkiG9w0BAQ0FADBnMQswCQYDVQQGEwJDSDEP
+MA0GA1UECAwGR2VuZXZhMRAwDgYDVQQHDAdWZXJuaWVyMRYwFAYDVQQKDA1Qcm90
+b25WUE4gQUcxHTAbBgNVBAMMFFByb3RvblZQTiBSb290IENBIDIwHhcNMjExMDE4
+MTIxNzM2WhcNMzExMDE4MTIxNzM2WjBnMQswCQYDVQQGEwJDSDEPMA0GA1UECAwG
+R2VuZXZhMRAwDgYDVQQHDAdWZXJuaWVyMRYwFAYDVQQKDA1Qcm90b25WUE4gQUcx
+HTAbBgNVBAMMFFByb3RvblZQTiBSb290IENBIDIwggIiMA0GCSqGSIb3DQEBAQUA
+A4ICDwAwggIKAoICAQDDNwG6FLN1bKLXDVXp4fzKmAF2KLdhGh7CWIIbTaD3eXzH
+WLKo6FKYVXlLiXu2wVxuHCVwcaWiWiRV48pI6YbXzWqA6k1jnZoUGMywmIPJ5OsP
+KMvBEm82BaY9y3y4cEJhH8OQYkGJFUGVzWvI+JGtH1LdNElPCvhBr8KeI4RqCcBy
+oFqBNZkBIgzhVcJFgNcTpDrXCYlO7cRKLxqFo0YvBLLaVBxrLHgMqJGvON9xNvgO
+MLNL+PQKPGp3SBNrXvGMd7MF9GKTfM3IfQVz3Vc9rLiRWqpJVJTCrCa4FHwU9z0u
+fqLJxGz3aA2pqMN3tIVvMJWQ5p9qMYmvYdGr0k8rqCwlXQsUOiEkVKPwYmPgVjmD
+sJ8L8r0GQxNrIhP6ecLHHOZNQ9Mm2jJGNvBCPD/qfq8TfPXDLNHWhRPWYpNPV8xR
+sQA8HcFR7Lx+OPBNiZKPJPp7e1B7HKPqQ8VbSHT9Fc5iBT8ZNMM7JKkV8lSF/Hy2
+t0w3QNXXm8DXRDmBDqJSwULkTHLjqLnqF2nVGhDtJQWW7hDQF+Qhx5Q8TJl8Ujkd
+LbJdqGy3SkDiJ8c2pqDLTpqCqaLZpTaVE6NBSjDgALQPkCPMvR3s9eAQJLdH6BWN
+UqWV1kjRCqKHWK0pPBEPBNPhZJ7gvXWP0C1qXNKnXqaivYFNZ1rD1fhkCxqQHwID
+AQABo2MwYTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBBjAdBgNVHQ4E
+FgQU7B/fKfvQNHMpB8wGQ4GwA1Uc33owHwYDVR0jBBgwFoAU7B/fKfvQNHMpB8wG
+Q4GwA1Uc33owDQYJKoZIhvcNAQENBQADggIBABqG6jP5cJNFkLaFNJPy1s5JqSEG
+1kzPhYRKROCvRLYVFPTNhcW3sUbMQOjTRRSjQG9LCKSFCmEeZcxVEtMIspVrjmMk
+GDhJoL2kMPcGZlGPJCUa3rBjGYv4gPYPu6y1rxJIaJhh7hxUL/H4eUMBJYR0BpJd
+7Hq8xpNHqLLw8xfDMEgdnlRDQBJGgN1NvKKyxTr3S5qHG+GJMJ/RKlCLPklHDZ/i
+7WpDdCLJPi9mPGvXrQn8pqDWcW/pVqJp1WmXFHIQBXPVzCbHvE9dJyQcFHDlmBJb
+S5Yh0mJRfVqJmNTKH7hElOlF6jXlDHJW8MzKTKzXALbhJlF9VEkqz0Nh1mfEuKvC
+0VnqkPXKBSL7pxQpPpGNp5x7K0MrLdCkqHfRYmKmHmTmWPYqFqmJ1dI0xYB8Ywhs
+pYnLYH9Kpci+pYGPGpOFdJaFcTPZ8EeZmEF8gccU+HMWM3M6nF3g8UpJV2nKAQ2P
+LjgWLjUlNvHXD6CUJ2j6z5R8xQVJN7vGGJqPjJmqYBNNLMw5L8SfJ7n0QnK9dRxr
+dHWc3GPUIJ2xKjQN2aLaLdIEPGPVQvO3A6DuOL3MQfUTGZM2LTTdBMJTWNXFQvJP
+9O6RBpQCPPFPvJdLZcLFQvJLJQcJRZLFGJVGSUXfShm7nW3FNqFYQvqTwNO2lhqX
+YFqzPcAaAH9qkYB3
+-----END CERTIFICATE-----`;
+
+        let protonVPNConfigs = [];
+
+        function log(message, className = '') {
+            const line = document.createElement('div');
+            line.textContent = message;
+            if (className) line.className = className;
+            output.appendChild(line);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        listBtn.addEventListener('click', async () => {
+            output.innerHTML = '';
+            log('📋 Loading configurations from Chrome storage...', 'info');
+            
+            try {
+                const syncData = await chrome.storage.sync.get('coreConfigurations');
+                const configs = syncData.coreConfigurations || [];
+                
+                log(`Found ${configs.length} total configurations`, 'info');
+                
+                protonVPNConfigs = [];
+                
+                for (const config of configs) {
+                    if (config.type === 'openvpn' && config.name && config.name.includes('ProtonVPN')) {
+                        // Load ovpn content from local storage if stored separately
+                        let ovpnContent = config.ovpnFileContent || '';
+                        if (!ovpnContent && config.ovpnFileContentRef) {
+                            const localData = await chrome.storage.local.get(config.ovpnFileContentRef);
+                            ovpnContent = localData[config.ovpnFileContentRef] || '';
+                        }
+                        
+                        protonVPNConfigs.push({
+                            ...config,
+                            ovpnContent: ovpnContent
+                        });
+                        
+                        log(`\n✓ ProtonVPN Config: ${config.name}`, 'success');
+                        log(`  ID: ${config.id}`);
+                        log(`  Enabled: ${config.enabled}`);
+                        log(`  Has OVPN content: ${ovpnContent.length > 0 ? 'Yes (' + ovpnContent.length + ' bytes)' : 'No'}`);
+                        log(`  Stored in local: ${config.ovpnFileContentRef ? 'Yes' : 'No'}`);
+                        
+                        // Check if it has the broken certificate
+                        if (ovpnContent.includes('MIIFozCCA4ugAwIBAgIBATANBgkqhkiG9w0BAQ0FADBAMQswCQYDVQQGEwJDSDEV')) {
+                            log(`  ⚠️  Has BROKEN certificate!`, 'error');
+                        } else if (ovpnContent.includes('MIIFszCCA5ugAwIBAgIBATANBgkqhkiG9w0BAQ0FADBnMQswCQYDVQQGEwJDSDEP')) {
+                            log(`  ✓ Has CORRECT certificate`, 'success');
+                        } else {
+                            log(`  ❓ Certificate status unknown`, 'info');
+                        }
+                    }
+                }
+                
+                log(`\n📊 Found ${protonVPNConfigs.length} ProtonVPN configurations`, 'success');
+                
+                if (protonVPNConfigs.length > 0) {
+                    fixBtn.disabled = false;
+                    deleteBtn.disabled = false;
+                }
+                
+            } catch (error) {
+                log(`\n❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+        fixBtn.addEventListener('click', async () => {
+            if (protonVPNConfigs.length === 0) {
+                log('\n⚠️ No ProtonVPN configs loaded. Click "List ProtonVPN Configs" first.', 'error');
+                return;
+            }
+            
+            log('\n🔧 Starting certificate fix...', 'info');
+            let fixedCount = 0;
+            
+            try {
+                const syncData = await chrome.storage.sync.get('coreConfigurations');
+                const allConfigs = syncData.coreConfigurations || [];
+                
+                for (const pvpnConfig of protonVPNConfigs) {
+                    log(`\n🔄 Processing: ${pvpnConfig.name}`);
+                    
+                    let ovpnContent = pvpnConfig.ovpnContent;
+                    
+                    // Replace the certificate
+                    const caRegex = /<ca>\s*-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----\s*<\/ca>/;
+                    const newCaBlock = `<ca>\n${CORRECT_CA_CERT}\n</ca>`;
+                    
+                    if (caRegex.test(ovpnContent)) {
+                        ovpnContent = ovpnContent.replace(caRegex, newCaBlock);
+                        log('  ✓ Certificate replaced');
+                        
+                        // Update in storage
+                        const configIndex = allConfigs.findIndex(c => c.id === pvpnConfig.id);
+                        if (configIndex !== -1) {
+                            if (pvpnConfig.ovpnFileContentRef) {
+                                // Store in local storage
+                                await chrome.storage.local.set({
+                                    [pvpnConfig.ovpnFileContentRef]: ovpnContent
+                                });
+                                log('  ✓ Updated in chrome.storage.local');
+                            } else {
+                                // Store in sync storage
+                                allConfigs[configIndex].ovpnFileContent = ovpnContent;
+                                log('  ✓ Updated in chrome.storage.sync');
+                            }
+                            fixedCount++;
+                        }
+                    } else {
+                        log('  ⚠️ No CA certificate found to replace', 'error');
+                    }
+                }
+                
+                // Save updated configs
+                await chrome.storage.sync.set({ coreConfigurations: allConfigs });
+                log(`\n✅ Fixed ${fixedCount} configuration(s)!`, 'success');
+                log('Please reload the extension options page to see changes.', 'info');
+                
+            } catch (error) {
+                log(`\n❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+        deleteBtn.addEventListener('click', async () => {
+            if (protonVPNConfigs.length === 0) {
+                log('\n⚠️ No ProtonVPN configs loaded. Click "List ProtonVPN Configs" first.', 'error');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to delete ${protonVPNConfigs.length} ProtonVPN configuration(s)?\n\nThis cannot be undone!`)) {
+                return;
+            }
+            
+            log('\n🗑️ Deleting ProtonVPN configurations...', 'info');
+            let deletedCount = 0;
+            
+            try {
+                const syncData = await chrome.storage.sync.get('coreConfigurations');
+                let allConfigs = syncData.coreConfigurations || [];
+                
+                for (const pvpnConfig of protonVPNConfigs) {
+                    log(`\n🗑️ Deleting: ${pvpnConfig.name}`);
+                    
+                    // Remove from configs array
+                    allConfigs = allConfigs.filter(c => c.id !== pvpnConfig.id);
+                    
+                    // Remove from local storage if stored there
+                    if (pvpnConfig.ovpnFileContentRef) {
+                        await chrome.storage.local.remove(pvpnConfig.ovpnFileContentRef);
+                        log('  ✓ Removed from chrome.storage.local');
+                    }
+                    
+                    deletedCount++;
+                }
+                
+                // Save updated configs
+                await chrome.storage.sync.set({ coreConfigurations: allConfigs });
+                log(`\n✅ Deleted ${deletedCount} configuration(s)!`, 'success');
+                log('Please reload the extension options page to see changes.', 'info');
+                
+                protonVPNConfigs = [];
+                fixBtn.disabled = true;
+                deleteBtn.disabled = true;
+                
+            } catch (error) {
+                log(`\n❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+        log('Ready! Click "List ProtonVPN Configs" to begin.', 'info');
+    </script>
+</body>
+</html>

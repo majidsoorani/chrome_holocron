@@ -14,6 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const proxyMessage = document.getElementById('proxy-message');
   const applyProxyButton = document.getElementById('apply-proxy-button');
   const revertProxyButton = document.getElementById('revert-proxy-button');
+  const passwall2Container = document.getElementById('passwall2-container');
+  const passwall2Message = document.getElementById('passwall2-message');
+  const startPasswall2Button = document.getElementById('start-passwall2-button');
+  const stopPasswall2Button = document.getElementById('stop-passwall2-button');
 
   let currentStatus = {}; // Cache the latest status object
 
@@ -80,7 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
       tcpPingEl.textContent = formatTcpError(status.tcp_ping_error);
       tcpPingEl.className = 'value bad';
     } else {
-      tcpPingEl.textContent = `${tcpLatency}ms`;
+      let displayText = `${tcpLatency}ms`;
+      if (status.connection_type === 'direct') {
+        displayText += ' (Direct)';
+      }
+      tcpPingEl.textContent = displayText;
       tcpPingEl.className = 'value good';
     }
 
@@ -94,7 +102,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Update proxy controls display
-    if (status.connected && status.socks_port) {
+    if (status.activeConfig && status.activeConfig.type === 'openwrt_passwall2') {
+        proxyContainer.style.display = 'none';
+        passwall2Container.style.display = 'block';
+        getPasswall2Status();
+    } else if (status.connected && status.socks_port) {
+        passwall2Container.style.display = 'none';
         proxyContainer.style.display = 'block';
         (async () => {
             const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
@@ -110,8 +123,51 @@ document.addEventListener('DOMContentLoaded', () => {
         })();
     } else {
       proxyContainer.style.display = 'none';
+      passwall2Container.style.display = 'none';
     }
   }
+
+  function getPasswall2Status() {
+    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'status', config: currentStatus.activeConfig }, (response) => {
+      if (response && response.success) {
+        passwall2Message.textContent = `Passwall2 is ${response.status}.`;
+        if (response.status === 'enabled') {
+          startPasswall2Button.disabled = true;
+          stopPasswall2Button.disabled = false;
+        } else {
+          startPasswall2Button.disabled = false;
+          stopPasswall2Button.disabled = true;
+        }
+      } else {
+        passwall2Message.textContent = 'Could not get Passwall2 status.';
+      }
+    });
+  }
+
+  startPasswall2Button.addEventListener('click', () => {
+    passwall2Message.textContent = 'Starting Passwall2...';
+    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'start', config: currentStatus.activeConfig }, (response) => {
+      if (response && response.success) {
+        passwall2Message.textContent = 'Passwall2 started.';
+        getPasswall2Status();
+      } else {
+        passwall2Message.textContent = 'Failed to start Passwall2.';
+      }
+    });
+  });
+
+  stopPasswall2Button.addEventListener('click', () => {
+    passwall2Message.textContent = 'Stopping Passwall2...';
+    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'stop', config: currentStatus.activeConfig }, (response) => {
+      if (response && response.success) {
+        passwall2Message.textContent = 'Passwall2 stopped.';
+        getPasswall2Status();
+      } else {
+        passwall2Message.textContent = 'Failed to stop Passwall2.';
+      }
+    });
+  });
+
 
   // Listen for broadcasted updates from the background script.
   // This allows the popup to reflect the latest status in real-time.

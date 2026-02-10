@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.holocron.resilient_tunnel</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/majidsoorani/chrome_holocron/backends/sh/create_resilient_tunnel.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>SSH_REMOTE_HOST</key>
+        <string>34.244.201.246</string>
+        <key>SSH_KEY_PATH</key>
+        <string>/Users/majidsoorani/.ssh/id_rsa_openwrt</string>
+        <key>SOCKS_PORT</key>
+        <string>1032</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/majidsoorani/chrome_holocron/backends/log/resilient_tunnel.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/majidsoorani/chrome_holocron/backends/log/resilient_tunnel.error.log</string>
+</dict>
+</plist>

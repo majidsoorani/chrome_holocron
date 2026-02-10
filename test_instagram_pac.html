@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Instagram PAC Script</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        .result {
+            font-family: monospace;
+            background: #263238;
+            color: #aed581;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .error { color: #f44336; }
+        .success { color: #4CAF50; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Instagram PAC Script Test</h1>
+        
+        <div class="test-section">
+            <h2>1️⃣ Test PAC Function</h2>
+            <button onclick="testPAC()">Test PAC Script</button>
+            <div id="pacResult" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>2️⃣ Test SOCKS Connection</h2>
+            <button onclick="testSOCKS()">Test SOCKS Proxy</button>
+            <div id="socksResult" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>3️⃣ Chrome Proxy Settings</h2>
+            <button onclick="checkChromeProxy()">Check Chrome Proxy</button>
+            <div id="chromeResult" class="result"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>4️⃣ Test Instagram Access</h2>
+            <button onclick="testInstagram()">Test Instagram</button>
+            <div id="instagramResult" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Simulated PAC script function
+        function FindProxyForURL(url, host) {
+            // Instagram routing
+            if (host.endsWith('.instagram.com') ||
+                host.endsWith('.cdninstagram.com') ||
+                host.endsWith('.fbcdn.net') ||
+                host === 'www.instagram.com' ||
+                host === 'instagram.com') {
+                return "SOCKS5 192.168.1.1:1081";
+            }
+            
+            // Company sites
+            if (host.endsWith('.kixy.com')) {
+                return "SOCKS5 192.168.1.1:1032";
+            }
+            
+            // Default
+            return "DIRECT";
+        }
+
+        function testPAC() {
+            const result = document.getElementById('pacResult');
+            const tests = [
+                { url: 'https://www.instagram.com', host: 'www.instagram.com' },
+                { url: 'https://scontent.cdninstagram.com', host: 'scontent.cdninstagram.com' },
+                { url: 'https://static.xx.fbcdn.net', host: 'static.xx.fbcdn.net' },
+                { url: 'https://noc.kixy.com', host: 'noc.kixy.com' },
+                { url: 'https://www.google.com', host: 'www.google.com' }
+            ];
+
+            let output = '🧪 Testing PAC Function:\n\n';
+            tests.forEach(test => {
+                const proxy = FindProxyForURL(test.url, test.host);
+                output += `${test.host}\n  → ${proxy}\n\n`;
+            });
+
+            result.textContent = output;
+        }
+
+        async function testSOCKS() {
+            const result = document.getElementById('socksResult');
+            result.textContent = '🔄 Testing SOCKS proxy connection...\n';
+
+            try {
+                // Try to connect via fetch (will use browser's proxy settings)
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch('http://192.168.1.1:1081', {
+                    signal: controller.signal,
+                    mode: 'no-cors'
+                });
+
+                clearTimeout(timeout);
+                result.textContent = '✅ SOCKS proxy is reachable at 192.168.1.1:1081';
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    result.textContent = '⚠️  Connection timeout - proxy might be down or blocked\n\n' + error.message;
+                } else {
+                    result.textContent = '❌ Connection error:\n\n' + error.message;
+                }
+            }
+        }
+
+        function checkChromeProxy() {
+            const result = document.getElementById('chromeResult');
+            
+            // Check if we can access chrome.proxy API
+            if (typeof chrome !== 'undefined' && chrome.proxy) {
+                chrome.proxy.settings.get({}, (config) => {
+                    result.textContent = '📋 Chrome Proxy Settings:\n\n' + 
+                        JSON.stringify(config, null, 2);
+                });
+            } else {
+                result.textContent = '⚠️  This test needs to run as Chrome Extension.\n\n' +
+                    'To check proxy settings:\n' +
+                    '1. Open Extension popup\n' +
+                    '2. Check if proxy is active\n' +
+                    '3. Look at browser console for PAC script logs';
+            }
+        }
+
+        async function testInstagram() {
+            const result = document.getElementById('instagramResult');
+            result.textContent = '🔄 Testing Instagram access...\n';
+
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 10000);
+
+                const response = await fetch('https://www.instagram.com', {
+                    method: 'HEAD',
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeout);
+                
+                result.textContent = `✅ Instagram Response:\n\n` +
+                    `Status: ${response.status} ${response.statusText}\n` +
+                    `Type: ${response.type}\n` +
+                    `URL: ${response.url}\n\n` +
+                    `Headers:\n${Array.from(response.headers.entries()).map(([k,v]) => `  ${k}: ${v}`).join('\n')}`;
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    result.textContent = '❌ Connection timeout after 10 seconds\n\n' +
+                        'Possible issues:\n' +
+                        '• SOCKS proxy not accessible from browser\n' +
+                        '• PAC script not applied correctly\n' +
+                        '• Instagram blocked by ISP\n\n' +
+                        'Error: ' + error.message;
+                } else {
+                    result.textContent = '❌ Error accessing Instagram:\n\n' + 
+                        error.message + '\n\n' +
+                        'Try:\n' +
+                        '1. Reload extension\n' +
+                        '2. Check if SOCKS proxy is running\n' +
+                        '3. Check browser console for errors';
+                }
+            }
+        }
+
+        // Auto-run PAC test on load
+        window.addEventListener('load', () => {
+            testPAC();
+        });
+    </script>
+</body>
+</html>

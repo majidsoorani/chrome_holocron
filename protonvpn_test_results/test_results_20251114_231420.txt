@@ -1,0 +1,525 @@
+ProtonVPN Server Discovery Test - Fri Nov 14 23:14:20 +0330 2025
+========================================
+
+[✓] https://protonvpn.com - HTTP 200
+[✓] https://account.protonvpn.com - HTTP 200
+[✓] https://api.protonvpn.ch - HTTP 200
+[✓] https://account.protonvpn.com/downloads - HTTP 200
+[✓] https://account.protonvpn.com/login - HTTP 200
+[✓] https://api.protonvpn.ch/vpn/logicals - HTTP 200
+[✓] https://api.protonvpn.ch/vpn/servers - HTTP 200
+
+
+Server: Netherlands - nl-01.protonvpn.net (185.159.157.11)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Netherlands - nl-02.protonvpn.net (185.159.157.12)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Netherlands - nl-03.protonvpn.net (185.159.157.13)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Netherlands - nl-04.protonvpn.net (185.159.156.27)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Netherlands - nl-free-01.protonvpn.net (95.215.61.163)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Netherlands - nl-free-02.protonvpn.net (95.215.61.164)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Switzerland - ch-01.protonvpn.net (146.70.136.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Switzerland - ch-02.protonvpn.net (146.70.136.3)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Switzerland - ch-03.protonvpn.net (146.70.136.4)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Switzerland - ch-04.protonvpn.net (146.70.198.2)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Switzerland - ch-ch-01.protonvpn.net (146.70.174.2)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Iceland - is-01.protonvpn.net (89.22.98.178)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Iceland - is-02.protonvpn.net (89.22.98.179)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Iceland - is-free-01.protonvpn.net (89.22.98.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Sweden - se-01.protonvpn.net (185.107.56.146)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Sweden - se-02.protonvpn.net (185.107.56.147)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Sweden - se-free-01.protonvpn.net (185.107.56.228)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: USA - us-ca-01.protonvpn.net (169.150.219.196)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: USA - us-ca-02.protonvpn.net (169.150.219.197)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: USA - us-ny-01.protonvpn.net (209.58.128.194)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: USA - us-ny-02.protonvpn.net (209.58.128.195)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: USA - us-free-01.protonvpn.net (45.151.162.194)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: UK - uk-01.protonvpn.net (146.70.184.2)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: UK - uk-02.protonvpn.net (146.70.184.3)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: UK - uk-free-01.protonvpn.net (146.70.184.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Germany - de-01.protonvpn.net (185.181.58.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Germany - de-02.protonvpn.net (185.181.58.3)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Germany - de-free-01.protonvpn.net (185.181.58.242)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: France - fr-01.protonvpn.net (146.70.152.2)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✓] Port 8080 (HTTP-Alt) - REACHABLE
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: France - fr-02.protonvpn.net (146.70.152.3)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✓] Port 8080 (HTTP-Alt) - REACHABLE
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: France - fr-free-01.protonvpn.net (146.70.152.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Japan - jp-01.protonvpn.net (146.70.27.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Japan - jp-02.protonvpn.net (146.70.27.3)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Japan - jp-free-01.protonvpn.net (146.70.27.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Singapore - sg-01.protonvpn.net (37.19.220.2)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Singapore - sg-02.protonvpn.net (37.19.220.3)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Australia - au-01.protonvpn.net (146.70.130.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Australia - au-02.protonvpn.net (146.70.130.3)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Spain - es-01.protonvpn.net (146.70.149.2)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Spain - es-free-01.protonvpn.net (146.70.149.226)
+  [✓] Port 443 (TCP/HTTPS) - REACHABLE
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✓] Port 80 (HTTP) - REACHABLE
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Italy - it-01.protonvpn.net (146.70.162.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Italy - it-free-01.protonvpn.net (146.70.162.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Poland - pl-01.protonvpn.net (185.232.23.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Poland - pl-free-01.protonvpn.net (185.232.23.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Romania - ro-01.protonvpn.net (89.45.89.2)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+Server: Romania - ro-free-01.protonvpn.net (89.45.89.226)
+  [✗] Port 443 (TCP/HTTPS) - BLOCKED
+  [✗] Port 1194 (TCP/OpenVPN) - BLOCKED
+  [✗] Port 5060 (UDP/OpenVPN) - BLOCKED
+  [✗] Port 80 (HTTP) - BLOCKED
+  [✗] Port 8080 (HTTP-Alt) - BLOCKED
+  [✗] Port 4569 (OpenVPN) - BLOCKED
+
+
+Server (via proxy): Netherlands - nl-01.protonvpn.net (185.159.157.11)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Netherlands - nl-02.protonvpn.net (185.159.157.12)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Netherlands - nl-03.protonvpn.net (185.159.157.13)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Netherlands - nl-04.protonvpn.net (185.159.156.27)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Netherlands - nl-free-01.protonvpn.net (95.215.61.163)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Netherlands - nl-free-02.protonvpn.net (95.215.61.164)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Switzerland - ch-01.protonvpn.net (146.70.136.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Switzerland - ch-02.protonvpn.net (146.70.136.3)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Switzerland - ch-03.protonvpn.net (146.70.136.4)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Switzerland - ch-04.protonvpn.net (146.70.198.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Switzerland - ch-ch-01.protonvpn.net (146.70.174.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Iceland - is-01.protonvpn.net (89.22.98.178)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Iceland - is-02.protonvpn.net (89.22.98.179)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Iceland - is-free-01.protonvpn.net (89.22.98.226)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Sweden - se-01.protonvpn.net (185.107.56.146)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Sweden - se-02.protonvpn.net (185.107.56.147)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Sweden - se-free-01.protonvpn.net (185.107.56.228)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): USA - us-ca-01.protonvpn.net (169.150.219.196)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): USA - us-ca-02.protonvpn.net (169.150.219.197)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): USA - us-ny-01.protonvpn.net (209.58.128.194)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): USA - us-ny-02.protonvpn.net (209.58.128.195)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): USA - us-free-01.protonvpn.net (45.151.162.194)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): UK - uk-01.protonvpn.net (146.70.184.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): UK - uk-02.protonvpn.net (146.70.184.3)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): UK - uk-free-01.protonvpn.net (146.70.184.226)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Germany - de-01.protonvpn.net (185.181.58.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Germany - de-02.protonvpn.net (185.181.58.3)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Germany - de-free-01.protonvpn.net (185.181.58.242)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): France - fr-01.protonvpn.net (146.70.152.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): France - fr-02.protonvpn.net (146.70.152.3)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): France - fr-free-01.protonvpn.net (146.70.152.226)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Japan - jp-01.protonvpn.net (146.70.27.2)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Japan - jp-02.protonvpn.net (146.70.27.3)
+  [✓] HTTPS (443) - REACHABLE via proxy
+
+Server (via proxy): Japan - jp-free-01.protonvpn.net (146.70.27.226)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Singapore - sg-01.protonvpn.net (37.19.220.2)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Singapore - sg-02.protonvpn.net (37.19.220.3)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Australia - au-01.protonvpn.net (146.70.130.2)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Australia - au-02.protonvpn.net (146.70.130.3)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Spain - es-01.protonvpn.net (146.70.149.2)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Spain - es-free-01.protonvpn.net (146.70.149.226)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Italy - it-01.protonvpn.net (146.70.162.2)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Italy - it-free-01.protonvpn.net (146.70.162.226)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Poland - pl-01.protonvpn.net (185.232.23.2)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Poland - pl-free-01.protonvpn.net (185.232.23.226)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Romania - ro-01.protonvpn.net (89.45.89.2)
+  [✗] HTTPS (443) - BLOCKED
+
+Server (via proxy): Romania - ro-free-01.protonvpn.net (89.45.89.226)
+  [✗] HTTPS (443) - BLOCKED
+
+
+========== SUMMARY ==========
+Total tests: 329
+Successful: 59
+Failed: 270
+Success rate: % Success rate: %

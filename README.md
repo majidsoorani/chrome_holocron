@@ -18,8 +18,9 @@ Holocron is a Google Chrome extension designed to seamlessly manage an SSH tunne
     - **(Optional)** Apply the active SOCKS proxy to the entire operating system (macOS only).
     - Includes a smart PAC script to bypass the proxy for local addresses and specific domains (e.g., `*.ir`).
     - Revert to your original proxy settings with a single click.
+- **OpenWrt Passwall2 Management**: Directly control the `passwall2` service on a configured OpenWrt router. Start, stop, and check the status of `passwall2` from the extension popup.
 - **Highly Configurable**: An intuitive options page allows you to set:
-    - Multiple connection profiles (SSH, OpenVPN, V2Ray, External).
+    - Multiple connection profiles (SSH, OpenVPN, V2Ray, OpenWrt Passwall2, External).
     - SSH connection details (user, host).
     - Custom port forwarding rules (local, remote, and dynamic/SOCKS).
     - Hosts and URLs for latency checks.
@@ -39,16 +40,16 @@ Background Script (background.js)
 Native Host (holocron_native_host.py)
         |
         v (Subprocess)
-Control Script (work_connect.sh)
+Control Scripts (work_connect.sh, openvpn_connect.sh, v2ray_connect.sh, passwall2_control.sh)
         |
         v
-      ssh
+      ssh, openvpn, v2ray, uci
 ```
 
 - **UI (HTML/CSS/JS)**: The popup and options pages that you interact with.
 - **Background Script**: The extension's core logic. It orchestrates status checks, manages state, and communicates with the native host.
 - **Native Host (Python)**: A small Python script that acts as a bridge between the browser and your local system. It can check processes and execute shell scripts.
-- **Control Script (Bash)**: A shell script that handles the logic of checking the Wi-Fi network (`wdutil`) and starting/stopping the `ssh` process.
+- **Control Scripts (Bash)**: A collection of shell scripts that handle the logic of checking the Wi-Fi network (`wdutil`), starting/stopping `ssh`, `openvpn`, and `v2ray` processes, and managing `passwall2` on an OpenWrt router.
 
 ## Prerequisites
 
@@ -57,6 +58,7 @@ Control Script (work_connect.sh)
 - **Python 3.x**.
 - **SSH client** and configured SSH keys for your target host.
 - **OpenVPN client** (if you plan to use OpenVPN configurations). The command-line tool must be installed and available in your system's PATH. The recommended way to install it on macOS is via [Homebrew](https://brew.sh/): `brew install openvpn`.
+- **autossh**: Required for the resilient tunnel feature. Install via Homebrew: `brew install autossh`.
 
 ## Installation
 
@@ -119,6 +121,13 @@ An installation script is provided to automate the setup process.
 - **Use a secrets manager for production credentials.** While this tool uses your local SSH configuration, for any team-based or production environment, SSH keys and other secrets should be managed through a proper secrets management tool.
 - **The default configuration uses safe placeholders.** The initial values in the options page use non-real hostnames like `database.example.com`. This is intentional to protect your infrastructure details.
 - **System-wide proxy modification is a powerful feature.** Enabling it gives the extension permission to change your computer's network settings. Only enable this feature if you understand and accept the security implications.
+
+### Standardized Connection Scripts
+To further enhance security and operational consistency, standardized scripts are provided for connecting to specific infrastructure components.
+
+- **`backends/sh/openwrt_connect.sh`**: This is the official, secure script for establishing an SSH connection to the OpenWRT router. It uses environment variables (`$SSH_KEY_PATH`, `$OPENWRT_HOST`, `$OPENWRT_USER`) to avoid hardcoding credentials and includes robust error checking. **All engineers must use this script for manual router access.**
+- **`backends/sh/create_resilient_tunnel.sh`**: A robust script for creating a persistent SSH SOCKS proxy using `autossh`. This is the recommended method for tunnels that must remain active indefinitely. It can be run as a `launchd` service on macOS for maximum reliability. See the `com.holocron.resilient_tunnel.plist.template` for a sample service configuration.
+- **`backends/sh/configure_openwrt_tunnel_service.sh`**: An automation script to configure a persistent, `procd`-managed SSH tunnel service directly on an OpenWrt router. This is the standard method for creating tunnels that originate *from* the router itself. For authentication, it prioritizes the `OPENWRT_SSH_KEY` environment variable but will automatically fall back to using a default key at `~/.ssh/id_rsa_openwrt` if the variable is not set, enhancing ease of use.
 
 ## Troubleshooting
 

@@ -2,6 +2,7 @@
 
 import { COMMANDS, STORAGE_KEYS } from './constants.js';
 import { IRAN_IP_RANGES_NETMASK } from './iran_ip_ranges.js';
+import { ProtonVPNManager } from './protonvpn_manager.js';
 
 const NATIVE_HOST_NAME = 'com.holocron.native_host';
 
@@ -16,6 +17,7 @@ const GEOIP_UPDATE_COOLDOWN_HOURS = 24;
 let isUpdateInProgress = false; // A flag to prevent concurrent updates.
 let lastReconnectAttemptTimestamp = 0; // For throttling auto-reconnect attempts.
 const RECONNECT_COOLDOWN_MS = 10000; // 10 seconds
+let configLatencies = {}; // Stores TCP ping latencies for all configs: { configId: latencyMs }
 
 function broadcastStatus() {
   // Send the latest status to any listeners (like the popup).
@@ -110,19 +112,22 @@ function setActionIcon(status) {
   const badIcon = { "16": "images/icon16-bad.png", "32": "images/icon32-bad.png", "48": "images/icon48-bad.png" };
   const warnIcon = { "16": "images/icon16-warn.png", "32": "images/icon32-warn.png", "48": "images/icon48-warn.png" };
 
-  // 1. Disconnected or critical failure (e.g., web check status reports failure)
-  if (!status || !status.connected || (status.web_check_status && status.web_check_status.includes('Failed'))) {
+  // If no status object or no valid latency data at all, show bad icon.
+  // This covers cases where the native host might have failed completely.
+  if (!status || (status.web_check_latency_ms === -1 && status.tcp_ping_ms === -1)) {
     chrome.action.setIcon({ path: badIcon });
     return;
   }
 
-  // 2. Connected but one of the latency checks failed (unreliable connection)
-  if (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1) {
+  // If connected but one of the latency checks failed (unreliable connection), show warn icon.
+  // This applies only when status.connected is true.
+  if (status.connected && (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1)) {
     chrome.action.setIcon({ path: warnIcon });
     return;
   }
 
-  // 3. Connected with valid latencies: generate dynamic icon
+  // In all other cases (connected with valid latencies, or disconnected with valid direct latencies),
+  // generate the dynamic icon.
   const imageData = {
     16: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 16),
     32: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 32),
@@ -306,10 +311,14 @@ async function attemptConnection(config) {
 async function tryToConnectToEnabledConfigs() {
     const {
         [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs,
-        [STORAGE_KEYS.WIFI_SSIDS]: wifiSsidList = []
+        [STORAGE_KEYS.WIFI_SSIDS]: wifiSsidList = [],
+        [STORAGE_KEYS.PING_HOST]: pingHost = 'youtube.com',
+        [STORAGE_KEYS.AUTO_SELECT_BEST_PROXY]: autoSelectBest = false
     } = await chrome.storage.sync.get([
         STORAGE_KEYS.CORE_CONFIGURATIONS,
-        STORAGE_KEYS.WIFI_SSIDS
+        STORAGE_KEYS.WIFI_SSIDS,
+        STORAGE_KEYS.PING_HOST,
+        STORAGE_KEYS.AUTO_SELECT_BEST_PROXY
     ]);
     if (!configs || configs.length === 0) {
         return { success: false, message: "No configurations defined." };
@@ -320,6 +329,19 @@ async function tryToConnectToEnabledConfigs() {
         return { success: false, message: "No configurations are enabled." };
     }
 
+    // If there's more than one enabled proxy and auto-select is enabled, test them all
+    if (enabledConfigs.length > 1 && autoSelectBest) {
+        console.log(`Auto-select best proxy enabled. Testing ${enabledConfigs.length} enabled proxies...`);
+        const bestConfig = await selectBestProxy(enabledConfigs, pingHost);
+        if (bestConfig) {
+            console.log(`Best proxy selected: "${bestConfig.name}"`);
+            const response = await attemptConnection({ ...bestConfig, wifiSsidList });
+            return response;
+        }
+        console.log("No currently running proxy responded. Falling back to sequential connection attempts.");
+    }
+
+    // Default behavior: try each proxy sequentially until one succeeds
     for (const config of enabledConfigs) {
         // Pass wifi list to the config object for the native host
         const response = await attemptConnection({ ...config, wifiSsidList });
@@ -331,6 +353,78 @@ async function tryToConnectToEnabledConfigs() {
 
     // If the loop finishes, no connection was successful
     return { success: false, message: "Failed to connect using any of the enabled configurations." };
+}
+
+/**
+ * Tests all enabled proxies that are ALREADY RUNNING via TCP ping and returns the one with the lowest latency.
+ * Only tests proxies that have active processes/connections, so WiFi SSID port mappings remain unchanged.
+ * @param {Array} configs - Array of enabled proxy configurations
+ * @param {string} pingHost - Host to ping for testing
+ * @returns {Promise<object|null>}} The best configuration or null if none respond
+ */
+async function selectBestProxy(configs, pingHost) {
+    const testResults = await Promise.all(
+        configs.map(async (config) => {
+            try {
+                // For external proxies, always test (they don't need to be "started")
+                if (config.type === 'external') {
+                    const proxyHost = config.proxyHost;
+                    const proxyPort = parseInt(config.proxyPort, 10);
+                    const proxyProtocol = config.proxyProtocol || 'SOCKS5';
+                    
+                    if (!proxyHost || !proxyPort) {
+                        console.warn(`External proxy "${config.name}" missing host or port`);
+                        return { config, tcpPingMs: -1, isRunning: false };
+                    }
+                    
+                    const result = await communicateWithNativeHost({
+                        command: 'tcpPing',
+                        host: pingHost,
+                        proxy_port: proxyPort,
+                        proxy_host: proxyHost,
+                        proxy_protocol: proxyProtocol
+                    });
+                    
+                    return { config, tcpPingMs: result.latency || -1, isRunning: result.latency > 0 };
+                }
+                
+                // For tunnel-based proxies (SSH, V2Ray, OpenVPN), check if they're already running
+                // This prevents changing the WiFi SSID port mappings by only testing active connections
+                const statusResponse = await communicateWithNativeHost({
+                    command: COMMANDS.GET_STATUS,
+                    config: config,
+                    pingHost: pingHost,
+                    webCheckUrl: '' // Not needed for just checking status
+                });
+                
+                // If the tunnel is not running, skip it (don't test)
+                if (!statusResponse || !statusResponse.connected) {
+                    console.log(`Skipping "${config.name}" - not currently running`);
+                    return { config, tcpPingMs: -1, isRunning: false };
+                }
+                
+                // Tunnel is running, use its TCP ping result
+                const tcpLatency = statusResponse.tcp_ping_ms || -1;
+                console.log(`Tested running proxy "${config.name}": ${tcpLatency}ms`);
+                return { config, tcpPingMs: tcpLatency, isRunning: true };
+                
+            } catch (error) {
+                console.error(`Error testing proxy "${config.name}":`, error.message);
+                return { config, tcpPingMs: -1, isRunning: false };
+            }
+        })
+    );
+    
+    // Only consider proxies that are running and responded successfully
+    const validResults = testResults.filter(r => r.isRunning && r.tcpPingMs > 0);
+    if (validResults.length === 0) {
+        console.log("No running proxies found to test. Will use sequential connection.");
+        return null;
+    }
+    
+    validResults.sort((a, b) => a.tcpPingMs - b.tcpPingMs);
+    console.log(`Found ${validResults.length} running proxies. Best: "${validResults[0].config.name}" (${validResults[0].tcpPingMs}ms)`);
+    return validResults[0].config;
 }
 
 
@@ -734,6 +828,19 @@ function FindProxyForURL(url, host) {
             });
         }
 
+        // --- Instagram Special Routing (via SSH Tunnel) ---
+        // Instagram needs special handling due to filtering in Iran
+        // Use SSH tunnel 1032 directly (port 1081 has SSL issues)
+        pacScript += `
+    // --- Instagram Routing (SSH Tunnel Direct) ---
+    // Route Instagram through SSH tunnel at 192.168.1.1:1032
+    if (shExpMatch(host, "*.instagram.com") ||
+        shExpMatch(host, "*.cdninstagram.com") ||
+        shExpMatch(host, "*.fbcdn.net")) {
+        return "SOCKS5 192.168.1.1:1032";
+    }
+`;
+
         // --- GeoSite Bypass ---
         if (geoSiteBypassEnabled && storedDomains && (storedDomains.subdomains?.length > 0 || storedDomains.full?.length > 0)) {
             pacScript += `
@@ -950,6 +1057,7 @@ chrome.runtime.onStartup.addListener(() => {
   updateGeoIpDatabase();
   updateGeoSiteDatabase();
   applyWebRTCPolicy();
+  updateConfigLatencies(); // Initial latency check
 });
 
 // Set up the alarm and perform an initial check when the extension is installed.
@@ -957,6 +1065,8 @@ chrome.runtime.onInstalled.addListener((details) => {
   chrome.alarms.create('status-check', { periodInMinutes: 1 });
   // Add a new alarm for daily GeoIP updates.
   chrome.alarms.create('database-update', { periodInMinutes: 60 * 24 }); // 24 hours
+  // Add alarm for periodic latency checks (every 2 minutes)
+  chrome.alarms.create('latency-check', { periodInMinutes: 2 });
 
   // On first install, open the options page to prompt the user for configuration.
   if (details.reason === chrome.runtime.OnInstalledReason.INSTALL) {
@@ -989,6 +1099,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   } else if (alarm.name === 'database-update') {
     updateGeoIpDatabase();
     updateGeoSiteDatabase();
+  } else if (alarm.name === 'latency-check') {
+    updateConfigLatencies();
   }
 });
 
@@ -998,6 +1110,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse(lastStatus);
     updateStatus();
     return true; // Keep message channel open for an async response.
+  }
+
+  if (request.command === COMMANDS.GET_LATENCIES) {
+    sendResponse({ latencies: configLatencies });
+    return true;
   }
 
   if (request.command === COMMANDS.MANUAL_DB_UPDATE) {
@@ -1058,9 +1175,67 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         let response;
         if (request.command === COMMANDS.START_TUNNEL) {
             if (request.config) { // A specific config is being targeted from options page
-                // For a specific connection attempt, we don't care about the saved Wi-Fi SSIDs.
-                // The user is forcing it, so we pass an empty list for wifiSsidList.
-                response = await attemptConnection({ ...request.config, wifiSsidList: [] });
+                // For ProtonVPN, we need to discover and select a server first
+                if (request.config.type === 'protonvpn') {
+                  try {
+                    console.log('ProtonVPN connection requested - starting auto-discovery...');
+                    
+                    // Create ProtonVPN manager instance
+                    const manager = new ProtonVPNManager(request.config.id);
+                    
+                    // Check if we have cached servers (less than 1 hour old)
+                    const { servers: cachedServers, lastUpdate } = await manager.loadDiscoveredServers(request.config.id);
+                    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+                    
+                    let servers = cachedServers;
+                    if (!cachedServers || cachedServers.length === 0 || lastUpdate < oneHourAgo) {
+                      console.log('No valid cached servers, discovering now...');
+                      servers = await manager.discoverServers();
+                      
+                      if (!servers || servers.length === 0) {
+                        sendResponse({ 
+                          success: false, 
+                          message: 'No accessible ProtonVPN servers found. Please try again later or check your internet connection.' 
+                        });
+                        return;
+                      }
+                      console.log(`Discovered ${servers.length} accessible ProtonVPN servers`);
+                    } else {
+                      console.log(`Using ${servers.length} cached servers from ${new Date(lastUpdate).toLocaleString()}`);
+                    }
+                    
+                    // Select the best server (fastest by default)
+                    const selectedServer = manager.selectServer(servers, 'fastest');
+                    console.log(`Selected server: ${selectedServer.name} (${selectedServer.country}) - ${selectedServer.latency}ms`);
+                    
+                    // Add server to config for native host
+                    const configWithServer = {
+                      ...request.config,
+                      wifiSsidList: [],
+                      protonvpnServer: selectedServer
+                    };
+                    
+                    response = await attemptConnection(configWithServer);
+                    
+                    // Include server info in response
+                    if (response.success) {
+                      response.server = selectedServer;
+                      response.message = `Connected to ProtonVPN server ${selectedServer.name} (${selectedServer.country}) - ${selectedServer.latency}ms`;
+                    }
+                  } catch (error) {
+                    console.error('ProtonVPN auto-connect error:', error);
+                    sendResponse({ 
+                      success: false, 
+                      message: `ProtonVPN auto-connect failed: ${error.message}` 
+                    });
+                    return;
+                  }
+                } else {
+                  // For non-ProtonVPN configs, use normal connection flow
+                  // For a specific connection attempt, we don't care about the saved Wi-Fi SSIDs.
+                  // The user is forcing it, so we pass an empty list for wifiSsidList.
+                  response = await attemptConnection({ ...request.config, wifiSsidList: [] });
+                }
             } else { // No specific config, use the enabled ones (from popup or auto-reconnect)
                 response = await tryToConnectToEnabledConfigs();
             }
@@ -1155,5 +1330,231 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.command === COMMANDS.DISCOVER_PROTONVPN_SERVERS) {
+    (async () => {
+      try {
+        // Use the already-imported ProtonVPN Manager
+        const manager = new ProtonVPNManager();
+        
+        // Discover servers
+        const servers = await manager.discoverServers({
+          freeOnly: request.freeOnly || false,
+          configId: request.configId
+        });
+        
+        // Save discovered servers to storage
+        await manager.saveDiscoveredServers(servers, request.configId);
+        
+        sendResponse({ 
+          success: true, 
+          servers: servers,
+          message: `Found ${servers.length} accessible servers`
+        });
+      } catch (error) {
+        console.error('ProtonVPN discovery error:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message,
+          message: `Discovery failed: ${error.message}`
+        });
+      }
+    })();
+    return true; // Indicate async response
+  }
+
+  if (request.command === COMMANDS.GET_PROTONVPN_SERVERS) {
+    (async () => {
+      try {
+        // Use the already-imported ProtonVPN Manager
+        const manager = new ProtonVPNManager();
+        
+        // Load cached servers
+        const { servers, lastUpdate } = await manager.loadDiscoveredServers(request.configId);
+        
+        sendResponse({ 
+          success: true, 
+          servers: servers,
+          lastUpdate: lastUpdate,
+          message: `Loaded ${servers.length} cached servers`
+        });
+      } catch (error) {
+        console.error('ProtonVPN get servers error:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message,
+          servers: [],
+          message: `Failed to load servers: ${error.message}`
+        });
+      }
+    })();
+    return true; // Indicate async response
+  }
+
+  if (request.command === COMMANDS.TEST_ROUTER_CONNECTION) {
+    (async () => {
+      try {
+        const { config } = request;
+        if (!config || !config.ip || !config.user) {
+          sendResponse({ 
+            success: false, 
+            message: 'Invalid router configuration. IP and username are required.' 
+          });
+          return;
+        }
+        
+        // Test the router connection via native host
+        const response = await communicateWithNativeHost({
+          command: COMMANDS.TEST_ROUTER_CONNECTION,
+          config: config
+        });
+        
+        sendResponse(response || { success: false, message: 'No response from native host' });
+      } catch (error) {
+        console.error('Router connection test error:', error);
+        sendResponse({ 
+          success: false, 
+          message: `Connection test failed: ${error.message}`
+        });
+      }
+    })();
+    return true; // Indicate async response
+  }
+
+  if (request.command === COMMANDS.PASSWALL2) {
+    console.log('[BG] PASSWALL2 command received:', request);
+    (async () => {
+      try {
+        // Forward Passwall2 management commands to the native host
+        console.log('[BG] Forwarding to native host:', {
+          command: COMMANDS.PASSWALL2,
+          action: request.action,
+          config: request.config
+        });
+        
+        const response = await communicateWithNativeHost({
+          command: COMMANDS.PASSWALL2,
+          action: request.action, // list_proxies, add_proxy, delete_proxy, enable_proxy, disable_proxy, start_service, stop_service, restart_service
+          config: request.config,
+          proxyId: request.proxyId, // For enable/disable/delete operations
+          proxyData: request.proxyData // For add_proxy operation
+        });
+        
+        console.log('[BG] Native host response:', response);
+        sendResponse(response || { success: false, message: 'No response from native host' });
+      } catch (error) {
+        console.error('[BG] Passwall2 command error:', error);
+        sendResponse({ 
+          success: false, 
+          message: `Passwall2 operation failed: ${error.message}`
+        });
+      }
+    })();
+    return true; // Indicate async response
+  }
+
   return false; // Explicitly return false for other messages.
 });
+
+/**
+ * Measures TCP ping latencies for all enabled proxy configurations.
+ * This runs periodically to keep latency data up-to-date for the UI.
+ */
+async function updateConfigLatencies() {
+    const {
+        [STORAGE_KEYS.CORE_CONFIGURATIONS]: configs,
+        [STORAGE_KEYS.PING_HOST]: pingHost = 'youtube.com'
+    } = await chrome.storage.sync.get([
+        STORAGE_KEYS.CORE_CONFIGURATIONS,
+        STORAGE_KEYS.PING_HOST
+    ]);
+
+    if (!configs || configs.length === 0) {
+        return;
+    }
+
+    const enabledConfigs = configs.filter(c => c.enabled);
+    if (enabledConfigs.length === 0) {
+        configLatencies = {};
+        broadcastLatencies();
+        return;
+    }
+
+    // Test all enabled configs in parallel
+    const latencyPromises = enabledConfigs.map(async (config) => {
+        try {
+            // For external proxies, test directly
+            if (config.type === 'external') {
+                const proxyHost = config.proxyHost;
+                const proxyPort = parseInt(config.proxyPort, 10);
+                const proxyProtocol = config.proxyProtocol || 'SOCKS5';
+                
+                if (!proxyHost || !proxyPort) {
+                    return { id: config.id, latency: -1 };
+                }
+                
+                const result = await communicateWithNativeHost({
+                    command: 'tcpPing',
+                    host: pingHost,
+                    proxy_port: proxyPort,
+                    proxy_host: proxyHost,
+                    proxy_protocol: proxyProtocol
+                });
+                
+                return { id: config.id, latency: result.latency || -1 };
+            }
+            
+            // For tunnel-based proxies, check if they're running and get their status
+            const statusResponse = await communicateWithNativeHost({
+                command: COMMANDS.GET_STATUS,
+                config: config,
+                pingHost: pingHost,
+                webCheckUrl: '' // Not needed for just latency
+            });
+            
+            if (!statusResponse || !statusResponse.connected) {
+                return { id: config.id, latency: -1 };
+            }
+            
+            return { id: config.id, latency: statusResponse.tcp_ping_ms || -1 };
+            
+        } catch (error) {
+            console.error(`Error measuring latency for "${config.name}":`, error.message);
+            return { id: config.id, latency: -1 };
+        }
+    });
+
+    const results = await Promise.all(latencyPromises);
+    
+    // Update the global latencies object
+    results.forEach(result => {
+        configLatencies[result.id] = result.latency;
+    });
+
+    // Broadcast to any listeners (like the options page)
+    broadcastLatencies();
+}
+
+/**
+ * Broadcasts the current latency measurements to listeners.
+ */
+function broadcastLatencies() {
+    chrome.runtime.sendMessage({ 
+        command: COMMANDS.LATENCIES_UPDATED, 
+        latencies: configLatencies 
+    }).catch(e => {
+        // Ignore if no one is listening
+        if (e.message !== "Could not establish connection. Receiving end does not exist.") {
+            console.warn("Error broadcasting latencies:", e.message);
+        }
+    });
+}
+
+// --- Periodic Latency Measurement ---
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'latency-check') {
+    updateConfigLatencies();
+  }
+});
+
+// Create an alarm for periodic latency checks (every 2 minutes)
+chrome.alarms.create('latency-check', { periodInMinutes: 2 });

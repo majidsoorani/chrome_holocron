@@ -1,0 +1,62 @@
+# Working ProtonVPN Servers from Iran
+# Tested on: Fri Nov 14 23:14:20 +0330 2025
+
+https://protonvpn.com
+https://account.protonvpn.com
+https://api.protonvpn.ch
+https://account.protonvpn.com/downloads
+https://account.protonvpn.com/login
+https://api.protonvpn.ch/vpn/logicals
+https://api.protonvpn.ch/vpn/servers
+185.159.156.27:443 # Netherlands - nl-04.protonvpn.net (TCP/HTTPS)
+146.70.198.2:443 # Switzerland - ch-04.protonvpn.net (TCP/HTTPS)
+146.70.174.2:443 # Switzerland - ch-ch-01.protonvpn.net (TCP/HTTPS)
+146.70.174.2:80 # Switzerland - ch-ch-01.protonvpn.net (HTTP)
+146.70.184.2:443 # UK - uk-01.protonvpn.net (TCP/HTTPS)
+146.70.184.2:80 # UK - uk-01.protonvpn.net (HTTP)
+146.70.152.2:443 # France - fr-01.protonvpn.net (TCP/HTTPS)
+146.70.152.2:80 # France - fr-01.protonvpn.net (HTTP)
+146.70.152.2:8080 # France - fr-01.protonvpn.net (HTTP-Alt)
+146.70.152.3:443 # France - fr-02.protonvpn.net (TCP/HTTPS)
+146.70.152.3:80 # France - fr-02.protonvpn.net (HTTP)
+146.70.152.3:8080 # France - fr-02.protonvpn.net (HTTP-Alt)
+37.19.220.2:443 # Singapore - sg-01.protonvpn.net (TCP/HTTPS)
+37.19.220.2:80 # Singapore - sg-01.protonvpn.net (HTTP)
+37.19.220.3:443 # Singapore - sg-02.protonvpn.net (TCP/HTTPS)
+37.19.220.3:80 # Singapore - sg-02.protonvpn.net (HTTP)
+146.70.149.2:443 # Spain - es-01.protonvpn.net (TCP/HTTPS)
+146.70.149.226:443 # Spain - es-free-01.protonvpn.net (TCP/HTTPS)
+146.70.149.226:80 # Spain - es-free-01.protonvpn.net (HTTP)
+# Via V2Ray: 185.159.157.11:443 # Netherlands - nl-01.protonvpn.net
+# Via V2Ray: 185.159.157.12:443 # Netherlands - nl-02.protonvpn.net
+# Via V2Ray: 185.159.157.13:443 # Netherlands - nl-03.protonvpn.net
+# Via V2Ray: 185.159.156.27:443 # Netherlands - nl-04.protonvpn.net
+# Via V2Ray: 95.215.61.163:443 # Netherlands - nl-free-01.protonvpn.net
+# Via V2Ray: 95.215.61.164:443 # Netherlands - nl-free-02.protonvpn.net
+# Via V2Ray: 146.70.136.2:443 # Switzerland - ch-01.protonvpn.net
+# Via V2Ray: 146.70.136.3:443 # Switzerland - ch-02.protonvpn.net
+# Via V2Ray: 146.70.136.4:443 # Switzerland - ch-03.protonvpn.net
+# Via V2Ray: 146.70.198.2:443 # Switzerland - ch-04.protonvpn.net
+# Via V2Ray: 146.70.174.2:443 # Switzerland - ch-ch-01.protonvpn.net
+# Via V2Ray: 89.22.98.178:443 # Iceland - is-01.protonvpn.net
+# Via V2Ray: 89.22.98.179:443 # Iceland - is-02.protonvpn.net
+# Via V2Ray: 89.22.98.226:443 # Iceland - is-free-01.protonvpn.net
+# Via V2Ray: 185.107.56.146:443 # Sweden - se-01.protonvpn.net
+# Via V2Ray: 185.107.56.147:443 # Sweden - se-02.protonvpn.net
+# Via V2Ray: 185.107.56.228:443 # Sweden - se-free-01.protonvpn.net
+# Via V2Ray: 169.150.219.196:443 # USA - us-ca-01.protonvpn.net
+# Via V2Ray: 169.150.219.197:443 # USA - us-ca-02.protonvpn.net
+# Via V2Ray: 209.58.128.194:443 # USA - us-ny-01.protonvpn.net
+# Via V2Ray: 209.58.128.195:443 # USA - us-ny-02.protonvpn.net
+# Via V2Ray: 45.151.162.194:443 # USA - us-free-01.protonvpn.net
+# Via V2Ray: 146.70.184.2:443 # UK - uk-01.protonvpn.net
+# Via V2Ray: 146.70.184.3:443 # UK - uk-02.protonvpn.net
+# Via V2Ray: 146.70.184.226:443 # UK - uk-free-01.protonvpn.net
+# Via V2Ray: 185.181.58.2:443 # Germany - de-01.protonvpn.net
+# Via V2Ray: 185.181.58.3:443 # Germany - de-02.protonvpn.net
+# Via V2Ray: 185.181.58.242:443 # Germany - de-free-01.protonvpn.net
+# Via V2Ray: 146.70.152.2:443 # France - fr-01.protonvpn.net
+# Via V2Ray: 146.70.152.3:443 # France - fr-02.protonvpn.net
+# Via V2Ray: 146.70.152.226:443 # France - fr-free-01.protonvpn.net
+# Via V2Ray: 146.70.27.2:443 # Japan - jp-01.protonvpn.net
+# Via V2Ray: 146.70.27.3:443 # Japan - jp-02.protonvpn.net

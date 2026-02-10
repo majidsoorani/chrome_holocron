@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Holocron - Proxy Debug</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        h1 { color: #4ec9b0; }
+        .test-box {
+            background: #252526;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #3e3e42;
+        }
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover { background: #1177bb; }
+        pre {
+            background: #1e1e1e;
+            color: #ce9178;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #3e3e42;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .warning { color: #dcdcaa; }
+        .info { color: #9cdcfe; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Holocron Proxy Debug Console</h1>
+    
+    <div class="test-box">
+        <h2>1️⃣ Current Proxy Configuration</h2>
+        <button onclick="checkProxy()">Check Proxy Settings</button>
+        <button onclick="reloadExtension()">Reload Extension</button>
+        <pre id="proxyResult">Click button to check...</pre>
+    </div>
+
+    <div class="test-box">
+        <h2>2️⃣ PAC Script Analysis</h2>
+        <button onclick="showPAC()">Show PAC Script</button>
+        <button onclick="searchPAC()">Search for Instagram</button>
+        <pre id="pacResult">Click button to view...</pre>
+    </div>
+
+    <div class="test-box">
+        <h2>3️⃣ Quick Tests</h2>
+        <button onclick="testDomain('www.instagram.com')">Test Instagram</button>
+        <button onclick="testDomain('www.google.com')">Test Google</button>
+        <button onclick="testDomain('noc.kixy.com')">Test Company</button>
+        <pre id="testResult">Click button to test...</pre>
+    </div>
+
+    <div class="test-box">
+        <h2>4️⃣ Manual PAC Test</h2>
+        <input type="text" id="testUrl" placeholder="Enter URL (e.g., www.instagram.com)" 
+               style="width: 300px; padding: 8px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #3e3e42; border-radius: 4px;">
+        <button onclick="manualTest()">Test URL</button>
+        <pre id="manualResult">Enter URL above...</pre>
+    </div>
+
+    <script>
+        async function checkProxy() {
+            const result = document.getElementById('proxyResult');
+            result.innerHTML = '<span class="info">Checking...</span>';
+            
+            try {
+                const settings = await chrome.proxy.settings.get({incognito: false});
+                let output = '<span class="success">✅ Proxy Settings Retrieved</span>\n\n';
+                output += `Mode: <span class="warning">${settings.value.mode}</span>\n`;
+                output += `Level of Control: ${settings.levelOfControl}\n\n`;
+                
+                if (settings.value.mode === 'pac_script') {
+                    output += '<span class="success">✅ PAC Script Mode Active</span>\n';
+                    const pacData = settings.value.pacScript?.data;
+                    if (pacData) {
+                        output += `PAC Script Length: ${pacData.length} characters\n`;
+                        
+                        // Check for Instagram
+                        if (pacData.includes('instagram')) {
+                            output += '<span class="success">✅ Instagram routing found</span>\n';
+                            const instagramSection = pacData.match(/instagram[\s\S]{0,200}/i);
+                            if (instagramSection) {
+                                output += '\nInstagram section:\n';
+                                output += '<span class="info">' + instagramSection[0] + '</span>\n';
+                            }
+                        } else {
+                            output += '<span class="error">❌ Instagram routing NOT found in PAC</span>\n';
+                        }
+                        
+                        // Check for SOCKS5
+                        if (pacData.includes('SOCKS5 192.168.1.1:1081')) {
+                            output += '<span class="success">✅ Router SOCKS5 proxy found (192.168.1.1:1081)</span>\n';
+                        } else {
+                            output += '<span class="error">❌ Router SOCKS5 proxy NOT found</span>\n';
+                        }
+                    }
+                } else {
+                    output += '<span class="warning">⚠️ Not using PAC script mode!</span>\n';
+                    output += 'Current mode: ' + settings.value.mode + '\n';
+                }
+                
+                result.innerHTML = output;
+            } catch (e) {
+                result.innerHTML = '<span class="error">❌ Error: ' + e.message + '</span>';
+            }
+        }
+
+        async function showPAC() {
+            const result = document.getElementById('pacResult');
+            result.innerHTML = '<span class="info">Loading PAC script...</span>';
+            
+            try {
+                const settings = await chrome.proxy.settings.get({incognito: false});
+                if (settings.value.pacScript?.data) {
+                    result.innerHTML = settings.value.pacScript.data;
+                } else {
+                    result.innerHTML = '<span class="error">No PAC script found</span>';
+                }
+            } catch (e) {
+                result.innerHTML = '<span class="error">Error: ' + e.message + '</span>';
+            }
+        }
+
+        async function searchPAC() {
+            const result = document.getElementById('pacResult');
+            result.innerHTML = '<span class="info">Searching...</span>';
+            
+            try {
+                const settings = await chrome.proxy.settings.get({incognito: false});
+                const pacData = settings.value.pacScript?.data;
+                
+                if (!pacData) {
+                    result.innerHTML = '<span class="error">No PAC script</span>';
+                    return;
+                }
+                
+                const keywords = ['instagram', 'cdninstagram', 'fbcdn', 'SOCKS5', '192.168.1.1'];
+                let output = '<span class="success">Search Results:</span>\n\n';
+                
+                keywords.forEach(keyword => {
+                    const regex = new RegExp(`.{0,50}${keyword}.{0,50}`, 'gi');
+                    const matches = pacData.match(regex);
+                    if (matches) {
+                        output += `\n<span class="warning">${keyword}:</span>\n`;
+                        matches.forEach(m => output += `  ${m}\n`);
+                    }
+                });
+                
+                result.innerHTML = output;
+            } catch (e) {
+                result.innerHTML = '<span class="error">Error: ' + e.message + '</span>';
+            }
+        }
+
+        async function testDomain(domain) {
+            const result = document.getElementById('testResult');
+            result.innerHTML = `<span class="info">Testing ${domain}...</span>`;
+            
+            try {
+                const settings = await chrome.proxy.settings.get({incognito: false});
+                const pacData = settings.value.pacScript?.data;
+                
+                if (!pacData) {
+                    result.innerHTML = '<span class="error">No PAC script configured</span>';
+                    return;
+                }
+                
+                let output = `<span class="success">Test for: ${domain}</span>\n\n`;
+                
+                // Check if domain matches any rules
+                if (domain.includes('instagram') && pacData.includes('instagram')) {
+                    output += '<span class="success">✅ Should route through SOCKS5 192.168.1.1:1081</span>\n';
+                } else if (domain.includes('kixy') && pacData.includes('kixy')) {
+                    output += '<span class="success">✅ Should route through company proxy</span>\n';
+                } else if (pacData.includes('iran') || pacData.includes('DIRECT')) {
+                    output += '<span class="warning">⚠️ Might go DIRECT (Iranian sites)</span>\n';
+                } else {
+                    output += '<span class="info">ℹ️ Will use default PROXY</span>\n';
+                }
+                
+                result.innerHTML = output;
+            } catch (e) {
+                result.innerHTML = '<span class="error">Error: ' + e.message + '</span>';
+            }
+        }
+
+        async function manualTest() {
+            const url = document.getElementById('testUrl').value;
+            const result = document.getElementById('manualResult');
+            
+            if (!url) {
+                result.innerHTML = '<span class="error">Please enter a URL</span>';
+                return;
+            }
+            
+            await testDomain(url);
+            document.getElementById('manualResult').innerHTML = document.getElementById('testResult').innerHTML;
+        }
+
+        async function reloadExtension() {
+            try {
+                chrome.runtime.reload();
+            } catch (e) {
+                alert('Cannot reload from here. Use chrome://extensions/ to reload.');
+            }
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            setTimeout(checkProxy, 500);
+        });
+    </script>
+</body>
+</html>
