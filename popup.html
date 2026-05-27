@@ -12,8 +12,8 @@
             <span id="connection-status">Loading...</span>
         </div>
         <div class="header-controls">
-             <button id="connection-action-button" class="icon-button" title="Connect">⏻</button>
-             <button id="refresh-button" class="icon-button" title="Refresh Status">
+             <button id="connection-action-button" class="icon-button" title="Connect or disconnect the tunnel">⏻</button>
+             <button id="refresh-button" class="icon-button" title="Refresh connection status">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
             </button>
         </div>
@@ -36,15 +36,29 @@
 
       <div id="proxy-container" class="proxy-info" style="display: none;">
         <p id="proxy-message"></p>
-        <div class="buttons"><button id="apply-proxy-button" class="button-primary">Apply Browser Proxy</button>
-        <button id="revert-proxy-button" class="button-secondary">Revert Proxy</button></div>
+        <div class="buttons"><button id="apply-proxy-button" class="button-primary" title="Apply browser proxy settings for the active tunnel">Apply Browser Proxy</button>
+        <button id="revert-proxy-button" class="button-secondary" title="Revert browser proxy settings to previous state">Revert Proxy</button></div>
       </div>
 
       <div id="passwall2-container" class="passwall2-info" style="display: none;">
         <p id="passwall2-message"></p>
         <div class="buttons">
-            <button id="start-passwall2-button" class="button-primary">Start Passwall2</button>
-            <button id="stop-passwall2-button" class="button-secondary">Stop Passwall2</button>
+            <button id="start-passwall2-button" class="button-primary" title="Start Passwall2 service on the router">Start</button>
+            <button id="restart-passwall2-button" class="button-secondary" title="Restart Passwall2 service on the router" style="background-color: var(--warn-color); color: #1f2329;">Restart</button>
+            <button id="stop-passwall2-button" class="button-secondary" title="Stop Passwall2 service on the router">Stop</button>
+        </div>
+      </div>
+
+      <div id="passwall2-nodes-container" class="passwall2-nodes" style="display: none;">
+        <div class="nodes-header">
+          <span class="nodes-title">Passwall2 Nodes</span>
+          <button id="optimize-balance-nodes" class="link-button" title="Optimize balance nodes: keep up to 5 working YouTube/WhatsApp nodes">🎯</button>
+          <button id="update-subscription" class="link-button" title="Fetch fresh proxy nodes from subscription URL">📡</button>
+          <button id="update-balance-nodes" class="link-button" title="Update balance node groups with fresh nodes">⬆</button>
+          <button id="refresh-passwall2-nodes" class="link-button" title="Refresh Passwall2 node list from router">⟳</button>
+        </div>
+        <div id="passwall2-nodes-list" class="nodes-list">
+          <div class="nodes-empty">Loading…</div>
         </div>
       </div>
     </div>

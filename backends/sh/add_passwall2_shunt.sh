@@ -29,7 +29,7 @@ SHUNT_ID=\"shunt_iran\"
 
 # Add the shunt node
 uci set passwall2.\${SHUNT_ID}=nodes
-uci set passwall2.\${SHUNT_ID}.type='Xray'
+uci set passwall2.\${SHUNT_ID}.type='sing-box'
 uci set passwall2.\${SHUNT_ID}.protocol='_shunt'
 uci set passwall2.\${SHUNT_ID}.remarks='Iran Direct Shunt'
 

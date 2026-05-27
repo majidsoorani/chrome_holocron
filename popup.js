@@ -17,7 +17,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwall2Container = document.getElementById('passwall2-container');
   const passwall2Message = document.getElementById('passwall2-message');
   const startPasswall2Button = document.getElementById('start-passwall2-button');
+  const restartPasswall2Button = document.getElementById('restart-passwall2-button');
   const stopPasswall2Button = document.getElementById('stop-passwall2-button');
+  const passwall2NodesContainer = document.getElementById('passwall2-nodes-container');
+  const passwall2NodesList = document.getElementById('passwall2-nodes-list');
+  const refreshPasswall2NodesBtn = document.getElementById('refresh-passwall2-nodes');
+  const updateBalanceNodesBtn = document.getElementById('update-balance-nodes');
+  const updateSubscriptionBtn = document.getElementById('update-subscription');
+  const optimizeBalanceNodesBtn = document.getElementById('optimize-balance-nodes');
 
   let currentStatus = {}; // Cache the latest status object
 
@@ -105,7 +112,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (status.activeConfig && status.activeConfig.type === 'openwrt_passwall2') {
         proxyContainer.style.display = 'none';
         passwall2Container.style.display = 'block';
+        passwall2NodesContainer.style.display = status.connected ? 'block' : 'none';
         getPasswall2Status();
+        if (status.connected) loadPasswall2Nodes();
     } else if (status.connected && status.socks_port) {
         passwall2Container.style.display = 'none';
         proxyContainer.style.display = 'block';
@@ -124,6 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       proxyContainer.style.display = 'none';
       passwall2Container.style.display = 'none';
+      passwall2NodesContainer.style.display = 'none';
     }
   }
 
@@ -134,9 +144,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (response.status === 'enabled') {
           startPasswall2Button.disabled = true;
           stopPasswall2Button.disabled = false;
+          if (restartPasswall2Button) restartPasswall2Button.disabled = false;
         } else {
           startPasswall2Button.disabled = false;
           stopPasswall2Button.disabled = true;
+          if (restartPasswall2Button) restartPasswall2Button.disabled = true;
         }
       } else {
         passwall2Message.textContent = 'Could not get Passwall2 status.';
@@ -144,9 +156,150 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+
+  function renderPasswall2Nodes(proxies, activeId) {
+    if (!proxies || proxies.length === 0) {
+      passwall2NodesList.innerHTML = '<div class="nodes-empty">No nodes found.</div>';
+      return;
+    }
+    passwall2NodesList.innerHTML = proxies.map(p => {
+      const isActive = p.is_active || (activeId && p.id === activeId);
+      const name = escapeHtml(p.remarks || p.name || p.id);
+      const id = escapeHtml(p.id);
+      const btnClass = isActive ? 'node-use-btn active-btn' : 'node-use-btn';
+      const btnLabel = isActive ? 'In Use' : 'Use';
+      return `<div class="node-row${isActive ? ' active' : ''}">
+        <span class="node-name" title="${name}">${name}</span>
+        <button class="${btnClass}" data-node-id="${id}" ${isActive ? 'disabled' : ''}>${btnLabel}</button>
+      </div>`;
+    }).join('');
+
+    passwall2NodesList.querySelectorAll('.node-use-btn').forEach(btn => {
+      if (btn.disabled) return;
+      btn.addEventListener('click', () => useNode(btn.dataset.nodeId, btn));
+    });
+  }
+
+  function loadPasswall2Nodes() {
+    if (!currentStatus.activeConfig) return;
+    passwall2NodesList.innerHTML = '<div class="nodes-empty">Loading…</div>';
+    chrome.runtime.sendMessage(
+      { command: COMMANDS.PASSWALL2, action: 'list_proxies', config: currentStatus.activeConfig },
+      (response) => {
+        if (response && response.success && Array.isArray(response.proxies)) {
+          renderPasswall2Nodes(response.proxies, response.active_node_id);
+        } else {
+          const msg = (response && response.message) || (response && response.error) || 'Failed to load nodes.';
+          passwall2NodesList.innerHTML = `<div class="nodes-empty">${escapeHtml(msg)}</div>`;
+        }
+      }
+    );
+  }
+
+  function useNode(nodeId, btn) {
+    if (!nodeId) return;
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Switching…';
+    chrome.runtime.sendMessage(
+      { command: COMMANDS.PASSWALL2, action: 'use_proxy', config: currentStatus.activeConfig, proxyId: nodeId },
+      (response) => {
+        if (response && response.success) {
+          loadPasswall2Nodes();
+        } else {
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+          const msg = (response && response.message) || 'Failed to switch node.';
+          passwall2Message.textContent = msg;
+        }
+      }
+    );
+  }
+
+  if (refreshPasswall2NodesBtn) {
+    refreshPasswall2NodesBtn.addEventListener('click', () => loadPasswall2Nodes());
+  }
+
+  if (optimizeBalanceNodesBtn) {
+    optimizeBalanceNodesBtn.addEventListener('click', () => {
+      if (!currentStatus.activeConfig) return;
+      const original = optimizeBalanceNodesBtn.textContent;
+      optimizeBalanceNodesBtn.disabled = true;
+      optimizeBalanceNodesBtn.textContent = '⏳';
+      passwall2Message.textContent = 'Optimizing balance nodes…';
+      chrome.runtime.sendMessage(
+        { command: COMMANDS.PASSWALL2, action: 'optimize_balance_nodes', config: currentStatus.activeConfig },
+        (response) => {
+          optimizeBalanceNodesBtn.disabled = false;
+          optimizeBalanceNodesBtn.textContent = original;
+          if (response && response.success) {
+            passwall2Message.textContent = 'Balance groups optimized.';
+            loadPasswall2Nodes();
+          } else {
+            const msg = (response && response.message) || 'Failed to optimize balance groups.';
+            passwall2Message.textContent = msg;
+          }
+        }
+      );
+    });
+  }
+
+  if (updateSubscriptionBtn) {
+    updateSubscriptionBtn.addEventListener('click', () => {
+      if (!currentStatus.activeConfig) return;
+      const original = updateSubscriptionBtn.textContent;
+      updateSubscriptionBtn.disabled = true;
+      updateSubscriptionBtn.textContent = '⏳';
+      passwall2Message.textContent = 'Updating subscription…';
+      chrome.runtime.sendMessage(
+        { command: COMMANDS.PASSWALL2, action: 'update_subscription', config: currentStatus.activeConfig },
+        (response) => {
+          updateSubscriptionBtn.disabled = false;
+          updateSubscriptionBtn.textContent = original;
+          if (response && response.success) {
+            passwall2Message.textContent = 'Subscription updated.';
+            loadPasswall2Nodes();
+          } else {
+            const msg = (response && response.message) || 'Failed to update subscription.';
+            passwall2Message.textContent = msg;
+          }
+        }
+      );
+    });
+  }
+
+  if (updateBalanceNodesBtn) {
+    updateBalanceNodesBtn.addEventListener('click', () => {
+      if (!currentStatus.activeConfig) return;
+      const original = updateBalanceNodesBtn.textContent;
+      updateBalanceNodesBtn.disabled = true;
+      updateBalanceNodesBtn.textContent = '⏳';
+      passwall2Message.textContent = 'Updating balance nodes…';
+      chrome.runtime.sendMessage(
+        { command: COMMANDS.PASSWALL2, action: 'update_balance_nodes', config: currentStatus.activeConfig },
+        (response) => {
+          updateBalanceNodesBtn.disabled = false;
+          updateBalanceNodesBtn.textContent = original;
+          if (response && response.success) {
+            passwall2Message.textContent = 'Balance nodes updated.';
+            loadPasswall2Nodes();
+          } else {
+            const msg = (response && response.message) || 'Failed to update balance nodes.';
+            passwall2Message.textContent = msg;
+          }
+        }
+      );
+    });
+  }
+
   startPasswall2Button.addEventListener('click', () => {
     passwall2Message.textContent = 'Starting Passwall2...';
-    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'start', config: currentStatus.activeConfig }, (response) => {
+    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'start_service', config: currentStatus.activeConfig }, (response) => {
       if (response && response.success) {
         passwall2Message.textContent = 'Passwall2 started.';
         getPasswall2Status();
@@ -156,9 +309,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  if (restartPasswall2Button) {
+    restartPasswall2Button.addEventListener('click', () => {
+      passwall2Message.textContent = 'Restarting Passwall2...';
+      chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'restart_service', config: currentStatus.activeConfig }, (response) => {
+        if (response && response.success) {
+          passwall2Message.textContent = 'Passwall2 restarted.';
+          getPasswall2Status();
+          setTimeout(() => loadPasswall2Nodes(), 2000);
+        } else {
+          passwall2Message.textContent = 'Failed to restart Passwall2.';
+        }
+      });
+    });
+  }
+
   stopPasswall2Button.addEventListener('click', () => {
     passwall2Message.textContent = 'Stopping Passwall2...';
-    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'stop', config: currentStatus.activeConfig }, (response) => {
+    chrome.runtime.sendMessage({ command: COMMANDS.PASSWALL2, action: 'stop_service', config: currentStatus.activeConfig }, (response) => {
       if (response && response.success) {
         passwall2Message.textContent = 'Passwall2 stopped.';
         getPasswall2Status();

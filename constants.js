@@ -16,6 +16,8 @@ export const COMMANDS = {
   LATENCIES_UPDATED: 'latenciesUpdated',
   GET_LATENCIES: 'getLatencies',
   TEST_ROUTER_CONNECTION: 'testRouterConnection',
+  CHECK_SUBSCRIPTION_QUOTA: 'checkSubscriptionQuota',
+  CHECK_SUBSCRIPTION_NODES: 'checkSubscriptionNodes',
   // ProtonVPN commands
   DISCOVER_PROTONVPN_SERVERS: 'discoverProtonVPNServers',
   GET_PROTONVPN_SERVERS: 'getProtonVPNServers',
@@ -53,6 +55,8 @@ export const STORAGE_KEYS = {
   ROUTER_SSH_PORT: 'routerSshPort',
   ROUTER_SSH_PASSWORD: 'routerSshPassword',
   ROUTER_SSH_KEY_PATH: 'routerSshKeyPath',
+  SUBSCRIPTION_URLS: 'subscriptionUrls',
+  PASSWALL2_TEST_URLS: 'passwall2TestUrls',
 
   // --- Runtime State (local) ---
   CURRENTLY_ACTIVE_CONFIG_ID: 'currentlyActiveConfigId',

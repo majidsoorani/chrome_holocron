@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let webLatencyChart = null;
   let tcpPingChart = null;
   let coreConfigsForSelect = []; // Cache configs for dropdowns
-  const MAX_CHART_POINTS = 60; // Show last 60 data points
+  const MAX_CHART_POINTS = 120; // Show last 120 data points
   let configLogPollIntervals = {}; // To hold setInterval IDs for config-specific log polling.
   let logPollInterval = null; // To hold the setInterval ID for log polling
   let mainLogPollInterval = null; // For the main log viewer
@@ -395,7 +395,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (response.success) {
-                    passwall2StatusText.textContent = response.service_status || 'Running';
+                    let statusText = response.service_status || 'Running';
+                    if (response.router_stats) {
+                        statusText += ` [${response.router_stats}]`;
+                    }
+                    passwall2StatusText.textContent = statusText;
                     passwall2StatusText.style.color = response.service_status === 'running' ? '#4CAF50' : '#f44336';
                     
                     if (response.proxies && response.proxies.length > 0) {
@@ -459,6 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
     
     // Toggle proxy enable/disable
     const togglePasswall2Proxy = async (proxyId, currentlyEnabled) => {
@@ -1840,6 +1845,7 @@ function FindProxyForURL(url, host) {
           borderColor: computedStyle.getPropertyValue('--chart-web-color').trim() || 'rgb(75, 192, 192)',
           backgroundColor: computedStyle.getPropertyValue('--chart-web-bg').trim() || 'rgba(75, 192, 192, 0.2)',
           fill: true,
+          spanGaps: true,
         }]
       },
       options: chartOptions
@@ -1856,6 +1862,7 @@ function FindProxyForURL(url, host) {
           borderColor: computedStyle.getPropertyValue('--chart-tcp-color').trim() || 'rgb(54, 162, 235)',
           backgroundColor: computedStyle.getPropertyValue('--chart-tcp-bg').trim() || 'rgba(54, 162, 235, 0.2)',
           fill: true,
+          spanGaps: true,
         }]
       },
       options: chartOptions
@@ -1863,13 +1870,19 @@ function FindProxyForURL(url, host) {
   }
 
   function updateCharts(status) {
-    if (!webLatencyChart || !tcpPingChart || !status.connected || status.web_check_latency_ms <= -1 || status.tcp_ping_ms <= -1) {
-      return; // Don't update if charts aren't ready, tunnel is down, or data is invalid
-    }
-    [webLatencyChart, tcpPingChart].forEach((chart, index) => {
-      const newData = index === 0 ? status.web_check_latency_ms : status.tcp_ping_ms;
-      chart.data.labels.push(new Date().toLocaleTimeString());
-      chart.data.datasets[0].data.push(newData);
+    if (!webLatencyChart || !tcpPingChart) return;
+    const web = (typeof status.web_check_latency_ms === 'number' && status.web_check_latency_ms > -1)
+      ? status.web_check_latency_ms : null;
+    const tcp = (typeof status.tcp_ping_ms === 'number' && status.tcp_ping_ms > -1)
+      ? status.tcp_ping_ms : null;
+    if (web === null && tcp === null) return;
+    const label = new Date().toLocaleTimeString();
+    [
+      { chart: webLatencyChart, value: web },
+      { chart: tcpPingChart, value: tcp },
+    ].forEach(({ chart, value }) => {
+      chart.data.labels.push(label);
+      chart.data.datasets[0].data.push(value);
       if (chart.data.labels.length > MAX_CHART_POINTS) {
         chart.data.labels.shift();
         chart.data.datasets[0].data.shift();
@@ -2234,7 +2247,7 @@ function FindProxyForURL(url, host) {
       const siteLastUpdate = result[STORAGE_KEYS.GEOSITE_LAST_UPDATE];
       if (siteLastUpdate) {
         const date = new Date(siteLastUpdate).toLocaleDateString('en-CA'); // YYYY-MM-DD format
-        const count = domains ? domains.length : 0;
+        const count = domains ? (domains.length || (domains.subdomains?.length || 0) + (domains.full?.length || 0)) : 0;
         geositeStatusDiv.innerHTML = `<strong>GeoSite:</strong> ${count} domains loaded (Last Updated: ${date})`;
       } else {
         geositeStatusDiv.textContent = 'GeoSite: Database has not been updated yet.';
@@ -3149,94 +3162,1714 @@ function FindProxyForURL(url, host) {
     };
   }
 
-  function setupGlobalPasswall2Management() {
-    const globalRefreshButtons = document.querySelectorAll('.passwall2-refresh-btn');
-    const passwall2ProxiesList = document.querySelector('.passwall2-proxies-list');
-    const passwall2StatusText = document.querySelector('.passwall2-status-text');
-    const passwall2ProxyCount = document.querySelector('.passwall2-proxy-count');
-    
-    console.log('[Passwall2] Setup: Found', globalRefreshButtons.length, 'refresh buttons');
-    console.log('[Passwall2] Setup: ProxiesList element:', passwall2ProxiesList);
-    console.log('[Passwall2] Setup: StatusText element:', passwall2StatusText);
-    
-    globalRefreshButtons.forEach(refreshBtn => {
-      if (refreshBtn.dataset.listenerAdded) {
-        console.log('[Passwall2] Skipping button - already has listener');
+  function escapeHtmlOpt(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+
+  // URL test columns shown next to each Passwall2 node, mirroring the
+  // OpenWrt Node List screen (TCP Ping mode). The list is user-editable
+  // through the "⚙ URLs" button in the proxies table header and persists
+  // in chrome.storage.sync under STORAGE_KEYS.PASSWALL2_TEST_URLS.
+  const PASSWALL2_TEST_URLS_DEFAULT = [
+    { label: 'YouTube',  url: 'https://www.youtube.com' },
+    { label: 'WhatsApp', url: 'https://www.whatsapp.com' },
+    { label: 'Telegram', url: 'https://telegram.org' },
+  ];
+  let PASSWALL2_TEST_URLS = PASSWALL2_TEST_URLS_DEFAULT.slice();
+
+  // Track the most recent proxies/active state so the table can be re-rendered
+  // in place when the URL list changes (without re-fetching from the router).
+  let _passwall2LastRenderCtx = new WeakMap();
+
+  function deriveTestLabel(url) {
+    try {
+      const u = new URL(url);
+      const host = u.hostname.replace(/^www\./, '');
+      // First label-ish chunk: take the first segment of the host before any dot.
+      const first = host.split('.')[0] || host;
+      // Capitalise.
+      return first.charAt(0).toUpperCase() + first.slice(1);
+    } catch (_e) {
+      return url.slice(0, 24);
+    }
+  }
+
+  async function loadPasswall2TestUrls() {
+    try {
+      const res = await chrome.storage.sync.get(STORAGE_KEYS.PASSWALL2_TEST_URLS);
+      const saved = res && res[STORAGE_KEYS.PASSWALL2_TEST_URLS];
+      if (Array.isArray(saved) && saved.length) {
+        PASSWALL2_TEST_URLS = saved
+          .filter(e => e && typeof e.url === 'string' && /^https?:\/\//.test(e.url))
+          .map(e => ({ label: String(e.label || deriveTestLabel(e.url)).slice(0, 20), url: e.url }));
+        if (!PASSWALL2_TEST_URLS.length) {
+          PASSWALL2_TEST_URLS = PASSWALL2_TEST_URLS_DEFAULT.slice();
+        }
+      }
+    } catch (_e) {
+      // keep defaults
+    }
+  }
+
+  async function savePasswall2TestUrls() {
+    try {
+      await chrome.storage.sync.set({
+        [STORAGE_KEYS.PASSWALL2_TEST_URLS]: PASSWALL2_TEST_URLS
+      });
+    } catch (_e) {}
+  }
+
+  // Kick off the initial load so the table picks up the saved list as soon as
+  // it's rendered (the test_node call uses PASSWALL2_TEST_URLS lazily).
+  loadPasswall2TestUrls();
+
+  function rerenderAllPasswall2Lists() {
+    document.querySelectorAll('[data-passwall2-list]').forEach(listEl => {
+      const ctx = _passwall2LastRenderCtx.get(listEl);
+      if (ctx) {
+        renderPasswall2ProxyList(listEl, ctx.proxies, ctx.activeNodeId);
+      }
+    });
+  }
+
+  function openTestUrlsEditor(anchorBtn) {
+    // Close any existing editor first.
+    document.querySelectorAll('.passwall2-test-urls-editor').forEach(n => n.remove());
+
+    const editor = document.createElement('div');
+    editor.className = 'passwall2-test-urls-editor';
+    editor.style.cssText = 'position:absolute; z-index:9999; background:white; border:1px solid #bbb; border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,0.18); padding:12px; min-width:340px; font-size:13px;';
+
+    const rect = anchorBtn.getBoundingClientRect();
+    editor.style.top = `${window.scrollY + rect.bottom + 4}px`;
+    editor.style.left = `${window.scrollX + Math.max(8, rect.right - 340)}px`;
+
+    function render() {
+      const rows = PASSWALL2_TEST_URLS.map((entry, idx) => `
+        <div class="ptu-row" data-idx="${idx}" style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+          <input class="ptu-label" type="text" value="${escapeHtmlOpt(entry.label)}" style="width:90px; padding:4px;" />
+          <input class="ptu-url" type="text" value="${escapeHtmlOpt(entry.url)}" style="flex:1; padding:4px;" />
+          <button type="button" class="ptu-del" title="Remove this URL" style="background:#f44336; color:white; border:none; border-radius:4px; padding:4px 8px; cursor:pointer;">✕</button>
+        </div>`).join('');
+      editor.innerHTML = `
+        <div style="font-weight:600; margin-bottom:8px;">URL Test Columns</div>
+        <div class="ptu-rows">${rows || '<div style="color:#888; margin-bottom:6px;">No URLs configured.</div>'}</div>
+        <div style="display:flex; gap:6px; align-items:center; margin-top:8px; padding-top:8px; border-top:1px solid #eee;">
+          <input class="ptu-new-label" type="text" placeholder="Label" style="width:90px; padding:4px;" />
+          <input class="ptu-new-url" type="text" placeholder="https://example.com" style="flex:1; padding:4px;" />
+          <button type="button" class="ptu-add button" style="background:#4caf50; color:white; min-width:48px;">+ Add</button>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:10px;">
+          <button type="button" class="ptu-reset" style="background:transparent; border:none; color:#777; cursor:pointer; font-size:12px;">Reset to defaults</button>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="ptu-cancel button" style="background:#9e9e9e; color:white;">Cancel</button>
+            <button type="button" class="ptu-save button" style="background:#2196F3; color:white;">Save</button>
+          </div>
+        </div>`;
+
+      editor.querySelectorAll('.ptu-del').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const row = btn.closest('.ptu-row');
+          const idx = parseInt(row.dataset.idx, 10);
+          if (Number.isInteger(idx)) {
+            PASSWALL2_TEST_URLS.splice(idx, 1);
+            render();
+          }
+        });
+      });
+      editor.querySelector('.ptu-add').addEventListener('click', () => {
+        const urlInput = editor.querySelector('.ptu-new-url');
+        const labelInput = editor.querySelector('.ptu-new-label');
+        const url = (urlInput.value || '').trim();
+        const label = (labelInput.value || '').trim() || deriveTestLabel(url);
+        if (!/^https?:\/\//.test(url)) {
+          alert('URL must start with http:// or https://');
+          return;
+        }
+        PASSWALL2_TEST_URLS.push({ label: label.slice(0, 20), url });
+        urlInput.value = '';
+        labelInput.value = '';
+        render();
+      });
+      editor.querySelector('.ptu-new-url').addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); editor.querySelector('.ptu-add').click(); }
+      });
+      editor.querySelector('.ptu-reset').addEventListener('click', () => {
+        if (confirm('Reset URL test list to defaults (YouTube, WhatsApp, Telegram)?')) {
+          PASSWALL2_TEST_URLS = PASSWALL2_TEST_URLS_DEFAULT.slice();
+          render();
+        }
+      });
+      editor.querySelector('.ptu-cancel').addEventListener('click', closeEditor);
+      editor.querySelector('.ptu-save').addEventListener('click', async () => {
+        // Sync any inline label edits back to the in-memory list before saving.
+        editor.querySelectorAll('.ptu-row').forEach(row => {
+          const idx = parseInt(row.dataset.idx, 10);
+          if (!Number.isInteger(idx) || !PASSWALL2_TEST_URLS[idx]) return;
+          const labelEl = row.querySelector('.ptu-label');
+          const urlEl = row.querySelector('.ptu-url');
+          PASSWALL2_TEST_URLS[idx].label = (labelEl.value || '').trim().slice(0, 20) || deriveTestLabel(urlEl.value);
+          if (urlEl.value.trim() && /^https?:\/\//.test(urlEl.value.trim())) {
+            PASSWALL2_TEST_URLS[idx].url = urlEl.value.trim();
+          }
+        });
+        await savePasswall2TestUrls();
+        closeEditor();
+        rerenderAllPasswall2Lists();
+      });
+    }
+
+    function onDocClick(ev) {
+      if (!editor.contains(ev.target) && ev.target !== anchorBtn) {
+        closeEditor();
+      }
+    }
+    function closeEditor() {
+      document.removeEventListener('mousedown', onDocClick, true);
+      editor.remove();
+    }
+
+    document.body.appendChild(editor);
+    render();
+    setTimeout(() => document.addEventListener('mousedown', onDocClick, true), 0);
+  }
+
+  function formatLatencyCell(ms) {
+    if (ms == null) return '<span style="color:#999;">—</span>';
+    if (ms < 0) return '<span style="color:#f44336; font-weight:600;">Timeout</span>';
+    return `<span style="color:#4CAF50; font-weight:600;">${ms} ms</span>`;
+  }
+
+  function renderPasswall2ProxyList(listEl, proxies, activeNodeId) {
+    if (!listEl) return;
+    // Tag the element and cache the render context so the URL-list editor can
+    // trigger an in-place re-render after the user changes the URL columns.
+    listEl.setAttribute('data-passwall2-list', '1');
+    _passwall2LastRenderCtx.set(listEl, { proxies, activeNodeId });
+    if (!proxies || proxies.length === 0) {
+      listEl.innerHTML = `<div style="text-align: center; padding: 40px; color: #999;">
+        <div style="font-size: 56px;">📭</div>
+        <div>No proxies found on router</div>
+      </div>`;
+      return;
+    }
+
+    const colWidth = 90;
+    const headerCols = PASSWALL2_TEST_URLS.map(
+      c => `<div style="width:${colWidth}px; text-align:center; font-weight:600; color: var(--neutral-color, #2196F3);">${escapeHtmlOpt(c.label)}</div>`
+    ).join('');
+
+    const rows = proxies.map(proxy => {
+      const isActive = proxy.is_active || (activeNodeId && proxy.id === activeNodeId);
+      const name = escapeHtmlOpt(proxy.remarks || proxy.name || 'Unnamed');
+      const id = escapeHtmlOpt(proxy.id);
+      const type = escapeHtmlOpt(proxy.type || 'Unknown');
+      const cells = PASSWALL2_TEST_URLS.map(
+        c => `<div class="passwall2-test-cell" data-node-id="${id}" data-url="${escapeHtmlOpt(c.url)}" style="width:${colWidth}px; text-align:center;">—</div>`
+      ).join('');
+      const useBtn = isActive
+        ? `<button type="button" class="button" disabled style="background:#4CAF50; color:white; min-width:64px;">In Use</button>`
+        : `<button type="button" class="passwall2-use-btn button" data-node-id="${id}" style="background:#2196F3; color:white; min-width:64px;">Use</button>`;
+      return `<div class="passwall2-node-row" data-node-id="${id}" style="display:flex; align-items:center; gap:10px; padding: 10px; border-bottom: 1px solid #eee; ${isActive ? 'background:#e8f5e9;' : ''}">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight: bold; margin-bottom: 4px;">${proxy.enabled ? '✅' : '⭕'} ${name}</div>
+          <div style="font-size: 0.85em; color: #666;">${type}</div>
+        </div>
+        ${cells}
+        <button type="button" class="passwall2-test-btn button" data-node-id="${id}" style="background:var(--button-bg, #4b5263); color:white; min-width:60px;">Test</button>
+        ${useBtn}
+      </div>`;
+    }).join('');
+
+    listEl.innerHTML = `
+      <div class="passwall2-node-header" style="display:flex; align-items:center; gap:10px; padding: 8px 10px; border-bottom: 2px solid #ddd; font-weight: 600;">
+        <div style="flex:1; min-width:0;">Remarks</div>
+        ${headerCols}
+        <div style="min-width:60px; text-align:center; display:flex; gap:4px; justify-content:center;">
+          <button type="button" class="passwall2-test-all-btn button" style="background:#2196F3; color:white;" title="Run URL test against every node">Test All</button>
+          <button type="button" class="passwall2-edit-test-urls-btn button" style="background:#607D8B; color:white; min-width:32px;" title="Add or remove URL test columns">⚙</button>
+        </div>
+        <div style="min-width:64px;"></div>
+      </div>
+      ${rows}
+    `;
+
+    listEl.querySelectorAll('.passwall2-use-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchPasswall2Node(btn));
+    });
+    listEl.querySelectorAll('.passwall2-test-btn').forEach(btn => {
+      btn.addEventListener('click', () => testPasswall2Node(listEl, btn.dataset.nodeId, btn));
+    });
+    const testAllBtn = listEl.querySelector('.passwall2-test-all-btn');
+    if (testAllBtn) {
+      testAllBtn.addEventListener('click', () => testAllPasswall2Nodes(listEl, testAllBtn));
+    }
+    const editUrlsBtn = listEl.querySelector('.passwall2-edit-test-urls-btn');
+    if (editUrlsBtn) {
+      editUrlsBtn.addEventListener('click', () => openTestUrlsEditor(editUrlsBtn));
+    }
+  }
+
+  function setRowCells(listEl, nodeId, valueOrMap) {
+    const cells = listEl.querySelectorAll(`.passwall2-test-cell[data-node-id="${CSS.escape(nodeId)}"]`);
+    cells.forEach(cell => {
+      const url = cell.dataset.url;
+      if (typeof valueOrMap === 'string') {
+        cell.innerHTML = valueOrMap;
+      } else if (valueOrMap && Object.prototype.hasOwnProperty.call(valueOrMap, url)) {
+        cell.innerHTML = formatLatencyCell(valueOrMap[url]);
+      }
+    });
+  }
+
+  async function testPasswall2Node(listEl, nodeId, btn) {
+    if (!nodeId) return;
+    const originalLabel = btn ? btn.textContent : null;
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    setRowCells(listEl, nodeId, '<span style="color:#999;">…</span>');
+    try {
+      const response = await chrome.runtime.sendMessage({
+        command: COMMANDS.PASSWALL2,
+        action: 'test_node',
+        config: getGlobalRouterConfig(),
+        proxyId: nodeId,
+        urls: PASSWALL2_TEST_URLS.map(u => u.url),
+      });
+      if (response && response.success && response.results) {
+        setRowCells(listEl, nodeId, response.results);
+      } else {
+        const msg = (response && response.message) || 'Test failed';
+        setRowCells(listEl, nodeId, `<span style="color:#f44336;" title="${escapeHtmlOpt(msg)}">Err</span>`);
+        console.warn('[Passwall2 test_node]', msg, response);
+      }
+    } catch (error) {
+      setRowCells(listEl, nodeId, `<span style="color:#f44336;" title="${escapeHtmlOpt(error.message)}">Err</span>`);
+      console.error('[Passwall2 test_node] exception', error);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel || 'Test'; }
+    }
+  }
+
+  async function testAllPasswall2Nodes(listEl, btn) {
+    const rowBtns = Array.from(listEl.querySelectorAll('.passwall2-test-btn'));
+    const originalLabel = btn ? btn.textContent : null;
+    if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+    try {
+      for (const rb of rowBtns) {
+        await testPasswall2Node(listEl, rb.dataset.nodeId, rb);
+      }
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel || 'Test All'; }
+    }
+  }
+
+  async function switchPasswall2Node(btn) {
+    const nodeId = btn.dataset.nodeId;
+    if (!nodeId) return;
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Switching…';
+    try {
+      const response = await chrome.runtime.sendMessage({
+        command: COMMANDS.PASSWALL2,
+        action: 'use_proxy',
+        config: getGlobalRouterConfig(),
+        proxyId: nodeId
+      });
+      if (response && response.success) {
+        const anyRefresh = document.querySelector('.passwall2-refresh-btn');
+        if (anyRefresh) anyRefresh.click();
+      } else {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        alert(`Failed to switch node: ${(response && response.message) || 'Unknown error'}`);
+      }
+    } catch (error) {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      alert(`Failed to switch node: ${error.message}`);
+    }
+  }
+
+  // --- Subscription Quota: show remaining GB / expiry per subscription URL ---
+  function setupSubscriptionQuota() {
+    const textarea = document.getElementById('subscription-quota-urls');
+    const checkBtn = document.getElementById('subscription-quota-check-btn');
+    const nodesBtn = document.getElementById('subscription-nodes-check-btn');
+    const saveBtn = document.getElementById('subscription-quota-save-btn');
+    const resultsBox = document.getElementById('subscription-quota-results');
+    if (!textarea || !checkBtn || !saveBtn || !resultsBox) return;
+
+    // One-time style: blink animation for fields whose value just changed.
+    if (!document.getElementById('sqc-style')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'sqc-style';
+      styleEl.textContent = `
+        @keyframes sqc-flash-kf { 0% { background-color: #fff59d; } 100% { background-color: transparent; } }
+        .sqc-flash { animation: sqc-flash-kf 0.9s ease-out; border-radius: 3px; }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
+    const STORAGE_KEY = STORAGE_KEYS.SUBSCRIPTION_URLS;
+    const HISTORY_KEY = 'subscriptionQuotaHistory';
+    const LAST_RESULTS_KEY = 'subscriptionQuotaLastResults';
+    const HISTORY_MAX_PER_URL = 80;       // keep at most this many samples per URL
+    const HISTORY_MIN_INTERVAL_S = 60;    // don't append samples closer than this
+    let usageHistory = {};                // { normalizedUrl: [{ts, used, total}, ...] }
+
+    async function saveLastResults() {
+      try {
+        await chrome.storage.local.set({
+          [LAST_RESULTS_KEY]: {
+            quota: lastQuotaResults,
+            passwall: lastPasswallSubs,
+            ts: Math.floor(Date.now() / 1000),
+          }
+        });
+      } catch (_e) {}
+    }
+
+    async function loadLastResults() {
+      try {
+        const res = await chrome.storage.local.get(LAST_RESULTS_KEY);
+        const cached = res && res[LAST_RESULTS_KEY];
+        if (cached && Array.isArray(cached.quota)) {
+          lastQuotaResults = cached.quota;
+          if (Array.isArray(cached.passwall)) lastPasswallSubs = cached.passwall;
+          return cached.ts || 0;
+        }
+      } catch (_e) {}
+      return 0;
+    }
+
+    async function loadUsageHistory() {
+      try {
+        const res = await chrome.storage.local.get(HISTORY_KEY);
+        usageHistory = (res && res[HISTORY_KEY]) || {};
+      } catch (_e) {
+        usageHistory = {};
+      }
+    }
+
+    async function recordUsageSamples(results) {
+      if (!Array.isArray(results)) return;
+      const nowSec = Math.floor(Date.now() / 1000);
+      let changed = false;
+      for (const r of results) {
+        if (!r || !r.success) continue;
+        if (typeof r.used !== 'number' || r.used < 0) continue;
+        const key = normalizeSubUrl(r.url);
+        if (!key) continue;
+        const series = usageHistory[key] || [];
+        const last = series[series.length - 1];
+        if (last && (nowSec - last.ts) < HISTORY_MIN_INTERVAL_S && last.used === r.used) {
+          continue; // dedupe near-duplicate samples
+        }
+        series.push({
+          ts: nowSec,
+          used: r.used,
+          total: typeof r.total === 'number' ? r.total : null,
+        });
+        // Keep series bounded.
+        if (series.length > HISTORY_MAX_PER_URL) {
+          series.splice(0, series.length - HISTORY_MAX_PER_URL);
+        }
+        usageHistory[key] = series;
+        changed = true;
+      }
+      if (changed) {
+        try {
+          await chrome.storage.local.set({ [HISTORY_KEY]: usageHistory });
+        } catch (_e) {}
+      }
+    }
+
+    function computeUsageRate(url, currentRemaining) {
+      // Returns {bytesPerDay, sampleCount, spanSec, etaDays} or null.
+      const key = normalizeSubUrl(url);
+      const series = usageHistory[key];
+      if (!series || series.length < 2) return null;
+      const first = series[0];
+      const last = series[series.length - 1];
+      const dt = last.ts - first.ts;
+      if (dt <= 0) return null;
+      const dUsed = last.used - first.used;
+      if (dUsed <= 0) {
+        return { bytesPerDay: 0, sampleCount: series.length, spanSec: dt, etaDays: null };
+      }
+      const bytesPerDay = (dUsed / dt) * 86400;
+      let etaDays = null;
+      if (typeof currentRemaining === 'number' && currentRemaining > 0 && bytesPerDay > 0) {
+        etaDays = currentRemaining / bytesPerDay;
+      }
+      return { bytesPerDay, sampleCount: series.length, spanSec: dt, etaDays };
+    }
+
+    function fmtRate(bytesPerDay) {
+      if (!Number.isFinite(bytesPerDay) || bytesPerDay <= 0) return '0 / day';
+      const perHour = bytesPerDay / 24;
+      if (bytesPerDay >= 1024 ** 3) return `${(bytesPerDay / (1024 ** 3)).toFixed(2)} GB/day`;
+      if (bytesPerDay >= 1024 ** 2 * 100) {
+        // big enough to read MB/day, but show per-hour if quite high
+        if (perHour >= 1024 ** 2) return `${(perHour / (1024 ** 2)).toFixed(1)} MB/hour`;
+        return `${(bytesPerDay / (1024 ** 2)).toFixed(0)} MB/day`;
+      }
+      if (bytesPerDay >= 1024 ** 2) return `${(bytesPerDay / (1024 ** 2)).toFixed(1)} MB/day`;
+      if (bytesPerDay >= 1024) return `${(bytesPerDay / 1024).toFixed(1)} KB/day`;
+      return `${bytesPerDay.toFixed(0)} B/day`;
+    }
+
+    function fmtSpan(sec) {
+      if (sec < 90) return `${Math.round(sec)}s`;
+      if (sec < 3600) return `${Math.round(sec / 60)}m`;
+      if (sec < 86400) return `${(sec / 3600).toFixed(1)}h`;
+      return `${(sec / 86400).toFixed(1)}d`;
+    }
+
+    function parseUrls() {
+      return textarea.value
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    function fmtBytes(n) {
+      if (!Number.isFinite(n) || n < 0) return '—';
+      const gb = n / (1024 ** 3);
+      if (gb >= 1) return `${gb.toFixed(2)} GB`;
+      const mb = n / (1024 ** 2);
+      if (mb >= 1) return `${mb.toFixed(1)} MB`;
+      const kb = n / 1024;
+      if (kb >= 1) return `${kb.toFixed(1)} KB`;
+      return `${n} B`;
+    }
+
+    // Latest results from each command, used for cross-referencing and
+    // for the "♻ Replace" button to find the best unused candidate.
+    let lastQuotaResults = [];
+    let lastPasswallSubs = [];
+
+    function normalizeSubUrl(u) {
+      if (!u) return '';
+      // Strip URL fragment and trailing slashes; lowercase host.
+      let s = String(u).trim();
+      const hashIdx = s.indexOf('#');
+      if (hashIdx >= 0) s = s.slice(0, hashIdx);
+      s = s.replace(/\s+/g, '');
+      try {
+        const parsed = new URL(s);
+        return `${parsed.protocol}//${parsed.host.toLowerCase()}${parsed.pathname}${parsed.search}`;
+      } catch (e) {
+        return s.toLowerCase();
+      }
+    }
+
+    function findPasswallMatch(quotaUrl) {
+      const key = normalizeSubUrl(quotaUrl);
+      if (!key) return null;
+      return lastPasswallSubs.find(s => normalizeSubUrl(s.url) === key) || null;
+    }
+
+    function findBestUnusedCandidate() {
+      // An unused candidate is a quota row that is NOT currently in Passwall2,
+      // has a successful header fetch, and has remaining bytes > 0.
+      const usedKeys = new Set(lastPasswallSubs.map(s => normalizeSubUrl(s.url)));
+      const candidates = lastQuotaResults
+        .filter(r => r.success && typeof r.remaining === 'number' && r.remaining > 0)
+        .filter(r => !usedKeys.has(normalizeSubUrl(r.url)))
+        .sort((a, b) => (b.remaining || 0) - (a.remaining || 0));
+      return candidates[0] || null;
+    }
+
+    // Build the per-card metrics needed for both initial render and diff updates.
+    function deriveCardMetrics(r) {
+      const label = r.label || r.url || '(unknown)';
+      const pct = (typeof r.percent_used === 'number' && r.percent_used >= 0) ? r.percent_used : null;
+      const pctStr = pct === null ? '—' : `${pct.toFixed(1)}%`;
+      const barWidth = pct === null ? 0 : Math.max(0, Math.min(100, pct));
+      const barColor = pct === null ? '#ccc' : (pct >= 90 ? '#f44336' : pct >= 75 ? '#ff9800' : '#4caf50');
+      const days = (typeof r.days_remaining === 'number' && r.days_remaining >= 0) ? `${r.days_remaining}d left` : '—';
+      const expireStr = r.expire ? new Date(r.expire * 1000).toLocaleDateString() : '—';
+      const viaStr = r.via && r.via !== 'direct' ? ` · via ${r.via}` : '';
+      const match = findPasswallMatch(r.url);
+      const finished = typeof r.remaining === 'number' && r.remaining <= 0;
+      return { label, pct, pctStr, barWidth, barColor, days, expireStr, viaStr, match, finished };
+    }
+
+    function buildRateLineHTML(r) {
+      const rate = computeUsageRate(r.url, r.remaining);
+      if (!rate) {
+        return `📈 Tracking started — check again later for usage rate.`;
+      }
+      const rateStr = fmtRate(rate.bytesPerDay);
+      const spanStr = fmtSpan(rate.spanSec);
+      const etaStr = rate.bytesPerDay <= 0
+        ? '<span style="color:#666;">no usage detected</span>'
+        : (rate.etaDays === null
+            ? ''
+            : (rate.etaDays >= 1
+                ? ` · <strong style="color:${rate.etaDays < 3 ? '#c62828' : rate.etaDays < 7 ? '#ef6c00' : '#2e7d32'};">runs out in ${rate.etaDays.toFixed(1)} days</strong>`
+                : ` · <strong style="color:#c62828;">runs out in ${(rate.etaDays * 24).toFixed(1)} hours</strong>`));
+      return `📈 <strong>${escapeHtmlOpt(rateStr)}</strong> (over ${spanStr}, ${rate.sampleCount} samples)${etaStr}`;
+    }
+
+    function buildBadgeHTML(match, r) {
+      // The badge doubles as an action button:
+      //  - When the subscription IS in Passwall2 → click removes it.
+      //  - When it is NOT in Passwall2 → click adds it (+ optionally optimizes balancing).
+      const url = (r && r.url) ? r.url : '';
+      const label = (r && (r.label || r.url)) || '';
+      if (match) {
+        const titleAttr = `Click to remove this subscription from Passwall2 slot ${match.index}${match.remark ? ' ("' + escapeHtmlOpt(match.remark) + '")' : ''}. Imported nodes will be removed too.`;
+        return `<button type="button" class="sqc-badge sqc-passwall-action-btn"
+          data-action="remove" data-index="${match.index}" data-remark="${escapeHtmlOpt(match.remark || '')}"
+          title="${titleAttr}"
+          style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:10px; background:#e8f5e9; color:#2e7d32; font-size:11px; border:1px solid #a5d6a7; cursor:pointer;"
+        >✅ Used in Passwall2 · slot ${match.index} · <span style="opacity:0.85;">click to remove</span></button>`;
+      }
+      if (lastPasswallSubs.length > 0 && url) {
+        const titleAttr = 'Click to add this subscription to Passwall2 (will trigger an import + optionally test nodes and add the best ones to existing balancing groups).';
+        return `<button type="button" class="sqc-badge sqc-passwall-action-btn"
+          data-action="add" data-url="${escapeHtmlOpt(url)}" data-remark="${escapeHtmlOpt(label)}"
+          title="${titleAttr}"
+          style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:10px; background:#fff8e1; color:#8d6e63; font-size:11px; border:1px solid #ffd180; cursor:pointer;"
+        >➕ Add to Passwall2</button>`;
+      }
+      return '<span class="sqc-badge"></span>';
+    }
+
+    function buildGroupsLineHTML(match) {
+      if (!match) return '';
+      const groups = Array.isArray(match.balancing_groups) ? match.balancing_groups : [];
+      const nodeCount = typeof match.nodes_count === 'number' ? match.nodes_count : null;
+      const groupChips = groups.map(g =>
+        `<span title="Balancing group ${escapeHtmlOpt(g.id)} contains nodes from this subscription" style="display:inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 10px; background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; font-size:11px;">🔀 ${escapeHtmlOpt(g.name || g.id)}</span>`
+      ).join('');
+      const nodeCountStr = nodeCount !== null
+        ? `<span style="color:#666; font-size:11px;">${nodeCount} node${nodeCount === 1 ? '' : 's'} imported</span>`
+        : '';
+      if (!groupChips && !nodeCountStr) return '';
+      return `<span style="color:#555;"><strong>Used by:</strong></span>
+              ${groupChips || '<span style="color:#888;">(no balancing group)</span>'}
+              ${nodeCountStr}`;
+    }
+
+    function buildReplaceBtnHTML(match, finished) {
+      if (!match || !finished) return '';
+      const candidate = findBestUnusedCandidate();
+      const canReplace = !!candidate;
+      const candLabel = candidate ? escapeHtmlOpt(candidate.label || candidate.url) : '';
+      return `
+        <button type="button" class="button subscription-replace-btn"
+          data-index="${match.index}"
+          data-old-remark="${escapeHtmlOpt(match.remark || '')}"
+          style="margin-top: 8px; background: ${canReplace ? '#ff9800' : '#bdbdbd'};"
+          ${canReplace ? '' : 'disabled'}
+          title="${canReplace ? 'Replace this finished subscription in Passwall2 with ' + candLabel : 'No unused subscription with remaining volume available'}"
+        >♻ Replace in Passwall2${canReplace ? ' → ' + candLabel : ''}</button>`;
+    }
+
+    function buildCircleHTML(r, match) {
+      if (!r.url) return '';
+      const circleUrl = escapeHtmlOpt(r.url);
+      // For cards NOT used in Passwall2 we don't run the auto-refresh countdown,
+      // but the user can still trigger a manual refresh with this button.
+      if (!match) {
+        return `
+          <button type="button" data-card-circle="${circleUrl}" class="sqc-card-refresh-btn"
+                  title="Refresh this subscription now"
+                  style="cursor:pointer; background:transparent; border:1px solid var(--border-color-light,#ccc); border-radius:50%; width:28px; height:28px; padding:0; display:inline-flex; align-items:center; justify-content:center; color:#555; flex:0 0 auto; line-height:1;">
+            <span style="font-size:14px; transform:translateY(-1px);">⟳</span>
+          </button>`;
+      }
+      const c = (2 * Math.PI * 11).toFixed(2);
+      return `
+        <span data-card-circle="${circleUrl}" class="sqc-card-circle" title="Auto-refresh countdown — click to refresh this card now"
+              style="cursor:pointer; position:relative; display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; flex:0 0 auto;">
+          <svg width="30" height="30" viewBox="0 0 28 28" style="display:block;">
+            <circle cx="14" cy="14" r="11" fill="none" stroke="#e0e4e8" stroke-width="2.5"/>
+            <circle class="sqc-ring" cx="14" cy="14" r="11" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round"
+                    transform="rotate(-90 14 14)" stroke-dasharray="${c}" stroke-dashoffset="${c}"
+                    style="transition: stroke-dashoffset 0.9s linear;"/>
+          </svg>
+          <span class="sqc-mm" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:9px; color:#555; font-variant-numeric:tabular-nums;">10:00</span>
+        </span>`;
+    }
+
+    function buildCardHTML(r, idx) {
+      const m = deriveCardMetrics(r);
+      const cardKey = escapeHtmlOpt(r.url || `__noUrl_${idx}`);
+      const circleHTML = buildCircleHTML(r, m.match);
+      const urlAttr = r.url ? escapeHtmlOpt(r.url) : '';
+      const labelHTML = r.url
+        ? `<a class="sqc-label-text sqc-sub-link" href="${urlAttr}" target="_blank" rel="noopener noreferrer" title="Open subscription URL in a new tab" style="color:inherit; text-decoration:none; border-bottom:1px dotted currentColor;">${escapeHtmlOpt(m.label)}</a>`
+        : `<span class="sqc-label-text">${escapeHtmlOpt(m.label)}</span>`;
+      if (!r.success) {
+        return `
+          <div data-quota-url="${cardKey}" data-card-success="0" style="border: 1px solid #f44336; background: #ffebee; border-radius: 4px; padding: 8px 12px; margin-bottom: 6px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="flex:1 1 auto;">
+                <div style="font-weight: bold;">${labelHTML}</div>
+                <div class="sqc-error-text" style="color: #c62828; font-size: 12px;">${escapeHtmlOpt(r.error || 'Unknown error')}</div>
+              </div>
+              ${circleHTML}
+            </div>
+          </div>`;
+      }
+      const badgeHTML = buildBadgeHTML(m.match, r);
+      const groupsInner = buildGroupsLineHTML(m.match);
+      const replaceBtnHTML = buildReplaceBtnHTML(m.match, m.finished);
+      const groupsLineWrapper = `<div class="sqc-groups-line" style="margin-top: 6px; font-size: 12px; display:${groupsInner ? 'flex' : 'none'}; align-items:center; gap:8px; flex-wrap:wrap;">${groupsInner}</div>`;
+      const replaceWrapper = `<div class="sqc-replace-wrapper">${replaceBtnHTML}</div>`;
+      return `
+        <div data-quota-url="${cardKey}" data-card-success="1" data-quota-idx="${idx}" style="border: 1px solid var(--border-color-light, #ddd); border-radius: 4px; padding: 10px 12px; margin-bottom: 6px; background: white;">
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+            <div style="font-weight: bold;">${labelHTML}${badgeHTML}</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="sqc-meta-line" style="font-size: 12px; color: #555;">${escapeHtmlOpt(m.expireStr)} · ${escapeHtmlOpt(m.days)}${escapeHtmlOpt(m.viaStr)}</div>
+              ${circleHTML}
+            </div>
+          </div>
+          <div class="sqc-remaining-line" style="margin-top: 6px; font-size: 13px;">
+            <strong>Remaining:</strong> ${fmtBytes(r.remaining)}
+            · <span style="color:#555;">Used ${fmtBytes(r.used)} of ${fmtBytes(r.total)} (${m.pctStr})</span>
+          </div>
+          <div style="margin-top: 6px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden;">
+            <div class="sqc-bar-fill" style="height: 100%; width: ${m.barWidth}%; background: ${m.barColor};"></div>
+          </div>
+          <div class="sqc-rate-line" style="margin-top: 6px; font-size: 12px; color:${(computeUsageRate(r.url, r.remaining) ? '#555' : '#888')};">${buildRateLineHTML(r)}</div>
+          ${groupsLineWrapper}
+          ${replaceWrapper}
+        </div>`;
+    }
+
+    // Apply a yellow flash to the element to indicate its value just changed.
+    function flashEl(el) {
+      if (!el) return;
+      el.classList.remove('sqc-flash');
+      // Force reflow so the animation restarts.
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetWidth;
+      el.classList.add('sqc-flash');
+    }
+    function setTextFlash(el, newText) {
+      if (!el) return;
+      if (el.textContent !== newText) {
+        el.textContent = newText;
+        flashEl(el);
+      }
+    }
+    function setHTMLFlash(el, newHTML) {
+      if (!el) return;
+      if (el.innerHTML !== newHTML) {
+        el.innerHTML = newHTML;
+        flashEl(el);
+      }
+    }
+
+    // Update only the changing fields of an existing card. Caller has already
+    // verified the card's structural shape (success state, match, finished)
+    // hasn't changed, so the same selectors exist.
+    function updateCardInPlace(cardEl, r) {
+      const m = deriveCardMetrics(r);
+      if (!r.success) {
+        setTextFlash(cardEl.querySelector('.sqc-label-text'), m.label);
+        setTextFlash(cardEl.querySelector('.sqc-error-text'), r.error || 'Unknown error');
         return;
       }
-      refreshBtn.dataset.listenerAdded = 'true';
-      console.log('[Passwall2] Adding listener to refresh button');
-      
-      refreshBtn.addEventListener('click', async () => {
-        console.log('[Passwall2] Refresh button clicked!');
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = '🔄 Loading...';
-        if (passwall2ProxiesList) {
-          passwall2ProxiesList.innerHTML = '<div style="text-align: center; padding: 20px;">Connecting to router...</div>';
+      setTextFlash(cardEl.querySelector('.sqc-label-text'), m.label);
+      // Keep the Passwall2 badge/button accurate (slot number, label, etc.)
+      const oldBadge = cardEl.querySelector('.sqc-badge');
+      if (oldBadge) {
+        const newBadgeHTML = buildBadgeHTML(m.match, r);
+        const wrap = document.createElement('div');
+        wrap.innerHTML = newBadgeHTML.trim();
+        const newBadge = wrap.firstElementChild;
+        if (newBadge && oldBadge.outerHTML !== newBadge.outerHTML) {
+          oldBadge.replaceWith(newBadge);
+          flashEl(newBadge);
         }
-        
+      }
+      setTextFlash(cardEl.querySelector('.sqc-meta-line'), `${m.expireStr} · ${m.days}${m.viaStr}`);
+      // Remaining line: use textContent of a freshly built node to compare reliably.
+      const remainingEl = cardEl.querySelector('.sqc-remaining-line');
+      const newRemainingHTML = `<strong>Remaining:</strong> ${fmtBytes(r.remaining)} · <span style="color:#555;">Used ${fmtBytes(r.used)} of ${fmtBytes(r.total)} (${m.pctStr})</span>`;
+      setHTMLFlash(remainingEl, newRemainingHTML);
+      // Bar fill: only flash the parent (the wrapper) if width changed visibly.
+      const barEl = cardEl.querySelector('.sqc-bar-fill');
+      if (barEl) {
+        const newWidth = `${m.barWidth}%`;
+        if (barEl.style.width !== newWidth || barEl.style.background !== m.barColor) {
+          barEl.style.width = newWidth;
+          barEl.style.background = m.barColor;
+          flashEl(barEl.parentElement);
+        }
+      }
+      setHTMLFlash(cardEl.querySelector('.sqc-rate-line'), buildRateLineHTML(r));
+      // Groups line — update inner content, toggle display.
+      const groupsEl = cardEl.querySelector('.sqc-groups-line');
+      if (groupsEl) {
+        const inner = buildGroupsLineHTML(m.match);
+        if (groupsEl.innerHTML !== inner) {
+          groupsEl.innerHTML = inner;
+          groupsEl.style.display = inner ? 'flex' : 'none';
+        }
+      }
+      // Replace button area.
+      const replaceWrap = cardEl.querySelector('.sqc-replace-wrapper');
+      if (replaceWrap) {
+        const newHTML = buildReplaceBtnHTML(m.match, m.finished);
+        if (replaceWrap.innerHTML !== newHTML) replaceWrap.innerHTML = newHTML;
+      }
+    }
+
+    // True when an existing card matches the new result's structural shape and
+    // can be updated in place (no need to rebuild from scratch).
+    function canUpdateInPlace(cardEl, r) {
+      const wasSuccess = cardEl.getAttribute('data-card-success') === '1';
+      if (wasSuccess !== !!r.success) return false;
+      const m = deriveCardMetrics(r);
+      // Distinguish auto-refresh ring (Passwall-used) from manual refresh button
+      // (not in Passwall2) — both carry [data-card-circle] but are different DOM.
+      const hadRing = !!cardEl.querySelector('.sqc-card-circle');
+      const hadManualBtn = !!cardEl.querySelector('.sqc-card-refresh-btn');
+      const wantsRing = !!(r.url && m.match);
+      const wantsManualBtn = !!(r.url && !m.match);
+      if (hadRing !== wantsRing) return false;
+      if (hadManualBtn !== wantsManualBtn) return false;
+      const hadReplaceBtn = !!cardEl.querySelector('.subscription-replace-btn');
+      const wantsReplaceBtn = !!(m.match && m.finished);
+      if (hadReplaceBtn !== wantsReplaceBtn) return false;
+      const hadBadge = !!cardEl.querySelector('.sqc-badge');
+      const wantsBadge = !!(m.match || lastPasswallSubs.length > 0);
+      if (hadBadge !== wantsBadge) return false;
+      return true;
+    }
+
+    function renderResults(results) {
+      if (!Array.isArray(results) || results.length === 0) {
+        resultsBox.innerHTML = '<div style="color: #999;">No results.</div>';
+        return;
+      }
+
+      // Index existing cards by URL key so we can update in place.
+      const existingByKey = new Map();
+      resultsBox.querySelectorAll('[data-quota-url]').forEach(el => {
+        existingByKey.set(el.getAttribute('data-quota-url'), el);
+      });
+
+      // Build / update each card and collect the final ordered list of nodes.
+      const orderedCards = [];
+      results.forEach((r, idx) => {
+        const cardKey = escapeHtmlOpt(r.url || `__noUrl_${idx}`);
+        const existing = existingByKey.get(cardKey);
+        let cardEl;
+        if (existing && canUpdateInPlace(existing, r)) {
+          updateCardInPlace(existing, r);
+          cardEl = existing;
+        } else {
+          const wrap = document.createElement('div');
+          wrap.innerHTML = buildCardHTML(r, idx).trim();
+          cardEl = wrap.firstElementChild;
+          if (existing && existing.parentNode) existing.parentNode.replaceChild(cardEl, existing);
+        }
+        existingByKey.delete(cardKey);
+        orderedCards.push(cardEl);
+      });
+
+      // Remove cards no longer present.
+      existingByKey.forEach(el => el.remove());
+
+      // Place / re-order cards inside resultsBox before the (optional) orphan block.
+      orderedCards.forEach((el, i) => {
+        const target = resultsBox.children[i];
+        if (target !== el) resultsBox.insertBefore(el, target || null);
+      });
+
+      // Orphan block: "Configured in Passwall2 but not in your list".
+      const userKeys = new Set(results.map(r => normalizeSubUrl(r.url)));
+      const orphan = lastPasswallSubs.filter(s => !userKeys.has(normalizeSubUrl(s.url)));
+      let orphanEl = resultsBox.querySelector('[data-quota-orphan]');
+      if (orphan.length) {
+        const inner = `
+          <strong>Configured in Passwall2 but not in your list:</strong>
+          <ul style="margin: 4px 0 0 18px;">
+            ${orphan.map(s => `<li>slot ${s.index} · ${escapeHtmlOpt(s.remark || '(no remark)')} · <span style="color:#888;">${escapeHtmlOpt(s.url.length > 70 ? s.url.slice(0, 70) + '…' : s.url)}</span></li>`).join('')}
+          </ul>`;
+        if (!orphanEl) {
+          orphanEl = document.createElement('div');
+          orphanEl.setAttribute('data-quota-orphan', '1');
+          orphanEl.style.cssText = 'margin-top: 10px; padding: 8px 12px; border:1px dashed #bbb; border-radius:4px; background:#fafafa; font-size:12px; color:#555;';
+          resultsBox.appendChild(orphanEl);
+        } else if (orphanEl.parentNode !== resultsBox || orphanEl !== resultsBox.lastElementChild) {
+          resultsBox.appendChild(orphanEl);
+        }
+        if (orphanEl.innerHTML !== inner) orphanEl.innerHTML = inner;
+      } else if (orphanEl) {
+        orphanEl.remove();
+      }
+    }
+
+    async function refreshPasswallSubsAndRerender() {
+      try {
+        const routerConfig = getGlobalRouterConfig();
+        if (!routerConfig || !(routerConfig.passwall2Host || routerConfig.openwrtHost)) {
+          // No router configured — skip silently.
+          lastPasswallSubs = [];
+          renderResults(lastQuotaResults);
+          return;
+        }
+        const response = await chrome.runtime.sendMessage({
+          command: COMMANDS.PASSWALL2,
+          action: 'list_subscriptions',
+          config: routerConfig
+        });
+        if (response && response.success && Array.isArray(response.subscriptions)) {
+          lastPasswallSubs = response.subscriptions;
+        } else {
+          lastPasswallSubs = [];
+        }
+      } catch (_e) {
+        lastPasswallSubs = [];
+      }
+      renderResults(lastQuotaResults);
+    }
+
+    // Delegate clicks for ♻ Replace buttons inside resultsBox.
+    resultsBox.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest && ev.target.closest('.subscription-replace-btn');      if (!btn || btn.disabled) return;
+      const index = parseInt(btn.dataset.index, 10);
+      const candidate = findBestUnusedCandidate();
+      if (!Number.isInteger(index) || !candidate) {
+        alert('Nothing to replace with — no unused subscription has remaining volume.');
+        return;
+      }
+      const oldRemark = btn.dataset.oldRemark || `slot ${index}`;
+      const candLabel = candidate.label || candidate.url;
+      const confirmed = window.confirm(
+        `Replace Passwall2 slot ${index} (${oldRemark}) with:\n  ${candLabel}\n  (${fmtBytes(candidate.remaining)} remaining)\n\nThis will rewrite the URL on the router and trigger a subscription refresh.`
+      );
+      if (!confirmed) return;
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ Replacing…';
+      try {
+        const routerConfig = getGlobalRouterConfig();
+        const response = await chrome.runtime.sendMessage({
+          command: COMMANDS.PASSWALL2,
+          action: 'replace_subscription',
+          config: routerConfig,
+          proxyData: {
+            index,
+            newUrl: candidate.url,
+            newRemark: candidate.label || '',
+            triggerUpdate: true
+          }
+        });
+        if (response && response.success) {
+          // Re-fetch quota and passwall list to reflect the change.
+          await refreshPasswallSubsAndRerender();
+          saveLastResults();
+          alert(response.message || 'Subscription replaced and refreshed.');
+        } else {
+          alert(`Replace failed: ${(response && (response.message || response.error)) || 'Unknown error'}`);
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      } catch (err) {
+        alert(`Replace error: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+
+    // Delegate clicks for the ✅/➕ badge buttons (add to / remove from Passwall2).
+    resultsBox.addEventListener('click', async (ev) => {
+      const btn = ev.target.closest && ev.target.closest('.sqc-passwall-action-btn');
+      if (!btn || btn.disabled) return;
+      const action = btn.dataset.action;
+      const originalText = btn.textContent;
+      const routerConfig = getGlobalRouterConfig();
+      if (!routerConfig || !(routerConfig.passwall2Host || routerConfig.openwrtHost)) {
+        alert('Router connection not configured.');
+        return;
+      }
+
+      if (action === 'remove') {
+        const index = parseInt(btn.dataset.index, 10);
+        const remark = btn.dataset.remark || `slot ${index}`;
+        if (!Number.isInteger(index)) return;
+        const confirmed = window.confirm(
+          `Remove Passwall2 slot ${index} ("${remark}")?\n\n` +
+          `This will:\n  • delete the @subscribe_list[${index}] entry on the router\n  • delete every node imported under group "${remark}"\n  • drop those nodes from any balancing group\n  • restart the Passwall2 service\n\nProceed?`
+        );
+        if (!confirmed) return;
+        btn.disabled = true;
+        btn.textContent = '⏳ Removing…';
+        try {
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'remove_subscription',
+            config: routerConfig,
+            proxyData: { index, deleteNodes: true, restartService: true }
+          });
+          if (response && response.success) {
+            await refreshPasswallSubsAndRerender();
+            saveLastResults();
+            alert(response.message || 'Removed.');
+          } else {
+            alert(`Remove failed: ${(response && (response.message || response.error)) || 'Unknown error'}`);
+            btn.disabled = false;
+            btn.textContent = originalText;
+          }
+        } catch (err) {
+          alert(`Remove error: ${err.message}`);
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+        return;
+      }
+
+      if (action === 'add') {
+        const url = btn.dataset.url;
+        const remark = btn.dataset.remark || '';
+        if (!url) return;
+        const optimize = window.confirm(
+          `Add this subscription to Passwall2?\n\n` +
+          `  URL:    ${url}\n  Remark: ${remark || '(none)'}\n\n` +
+          `Click OK to also run the balancing optimizer afterwards:\n` +
+          `  • TCP-pings every newly imported node from the router\n` +
+          `  • TCP-pings current members of each balancing group\n` +
+          `  • Adds new nodes that score higher than the group's median\n\n` +
+          `Click Cancel to just add the subscription without optimizing.`
+        );
+        // Second confirmation so users can still abort entirely.
+        const proceed = window.confirm(
+          (optimize ? 'About to ADD + OPTIMIZE' : 'About to ADD (no optimize)') +
+          `\n\n  URL:    ${url}\n  Remark: ${remark || '(auto)'}\n\nProceed?`
+        );
+        if (!proceed) return;
+
+        btn.disabled = true;
+        btn.textContent = '⏳ Adding…';
+        try {
+          const addResp = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'add_subscription',
+            config: routerConfig,
+            proxyData: { url, remark, autoUpdate: true, triggerUpdate: true }
+          });
+          if (!addResp || !addResp.success) {
+            alert(`Add failed: ${(addResp && (addResp.message || addResp.error)) || 'Unknown error'}`);
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+          }
+          const newRemark = addResp.remark || remark;
+          if (optimize && newRemark) {
+            btn.textContent = '⏳ Optimizing…';
+            const optResp = await chrome.runtime.sendMessage({
+              command: COMMANDS.PASSWALL2,
+              action: 'optimize_balancing_with_remark',
+              config: routerConfig,
+              proxyData: { remark: newRemark, probes: 3, minAdvantage: 1 }
+            });
+            await refreshPasswallSubsAndRerender();
+            saveLastResults();
+            if (optResp && optResp.success) {
+              const added = Array.isArray(optResp.added) ? optResp.added.length : 0;
+              alert(
+                `${addResp.message}\n\nOptimizer: ${optResp.message}` +
+                (added ? `\n\nAdded ${added} node(s) into balancing groups.` : '')
+              );
+            } else {
+              alert(`${addResp.message}\n\nOptimizer failed: ${(optResp && (optResp.message || optResp.error)) || 'Unknown error'}`);
+            }
+          } else {
+            await refreshPasswallSubsAndRerender();
+            saveLastResults();
+            alert(addResp.message || 'Added.');
+          }
+        } catch (err) {
+          alert(`Add error: ${err.message}`);
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+    });
+
+    // Load saved URLs, then merge with Passwall2's configured subscriptions
+    // so the textarea always reflects what's on the router + any extras the
+    // user has added on top.
+    (async () => {
+      let savedUrls = [];
+      try {
+        const res = await chrome.storage.sync.get(STORAGE_KEY);
+        if (Array.isArray(res[STORAGE_KEY])) savedUrls = res[STORAGE_KEY];
+      } catch (_e) {}
+
+      // Show what we have immediately so the page isn't blank while we wait
+      // for the router fetch.
+      if (savedUrls.length) {
+        textarea.value = savedUrls.join('\n');
+      }
+
+      // Try to fetch Passwall2's own subscription list and merge.
+      try {
+        const routerConfig = getGlobalRouterConfig();
+        if (routerConfig && (routerConfig.passwall2Host || routerConfig.openwrtHost)) {
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'list_subscriptions',
+            config: routerConfig
+          });
+          if (response && response.success && Array.isArray(response.subscriptions)) {
+            lastPasswallSubs = response.subscriptions;
+            const passwallUrls = response.subscriptions
+              .map(s => (s.url || '').trim())
+              .filter(Boolean);
+            // Merge: Passwall2 URLs first (canonical order), then any saved
+            // extras whose normalized form isn't already represented.
+            const seen = new Set(passwallUrls.map(normalizeSubUrl));
+            const extras = savedUrls.filter(u => !seen.has(normalizeSubUrl(u)));
+            const merged = [...passwallUrls, ...extras];
+            // Only rewrite the textarea if the merged list differs, so we don't
+            // disturb anything the user might already be typing.
+            if (textarea.value.trim() !== merged.join('\n').trim()) {
+              textarea.value = merged.join('\n');
+            }
+            // Persist the merged list so the next reload starts from here.
+            try {
+              await chrome.storage.sync.set({ [STORAGE_KEY]: merged });
+            } catch (_e) {}
+          }
+        }
+      } catch (_e) {
+        // Router unreachable / native host not running — keep the saved list.
+      }
+    })();
+
+    // Load historical usage samples for rate computation.
+    loadUsageHistory();
+
+    // ---- Per-card auto-refresh circles --------------------------------------
+    // Each subscription card carries its own circular progress indicator that
+    // fills over REFRESH_INTERVAL_MS. When it completes (or the user clicks the
+    // circle) we refresh only that one card.
+    const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+    const cardNextRefreshAt = new Map(); // url -> timestamp ms
+    const cardInFlight = new Set();      // urls currently being refreshed
+
+    function ensureCardSchedule(url, startNow = false) {
+      if (startNow || !cardNextRefreshAt.has(url)) {
+        cardNextRefreshAt.set(url, Date.now() + REFRESH_INTERVAL_MS);
+      }
+    }
+
+    async function refreshSingleCard(url) {
+      if (!url || cardInFlight.has(url)) return;
+      cardInFlight.add(url);
+      // Mark the circle as "refreshing" in the UI.
+      const circle = resultsBox.querySelector(`[data-card-circle="${CSS.escape(url)}"]`);
+      if (circle) circle.classList.add('sqc-refreshing');
+      try {
+        const response = await chrome.runtime.sendMessage({
+          command: COMMANDS.CHECK_SUBSCRIPTION_QUOTA,
+          urls: [url]
+        });
+        if (response && response.success && Array.isArray(response.results) && response.results[0]) {
+          const updated = response.results[0];
+          // Only overwrite existing data when the per-URL fetch succeeded.
+          // On per-URL failure (timeout, etc.) keep the previously shown data.
+          const existingIdx = lastQuotaResults.findIndex(r => r.url === url);
+          if (updated.success) {
+            if (existingIdx >= 0) lastQuotaResults[existingIdx] = updated;
+            else lastQuotaResults.push(updated);
+            await recordUsageSamples([updated]);
+            renderResults(lastQuotaResults);
+            saveLastResults();
+          } else {
+            // Refresh failed: keep old card data; just flash the circle red briefly.
+            if (circle) {
+              const ring = circle.querySelector('.sqc-ring');
+              if (ring) {
+                const prev = ring.getAttribute('stroke');
+                ring.setAttribute('stroke', '#f44336');
+                setTimeout(() => { ring.setAttribute('stroke', prev || '#4caf50'); }, 1500);
+              }
+              circle.title = `Last refresh failed: ${updated.error || 'unknown error'}. Showing previous data.`;
+            }
+            // If we had no prior data for this URL at all, surface the error card once.
+            if (existingIdx < 0) {
+              lastQuotaResults.push(updated);
+              renderResults(lastQuotaResults);
+            }
+          }
+        }
+      } catch (_) {
+        // Silent — circle will simply restart its countdown.
+      } finally {
+        cardInFlight.delete(url);
+        if (circle) circle.classList.remove('sqc-refreshing');
+        cardNextRefreshAt.set(url, Date.now() + REFRESH_INTERVAL_MS);
+      }
+    }
+
+    // Single tick loop driving every visible circle.
+    const RING_R = 11;
+    const RING_C = 2 * Math.PI * RING_R;
+    setInterval(() => {
+      const now = Date.now();
+      resultsBox.querySelectorAll('[data-card-circle]').forEach(el => {
+        const url = el.getAttribute('data-card-circle');
+        ensureCardSchedule(url);
+        const next = cardNextRefreshAt.get(url);
+        const remainingMs = Math.max(0, next - now);
+        const progress = 1 - (remainingMs / REFRESH_INTERVAL_MS); // 0..1
+        const ring = el.querySelector('.sqc-ring');
+        if (ring) {
+          ring.setAttribute('stroke-dasharray', RING_C.toFixed(2));
+          ring.setAttribute('stroke-dashoffset', (RING_C * (1 - progress)).toFixed(2));
+        }
+        const lbl = el.querySelector('.sqc-mm');
+        if (lbl) {
+          if (cardInFlight.has(url)) {
+            lbl.textContent = '…';
+          } else {
+            const total = Math.floor(remainingMs / 1000);
+            lbl.textContent = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+          }
+        }
+        if (remainingMs <= 0 && !cardInFlight.has(url)) {
+          refreshSingleCard(url);
+        }
+      });
+    }, 1000);
+
+    // Click on a circle = refresh that card now.
+    resultsBox.addEventListener('click', (e) => {
+      const circle = e.target.closest('[data-card-circle]');
+      if (!circle) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const url = circle.getAttribute('data-card-circle');
+      if (url) refreshSingleCard(url);
+    });
+    // -------------------------------------------------------------------------
+
+    // Restore the last quota + Passwall2 snapshot so data renders immediately
+    // on page reload (without waiting for a fresh check).
+    loadLastResults().then(ts => {
+      if (lastQuotaResults && lastQuotaResults.length) {
+        renderResults(lastQuotaResults);
+        if (ts) {
+          const ageSec = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+          const ageStr = ageSec < 90 ? `${ageSec}s` : ageSec < 3600 ? `${Math.round(ageSec / 60)}m`
+                       : ageSec < 86400 ? `${(ageSec / 3600).toFixed(1)}h` : `${(ageSec / 86400).toFixed(1)}d`;
+          const note = document.createElement('div');
+          note.style.cssText = 'margin: 4px 0 8px; font-size: 11px; color:#888;';
+          note.textContent = `Showing cached results from ${ageStr} ago. Click 📥 Show Remaining to refresh.`;
+          resultsBox.insertBefore(note, resultsBox.firstChild);
+        }
+      }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const urls = parseUrls();
+      try {
+        await chrome.storage.sync.set({ [STORAGE_KEY]: urls });
+        const original = saveBtn.textContent;
+        saveBtn.textContent = '✅ Saved';
+        setTimeout(() => { saveBtn.textContent = original; }, 1500);
+      } catch (err) {
+        alert(`Failed to save URLs: ${err.message}`);
+      }
+    });
+
+    checkBtn.addEventListener('click', async () => {
+      const urls = parseUrls();
+      if (!urls.length) {
+        resultsBox.innerHTML = '<div style="color: #f44336;">Add at least one subscription URL above.</div>';
+        return;
+      }
+      const original = checkBtn.textContent;
+      checkBtn.disabled = true;
+      checkBtn.textContent = '⏳ Checking…';
+      // Only re-render the empty placeholder when we have no existing cards;
+      // otherwise keep the cards on screen and update them in place.
+      if (!resultsBox.querySelector('[data-quota-url]')) {
+        resultsBox.innerHTML = '<div style="color: #999;">Fetching subscription headers…</div>';
+      }
+      try {
+        // Auto-save while checking, so the URLs persist.
+        await chrome.storage.sync.set({ [STORAGE_KEY]: urls });
+        // Decide which URLs need a fresh fetch:
+        //   - Always include URLs that are currently in Passwall2 (the important ones).
+        //   - Always include URLs we have NO prior successful data for (so newly
+        //     pasted URLs still get checked even if not in Passwall2 yet).
+        //   - Skip only the URLs that are NOT in Passwall2 AND already have a
+        //     cached successful result — those stay on screen with old data.
+        const haveData = new Set(
+          (lastQuotaResults || [])
+            .filter(r => r && r.success && r.url)
+            .map(r => r.url)
+        );
+        const urlsToCheck = lastPasswallSubs.length
+          ? urls.filter(u => !!findPasswallMatch(u) || !haveData.has(u))
+          : urls;
+        if (!urlsToCheck.length) {
+          checkBtn.textContent = '✓ Already up to date';
+          setTimeout(() => { checkBtn.textContent = original; }, 1800);
+          checkBtn.disabled = false;
+          return;
+        }
+        const response = await chrome.runtime.sendMessage({
+          command: COMMANDS.CHECK_SUBSCRIPTION_QUOTA,
+          urls: urlsToCheck
+        });
+        if (response && response.success) {
+          // Merge fresh results into the existing list rather than replacing it,
+          // so cards for URLs we intentionally skipped (not in Passwall2) survive.
+          // Also: if a per-URL refresh failed (e.g. timeout), keep the previous
+          // successful data on screen rather than replacing it with an error.
+          const fresh = response.results || [];
+          const successfulFresh = [];
+          if (Array.isArray(lastQuotaResults) && lastQuotaResults.length) {
+            const merged = lastQuotaResults.slice();
+            fresh.forEach(nr => {
+              const i = merged.findIndex(o => o && o.url === nr.url);
+              if (nr && nr.success) {
+                if (i >= 0) merged[i] = nr; else merged.push(nr);
+                successfulFresh.push(nr);
+              } else if (i < 0) {
+                // No previous data for this URL — surface the error card once.
+                merged.push(nr);
+              }
+              // else: keep existing successful data, drop the failed refresh.
+            });
+            lastQuotaResults = merged;
+          } else {
+            lastQuotaResults = fresh;
+            fresh.forEach(nr => { if (nr && nr.success) successfulFresh.push(nr); });
+          }
+          await recordUsageSamples(successfulFresh);
+          renderResults(lastQuotaResults);
+          // Also fetch the Passwall2 subscribe list to tag rows and enable replace.
+          await refreshPasswallSubsAndRerender();
+          // Persist for instant render on next page load.
+          saveLastResults();
+          // Reset auto-refresh countdown only for the cards we actually refreshed.
+          fresh.forEach(r => {
+            if (r && r.url) ensureCardSchedule(r.url, /*startNow=*/true);
+          });
+        } else {
+          resultsBox.innerHTML = `<div style="color: #f44336;">${escapeHtmlOpt((response && response.message) || 'Failed to check subscription quota.')}</div>`;
+        }
+      } catch (err) {
+        resultsBox.innerHTML = `<div style="color: #f44336;">Error: ${escapeHtmlOpt(err.message)}</div>`;
+      } finally {
+        checkBtn.disabled = false;
+        checkBtn.textContent = original;
+      }
+    });
+
+    // 🧪 Test Nodes: decode each subscription, TCP-ping all nodes, summarise quality.
+    function renderNodeResults(results) {
+      if (!Array.isArray(results) || results.length === 0) {
+        resultsBox.innerHTML = '<div style="color: #999;">No results.</div>';
+        return;
+      }
+      const rows = results.map(r => {
+        const label = escapeHtmlOpt(r.label || r.url || '(unknown)');
+        const viaStr = r.via && r.via !== 'direct' ? ` · via ${escapeHtmlOpt(r.via)}` : '';
+        if (!r.success) {
+          return `
+            <div style="border: 1px solid #f44336; background: #ffebee; border-radius: 4px; padding: 8px 12px; margin-bottom: 6px;">
+              <div style="font-weight: bold;">${label}</div>
+              <div style="color: #c62828; font-size: 12px;">${escapeHtmlOpt(r.error || 'Unknown error')}${viaStr}</div>
+            </div>`;
+        }
+        const alivePct = r.total > 0 ? (r.alive / r.total * 100) : 0;
+        const barColor = alivePct >= 50 ? '#4caf50' : alivePct >= 20 ? '#ff9800' : '#f44336';
+        const schemeBadges = Object.entries(r.by_scheme || {})
+          .map(([s, v]) => `<span style="display:inline-block; padding: 1px 6px; margin-right: 4px; border-radius: 3px; background:#eef; color:#225; font-size:11px;">${escapeHtmlOpt(s)}: ${v.alive}/${v.total}</span>`)
+          .join('');
+        const topRows = (r.top || []).map(n => `
+          <tr>
+            <td style="padding: 2px 8px 2px 0; font-family: monospace; font-size: 11px;">${escapeHtmlOpt(n.scheme)}</td>
+            <td style="padding: 2px 8px 2px 0; font-size: 12px;">${escapeHtmlOpt(n.name || (n.host + ':' + n.port))}</td>
+            <td style="padding: 2px 8px 2px 0; font-family: monospace; font-size: 11px; color:#666;">${escapeHtmlOpt(n.host)}:${n.port}</td>
+            <td style="padding: 2px 0; font-family: monospace; font-size: 12px; color:#2e7d32; text-align:right;">${n.ms} ms</td>
+          </tr>`).join('');
+        const topBlock = topRows
+          ? `<details style="margin-top: 6px;"><summary style="cursor: pointer; font-size: 12px; color:#1976d2;">Top ${r.top.length} fastest</summary>
+              <table style="margin-top: 6px; width: 100%; border-collapse: collapse;">${topRows}</table>
+             </details>`
+          : '';
+        return `
+          <div style="border: 1px solid var(--border-color-light, #ddd); border-radius: 4px; padding: 10px 12px; margin-bottom: 6px; background: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+              <div style="font-weight: bold;">${label}</div>
+              <div style="font-size: 12px; color: #555;">best ${r.best_ms >= 0 ? r.best_ms + 'ms' : '—'} · median ${r.median_ms >= 0 ? r.median_ms + 'ms' : '—'}${viaStr}</div>
+            </div>
+            <div style="margin-top: 6px; font-size: 13px;">
+              <strong>${r.alive} / ${r.total}</strong> nodes alive (${alivePct.toFixed(0)}%)
+              ${r.dead ? `<span style="color:#888;"> · ${r.dead} dead</span>` : ''}
+            </div>
+            ${schemeBadges ? `<div style="margin-top: 4px;">${schemeBadges}</div>` : ''}
+            <div style="margin-top: 6px; height: 8px; background: #eee; border-radius: 4px; overflow: hidden;">
+              <div style="height: 100%; width: ${alivePct}%; background: ${barColor};"></div>
+            </div>
+            ${topBlock}
+          </div>`;
+      }).join('');
+      resultsBox.innerHTML = rows;
+    }
+
+    if (nodesBtn) {
+      nodesBtn.addEventListener('click', async () => {
+        const urls = parseUrls();
+        if (!urls.length) {
+          resultsBox.innerHTML = '<div style="color: #f44336;">Add at least one subscription URL above.</div>';
+          return;
+        }
+        const original = nodesBtn.textContent;
+        nodesBtn.disabled = true;
+        nodesBtn.textContent = '⏳ Testing…';
+        resultsBox.innerHTML = '<div style="color: #999;">Decoding subscriptions and TCP-pinging nodes (this may take a few seconds)…</div>';
+        try {
+          await chrome.storage.sync.set({ [STORAGE_KEY]: urls });
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.CHECK_SUBSCRIPTION_NODES,
+            urls,
+            maxNodes: 120,
+            concurrency: 24,
+            timeout: 3.0
+          });
+          if (response && response.success) {
+            renderNodeResults(response.results || []);
+          } else {
+            resultsBox.innerHTML = `<div style="color: #f44336;">${escapeHtmlOpt((response && response.message) || 'Failed to test subscription nodes.')}</div>`;
+          }
+        } catch (err) {
+          resultsBox.innerHTML = `<div style="color: #f44336;">Error: ${escapeHtmlOpt(err.message)}</div>`;
+        } finally {
+          nodesBtn.disabled = false;
+          nodesBtn.textContent = original;
+        }
+      });
+    }
+  }
+
+  function setupGlobalPasswall2Management() {
+    const globalRefreshButtons = document.querySelectorAll('.passwall2-refresh-btn');
+    const globalOptimizeBalanceBtns = document.querySelectorAll('.passwall2-optimize-balance-btn');
+    const globalPinKixyBtns = document.querySelectorAll('.passwall2-pin-kixy-btn');
+    const globalFixGeminiBtns = document.querySelectorAll('.passwall2-fix-gemini-btn');
+    const globalUpdateSubBtns = document.querySelectorAll('.passwall2-update-sub-btn');
+    const globalUpdateBalanceBtns = document.querySelectorAll('.passwall2-update-balance-btn');
+    const globalResetRefreshBtns = document.querySelectorAll('.passwall2-reset-refresh-btn');
+    const globalRestartBtns = document.querySelectorAll('.passwall2-restart-btn');
+    const allProxiesLists = document.querySelectorAll('.passwall2-proxies-list');
+    const allStatusTexts = document.querySelectorAll('.passwall2-status-text');
+    const allProxyCounts = document.querySelectorAll('.passwall2-proxy-count');
+
+    console.log('[Passwall2] Setup: Found', globalRefreshButtons.length, 'refresh buttons,', allProxiesLists.length, 'lists');
+
+    globalOptimizeBalanceBtns.forEach(optimizeBtn => {
+      if (optimizeBtn.dataset.listenerAdded) return;
+      optimizeBtn.dataset.listenerAdded = 'true';
+      optimizeBtn.addEventListener('click', async () => {
+        const originalLabel = optimizeBtn.textContent;
+        optimizeBtn.disabled = true;
+        optimizeBtn.textContent = '⏳ Optimizing…';
+        allProxiesLists.forEach(l => { l.innerHTML = '<div style="text-align: center; padding: 20px;">Testing balance nodes and keeping the fastest stable set…</div>'; });
         try {
           const routerConfig = getGlobalRouterConfig();
-          console.log('[Passwall2] Router config:', routerConfig);
-          
-          console.log('[Passwall2] Sending message to background...');
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'optimize_balance_nodes',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            const refreshBtn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+            if (refreshBtn) refreshBtn.click();
+          } else {
+            const errorMsg = (response && (response.error || response.message)) || 'Balance optimization failed';
+            allProxiesLists.forEach(l => {
+              l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>${escapeHtmlOpt(errorMsg)}</div></div>`;
+            });
+          }
+        } catch (error) {
+          allProxiesLists.forEach(l => {
+            l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>Error: ${escapeHtmlOpt(error.message)}</div></div>`;
+          });
+        } finally {
+          optimizeBtn.disabled = false;
+          optimizeBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    // Pin Kixy: pin *.kixy.com -> jumpserver SSH node (bastion).
+    globalPinKixyBtns.forEach(pinBtn => {
+      if (pinBtn.dataset.listenerAdded) return;
+      pinBtn.dataset.listenerAdded = 'true';
+      pinBtn.addEventListener('click', async () => {
+        const originalLabel = pinBtn.textContent;
+        pinBtn.disabled = true;
+        pinBtn.textContent = '⏳ Pinning…';
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'pin_kixy_jumpserver',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            alert(response.message || '*.kixy.com pinned to jumpserver.');
+            const refreshBtn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+            if (refreshBtn) refreshBtn.click();
+          } else {
+            alert(`Pin Kixy failed: ${(response && (response.error || response.message)) || 'Unknown error'}`);
+          }
+        } catch (error) {
+          alert(`Pin Kixy error: ${error.message}`);
+        } finally {
+          pinBtn.disabled = false;
+          pinBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    // Fix Gemini: re-resolve Gemini/Google AI domains and reload the router ipset.
+    globalFixGeminiBtns.forEach(fixBtn => {
+      if (fixBtn.dataset.listenerAdded) return;
+      fixBtn.dataset.listenerAdded = 'true';
+      fixBtn.addEventListener('click', async () => {
+        const originalLabel = fixBtn.textContent;
+        fixBtn.disabled = true;
+        fixBtn.textContent = '⏳ Fixing…';
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'refresh_gemini_ipset',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            alert(response.message || 'Gemini ipset refreshed. Try Gemini again now.');
+          } else {
+            alert(`Fix Gemini failed: ${(response && (response.error || response.message)) || 'Unknown error'}`);
+          }
+        } catch (error) {
+          alert(`Fix Gemini error: ${error.message}`);
+        } finally {
+          fixBtn.disabled = false;
+          fixBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    globalUpdateSubBtns.forEach(updateBtn => {
+      if (updateBtn.dataset.listenerAdded) return;
+      updateBtn.dataset.listenerAdded = 'true';
+      updateBtn.addEventListener('click', async () => {
+        const originalLabel = updateBtn.textContent;
+        updateBtn.disabled = true;
+        updateBtn.textContent = '⏳ Updating…';
+        allProxiesLists.forEach(l => { l.innerHTML = '<div style="text-align: center; padding: 20px;">Fetching fresh nodes from subscription URL…</div>'; });
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'update_subscription',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            const refreshBtn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+            if (refreshBtn) refreshBtn.click();
+          } else {
+            const errorMsg = (response && (response.error || response.message)) || 'Subscription update failed';
+            allProxiesLists.forEach(l => {
+              l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>${escapeHtmlOpt(errorMsg)}</div></div>`;
+            });
+          }
+        } catch (error) {
+          allProxiesLists.forEach(l => {
+            l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>Error: ${escapeHtmlOpt(error.message)}</div></div>`;
+          });
+        } finally {
+          updateBtn.disabled = false;
+          updateBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    globalUpdateBalanceBtns.forEach(updateBtn => {
+      if (updateBtn.dataset.listenerAdded) return;
+      updateBtn.dataset.listenerAdded = 'true';
+      updateBtn.addEventListener('click', async () => {
+        const originalLabel = updateBtn.textContent;
+        updateBtn.disabled = true;
+        updateBtn.textContent = '⏳ Updating…';
+        allProxiesLists.forEach(l => { l.innerHTML = '<div style="text-align: center; padding: 20px;">Fetching fresh nodes from subscription…</div>'; });
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'update_balance_nodes',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            // Reload node list after successful update
+            const refreshBtn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+            if (refreshBtn) refreshBtn.click();
+          } else {
+            const errorMsg = (response && (response.error || response.message)) || 'Update failed';
+            allProxiesLists.forEach(l => {
+              l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>${escapeHtmlOpt(errorMsg)}</div></div>`;
+            });
+          }
+        } catch (error) {
+          allProxiesLists.forEach(l => {
+            l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>Error: ${escapeHtmlOpt(error.message)}</div></div>`;
+          });
+        } finally {
+          updateBtn.disabled = false;
+          updateBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    globalResetRefreshBtns.forEach(resetBtn => {
+      if (resetBtn.dataset.listenerAdded) return;
+      resetBtn.dataset.listenerAdded = 'true';
+      resetBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to DELETE ALL nodes and fetch fresh nodes from subscription?\n\nThis will remove all proxies from your router and reload them from your subscription.')) return;
+        const originalLabel = resetBtn.textContent;
+        resetBtn.disabled = true;
+        resetBtn.textContent = '🗑️ Resetting…';
+        allProxiesLists.forEach(l => { l.innerHTML = '<div style="text-align: center; padding: 20px;">Deleting all nodes and refreshing from subscription…</div>'; });
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'reset_and_refresh_nodes',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            const refreshBtn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+            if (refreshBtn) refreshBtn.click();
+          } else {
+            const errorMsg = (response && (response.error || response.message)) || 'Reset & refresh failed';
+            allProxiesLists.forEach(l => {
+              l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>${escapeHtmlOpt(errorMsg)}</div></div>`;
+            });
+          }
+        } catch (error) {
+          allProxiesLists.forEach(l => {
+            l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;"><div>Error: ${escapeHtmlOpt(error.message)}</div></div>`;
+          });
+        } finally {
+          resetBtn.disabled = false;
+          resetBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    globalRestartBtns.forEach(restartBtn => {
+      if (restartBtn.dataset.listenerAdded) return;
+      restartBtn.dataset.listenerAdded = 'true';
+      restartBtn.addEventListener('click', async () => {
+        const originalLabel = restartBtn.textContent;
+        restartBtn.disabled = true;
+        restartBtn.textContent = '⚡ Restarting…';
+        try {
+          const routerConfig = getGlobalRouterConfig();
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'restart_service',
+            config: routerConfig
+          });
+          if (response && response.success) {
+            alert(response.message || 'Passwall2 service restarted successfully.');
+            const refreshBtn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+            if (refreshBtn) refreshBtn.click();
+          } else {
+            alert(`Restart failed: ${(response && (response.error || response.message)) || 'Unknown error'}`);
+          }
+        } catch (error) {
+          alert(`Restart error: ${error.message}`);
+        } finally {
+          restartBtn.disabled = false;
+          restartBtn.textContent = originalLabel;
+        }
+      });
+    });
+
+    globalRefreshButtons.forEach(refreshBtn => {
+      if (refreshBtn.dataset.listenerAdded) return;
+      refreshBtn.dataset.listenerAdded = 'true';
+
+      refreshBtn.addEventListener('click', async () => {
+        const originalLabel = refreshBtn.textContent;
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = '🔄 Loading...';
+        allProxiesLists.forEach(l => { l.innerHTML = '<div style="text-align: center; padding: 20px;">Connecting to router…</div>'; });
+
+        try {
+          const routerConfig = getGlobalRouterConfig();
           const response = await chrome.runtime.sendMessage({
             command: COMMANDS.PASSWALL2,
             action: 'list_proxies',
             config: routerConfig
           });
-          
-          console.log('[Passwall2] Response received:', response);
-          
-          console.log('[Passwall2] Checking response.success:', response.success);
-          console.log('[Passwall2] Checking response.proxies:', response.proxies);
-          
-          if (response.success && response.proxies && response.proxies.length > 0) {
-            console.log('[Passwall2] Success! Found', response.proxies.length, 'proxies');
-            if (passwall2StatusText) {
-              passwall2StatusText.textContent = response.service_status || 'Running';
-              passwall2StatusText.style.color = response.service_status === 'running' ? '#4CAF50' : '#f44336';
-            }
-            if (passwall2ProxyCount) {
-              passwall2ProxyCount.textContent = `${response.proxies.length} ${response.proxies.length === 1 ? 'proxy' : 'proxies'}`;
-            }
-            if (passwall2ProxiesList) {
-              console.log('[Passwall2] Rendering proxy list...');
-              passwall2ProxiesList.innerHTML = response.proxies.map(proxy => `
-                <div style="padding: 14px; border-bottom: 1px solid #eee;">
-                  <div style="font-weight: bold; margin-bottom: 6px;">
-                    ${proxy.enabled ? '✅' : '⭕'} ${proxy.remarks || proxy.name || 'Unnamed'}
-                  </div>
-                  <div style="font-size: 0.9em; color: #666;">
-                    <strong>Type:</strong> ${proxy.type} | <strong>Server:</strong> ${proxy.address}:${proxy.port}
-                  </div>
-                </div>
-              `).join('');
-            }
+
+          if (response && response.success && Array.isArray(response.proxies)) {
+            allStatusTexts.forEach(el => {
+              let statusText = response.service_status || 'running';
+              if (response.router_stats) {
+                statusText += ` [${response.router_stats}]`;
+              }
+              el.textContent = statusText;
+              el.style.color = response.service_status === 'running' ? '#4CAF50' : '#f44336';
+            });
+            allProxyCounts.forEach(el => {
+              const n = response.proxies.length;
+              el.textContent = `${n} ${n === 1 ? 'node' : 'nodes'}`;
+            });
+            allProxiesLists.forEach(l => renderPasswall2ProxyList(l, response.proxies, response.active_node_id));
           } else {
-            console.warn('[Passwall2] No proxies or error. Success:', response.success, 'Error:', response.error);
-            if (passwall2ProxiesList) {
-              const errorMsg = response.error ? `<div>Error: ${response.error}</div>` : '<div>No proxies found on router</div>';
-              passwall2ProxiesList.innerHTML = `<div style="text-align: center; padding: 40px; color: #999;">
+            const errorMsg = (response && (response.error || response.message)) || 'No proxies found on router';
+            allProxiesLists.forEach(l => {
+              l.innerHTML = `<div style="text-align: center; padding: 40px; color: #999;">
                 <div style="font-size: 56px;">📭</div>
-                ${errorMsg}
+                <div>${escapeHtmlOpt(errorMsg)}</div>
               </div>`;
-            }
+            });
           }
         } catch (error) {
-          console.error('[Passwall2] Exception caught:', error);
-          if (passwall2ProxiesList) {
-            passwall2ProxiesList.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;">
-              <div>Error: ${error.message}</div>
+          allProxiesLists.forEach(l => {
+            l.innerHTML = `<div style="text-align: center; padding: 40px; color: #f44336;">
+              <div>Error: ${escapeHtmlOpt(error.message)}</div>
             </div>`;
-          }
+          });
         } finally {
-          console.log('[Passwall2] Finally block - restoring button');
           refreshBtn.disabled = false;
-          refreshBtn.textContent = '🔄 Refresh List';
+          refreshBtn.textContent = originalLabel || '🔄 Refresh List';
         }
       });
     });
+  }
+
+  function togglePasswall2ConnectionsCard(mode) {
+    const card = document.getElementById('connections-passwall2-nodes-card');
+    if (card) card.style.display = (mode === 'passwall2') ? 'block' : 'none';
   }
 
   // --- Proxy Mode Switching ---
@@ -3290,6 +4923,7 @@ function FindProxyForURL(url, host) {
       if (proxyModeLocalRadio.checked) {
         window.filterConfigsByProxyMode('local');
         chrome.storage.sync.set({ proxyMode: 'local' });
+        togglePasswall2ConnectionsCard('local');
       }
     });
     
@@ -3298,6 +4932,7 @@ function FindProxyForURL(url, host) {
         // Switch to Passwall2 mode and load proxies from router
         window.filterConfigsByProxyMode('passwall2');
         chrome.storage.sync.set({ proxyMode: 'passwall2' });
+        togglePasswall2ConnectionsCard('passwall2');
         
         // Automatically load Passwall2 proxies from router
         const passwall2RefreshBtn = document.querySelector('.passwall2-refresh-btn');
@@ -3310,10 +4945,91 @@ function FindProxyForURL(url, host) {
   }
 
 
+  // --- Auto-detect router (192.168.1.1:22) on first load ---
+  async function autoDetectRouter() {
+    try {
+      const flagKey = 'autoDetectedRouter_v1';
+      const { [flagKey]: alreadyTried, [STORAGE_KEYS.ROUTER_IP]: existingRouterIp } =
+        await chrome.storage.local.get([flagKey, STORAGE_KEYS.ROUTER_IP]);
+
+      // Skip if user already has router IP configured or we've already auto-detected once.
+      if (existingRouterIp || alreadyTried) return;
+
+      const defaultIp = '192.168.1.1';
+      const defaultUser = 'root';
+      const defaultKey = '/Users/majidsoorani/.ssh/id_ed25519';
+
+      console.log('[AutoDetect] Trying SSH', defaultUser + '@' + defaultIp + ':22');
+      const testResponse = await chrome.runtime.sendMessage({
+        command: COMMANDS.TEST_ROUTER_CONNECTION,
+        config: {
+          ip: defaultIp,
+          user: defaultUser,
+          port: 22,
+          password: '',
+          keyPath: defaultKey,
+        },
+      });
+
+      // Mark as tried so we don't repeatedly probe on every reload.
+      await chrome.storage.local.set({ [flagKey]: true });
+
+      if (!testResponse || !testResponse.success) {
+        console.log('[AutoDetect] Router not reachable:', testResponse && testResponse.message);
+        return;
+      }
+
+      console.log('[AutoDetect] Router reachable. Saving settings and switching to Passwall2 mode.');
+
+      // Persist router settings to sync storage.
+      await chrome.storage.sync.set({
+        [STORAGE_KEYS.ROUTER_IP]: defaultIp,
+        [STORAGE_KEYS.ROUTER_SSH_USER]: defaultUser,
+        [STORAGE_KEYS.ROUTER_SSH_PORT]: '22',
+        [STORAGE_KEYS.ROUTER_SSH_KEY_PATH]: defaultKey,
+        proxyMode: 'passwall2',
+      });
+
+      // Reflect the values in the UI.
+      if (routerIpInput) routerIpInput.value = defaultIp;
+      if (routerSshUserInput) routerSshUserInput.value = defaultUser;
+      if (routerSshPortInput) routerSshPortInput.value = '22';
+      if (routerSshKeyPathInput) routerSshKeyPathInput.value = defaultKey;
+
+      // Make the Passwall2 radio visible and select it.
+      checkRouterSettingsAndUpdateUI();
+      const proxyModePasswall2Radio = document.getElementById('proxy-mode-passwall2');
+      if (proxyModePasswall2Radio) {
+        proxyModePasswall2Radio.checked = true;
+        proxyModePasswall2Radio.dispatchEvent(new Event('change'));
+      }
+
+      const statusMessage = document.getElementById('status-message');
+      if (statusMessage) {
+        statusMessage.textContent = '✅ Router auto-detected at 192.168.1.1 — switched to Passwall2 mode.';
+        statusMessage.style.color = '#4CAF50';
+        setTimeout(() => { statusMessage.textContent = ''; }, 6000);
+      }
+    } catch (err) {
+      console.warn('[AutoDetect] Failed:', err);
+    }
+  }
+
   // --- Initial Load ---
-  loadSettings();
-  setupGlobalPasswall2Management();
-  requestStatusUpdate();
+  (async () => {
+    await loadSettings();
+    setupGlobalPasswall2Management();
+    setupSubscriptionQuota();
+    await autoDetectRouter();
+    // Apply initial Passwall2 connections-card visibility based on stored mode.
+    const { proxyMode = 'local' } = await chrome.storage.sync.get({ proxyMode: 'local' });
+    togglePasswall2ConnectionsCard(proxyMode);
+    if (proxyMode === 'passwall2') {
+      const btn = document.querySelector('#connections-passwall2-refresh-btn') || document.querySelector('.passwall2-refresh-btn');
+      if (btn) btn.click();
+    }
+    requestStatusUpdate();
+  })();
   // Add visibility change listener for live log
   document.addEventListener('visibilitychange', handleVisibilityChange);
   // Start polling for the main log viewer

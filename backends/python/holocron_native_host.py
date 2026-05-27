@@ -1042,7 +1042,7 @@ def execute_tunnel_command(command, config):
     else:
         return {"success": False, "message": f"Unknown connection type: {conn_type}"}
 
-def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
+def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None, urls=None):
     """
     Executes Passwall2 management commands via SSH on the OpenWrt router.
     
@@ -1062,11 +1062,18 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
     logger.info(f"[execute_passwall2_command] ProxyId: {proxy_id}")
     
     valid_actions = [
-        "list_proxies", "add_proxy", "delete_proxy", 
-        "enable_proxy", "disable_proxy", 
-        "start_service", "stop_service", "restart_service"
+        "list_proxies", "add_proxy", "delete_proxy",
+        "enable_proxy", "disable_proxy", "use_proxy",
+        "test_node", "status",
+        "start_service", "stop_service", "restart_service",
+        "update_balance_nodes", "update_subscription", "optimize_balance_nodes",
+        "reset_and_refresh_nodes",
+        "refresh_gemini_ipset", "pin_kixy_jumpserver",
+        "list_subscriptions", "replace_subscription",
+        "add_subscription", "remove_subscription", "optimize_balancing_with_remark",
+        "remove_sub_from_balancing_group"
     ]
-    
+
     if action not in valid_actions:
         logger.error(f"[execute_passwall2_command] Invalid action: {action}")
         return {"success": False, "message": f"Invalid Passwall2 action: {action}. Must be one of: {', '.join(valid_actions)}"}
@@ -1075,11 +1082,11 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
         logger.error("[execute_passwall2_command] No config provided")
         return {"success": False, "message": "Configuration must be provided for Passwall2 command."}
 
-    passwall2_host = config.get("passwall2Host")
-    passwall2_user = config.get("passwall2User", "root")
-    passwall2_password = config.get("passwall2Password")
-    passwall2_key_path = config.get("passwall2KeyPath")
-    passwall2_socks_port = config.get("passwall2SocksPort", "1080")
+    passwall2_host = config.get("passwall2Host") or config.get("openwrtHost")
+    passwall2_user = config.get("passwall2User") or config.get("openwrtUser", "root")
+    passwall2_password = config.get("passwall2Password") or config.get("openwrtPassword")
+    passwall2_key_path = config.get("passwall2KeyPath") or config.get("sshKeyPath")
+    passwall2_socks_port = config.get("passwall2SocksPort") or config.get("openwrtSocksPort", "1080")
     passwall2_http_port = config.get("passwall2HttpPort", "")
 
     logger.info(f"[execute_passwall2_command] Extracted config - Host: {passwall2_host}, User: {passwall2_user}, KeyPath: {passwall2_key_path}")
@@ -1111,11 +1118,61 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
     ])
 
     try:
+        if action == "status":
+            remote_cmd = (
+                "if ps | grep -E '/tmp/etc/passwall2/bin/(xray|sing-box)' | grep -v grep >/dev/null 2>&1; "
+                "then echo enabled; else echo disabled; fi"
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info("[status] Checking Passwall2 service status")
+            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   universal_newlines=True, timeout=30)
+            if result.returncode != 0:
+                error_msg = (result.stderr or result.stdout).strip()
+                logger.error(f"[status] Failed: {error_msg}")
+                return {"success": False, "message": f"Failed to get status: {error_msg}"}
+            return {"success": True, "status": result.stdout.strip()}
+
+        if action == "reset_and_refresh_nodes":
+            # Remove all nodes and trigger subscription refresh
+            remote_cmd = (
+                "uci show passwall2 | grep '=nodes' | awk -F'.' '{print $2}' | awk -F'=' '{print $1}' | "
+                "xargs -I{} uci delete passwall2.{} 2>/dev/null; "
+                "uci commit passwall2; "
+                "/etc/init.d/passwall2 reload >/dev/null 2>&1; "
+                "[ -x /usr/share/passwall2/subscribe.lua ] && lua /usr/share/passwall2/subscribe.lua start || "
+                "/etc/init.d/passwall2 restart >/dev/null 2>&1; "
+                "echo OK"
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info("[reset_and_refresh_nodes] Deleting all nodes and refreshing from subscription")
+            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, timeout=120)
+            if result.returncode != 0:
+                error_msg = (result.stderr or result.stdout).strip()
+                logger.error(f"[reset_and_refresh_nodes] Failed: {error_msg}")
+                return {"success": False, "message": f"Failed to reset and refresh nodes: {error_msg}"}
+            return {"success": True, "message": "All nodes deleted and refreshed from subscription."}
+
         if action == "list_proxies":
             logger.info(f"[list_proxies] Starting proxy list operation")
-            # Get all nodes from Passwall2 UCI config with their properties
+            # Get all nodes from Passwall2 UCI config with their properties.
+            # Also include the currently-active global node, service status, and hardware stats
+            # so the UI can highlight which node is in use.
             # Support both indexed (@nodes[0]) and named (nodeId=nodes) formats
-            remote_cmd = "uci show passwall2 | grep -E '(^passwall2\\.[^.@]+=(nodes|shunt_rules)|\\.(type|remarks|address|port|protocol|enabled)=)'"
+            remote_cmd = (
+                "echo '---NODES---'; "
+                "uci show passwall2 | grep -E '(^passwall2\\.[^.@]+=(nodes|shunt_rules)|\\.(type|remarks|address|port|protocol|enabled)=)'; "
+                "echo '---ACTIVE---'; "
+                "uci -q get passwall2.@global[0].node || echo ''; "
+                "echo '---STATUS---'; "
+                "if ps | grep -E '/tmp/etc/passwall2/bin/(xray|sing-box)' | grep -v grep >/dev/null 2>&1; "
+                "then echo running; else echo stopped; fi; "
+                "echo '---STATS---'; "
+                "mem=$(awk '/MemTotal/ {total=$2} /MemAvailable/ {avail=$2} /MemFree/ {free=$2} /Buffers/ {buffers=$2} /Cached/ {cached=$2} END {if (total>0) {a=avail?avail:(free+buffers+cached); printf \"%d%%\", (total-a)/total*100} else {print \"N/A\"}}' /proc/meminfo); "
+                "load=$(cut -d' ' -f1-3 /proc/loadavg); "
+                "echo \"Mem: $mem | Load: $load\""
+            )
             ssh_cmd.append(remote_cmd)
             
             logger.info(f"[list_proxies] SSH command: {' '.join(ssh_cmd)}")
@@ -1137,25 +1194,56 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
             
             # Parse UCI output to extract proxy information
             proxies = []
-            lines = result.stdout.strip().split('\n')
-            proxy_sections = {}
+            raw_output = result.stdout
+            active_node_id = ""
             service_status = "unknown"
-            
-            logger.info(f"[list_proxies] Processing {len(lines)} lines")
-            
-            for line in lines:
-                if "running" in line.lower():
-                    service_status = "running"
-                elif "stopped" in line.lower() or "inactive" in line.lower():
-                    service_status = "stopped"
-                    
+            router_stats = ""
+
+            # Split into sections using markers emitted by the remote command.
+            section = "NODES"
+            node_lines = []
+            active_lines = []
+            status_lines = []
+            stats_lines = []
+            for line in raw_output.splitlines():
+                if line.strip() == "---NODES---":
+                    section = "NODES"; continue
+                if line.strip() == "---ACTIVE---":
+                    section = "ACTIVE"; continue
+                if line.strip() == "---STATUS---":
+                    section = "STATUS"; continue
+                if line.strip() == "---STATS---":
+                    section = "STATS"; continue
+                if section == "NODES":
+                    node_lines.append(line)
+                elif section == "ACTIVE":
+                    active_lines.append(line)
+                elif section == "STATUS":
+                    status_lines.append(line)
+                elif section == "STATS":
+                    stats_lines.append(line)
+
+            active_node_id = "\n".join(active_lines).strip()
+            router_stats = "\n".join(stats_lines).strip()
+
+            status_text = "\n".join(status_lines).lower()
+            if "running" in status_text:
+                service_status = "running"
+            elif "stopped" in status_text or "inactive" in status_text or "not running" in status_text:
+                service_status = "stopped"
+
+            proxy_sections = {}
+
+            logger.info(f"[list_proxies] Processing {len(node_lines)} node lines; active='{active_node_id}'; status='{service_status}'")
+
+            for line in node_lines:
                 # Parse UCI format - supports both:
                 # 1. Named sections: passwall2.nodeId=nodes
                 # 2. Indexed sections: passwall2.@nodes[0]=nodes
                 # 3. Properties: passwall2.nodeId.type='vmess'
                 
                 # Match: passwall2.nodeId=nodes (node definition)
-                node_def_match = re.match(r"passwall2\.([a-zA-Z0-9]+)=nodes", line)
+                node_def_match = re.match(r"passwall2\.([A-Za-z0-9_]+)=nodes", line)
                 if node_def_match:
                     node_id = node_def_match.group(1)
                     logger.info(f"[list_proxies] Found named node: {node_id}")
@@ -1173,9 +1261,12 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
                     continue
                 
                 # Match properties: passwall2.nodeId.property='value' or passwall2.@nodes[0].property='value'
-                prop_match = re.match(r"passwall2\.([a-zA-Z0-9@\[\]]+)\.(\w+)='?([^']*)'?", line)
+                prop_match = re.match(r"passwall2\.([A-Za-z0-9_@\[\]]+)\.(\w+)=(.*)", line)
                 if prop_match:
                     section_id, key, value = prop_match.groups()
+                    value = value.strip()
+                    if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
+                        value = value[1:-1]
                     # Extract ID from @nodes[0] format
                     indexed_id_match = re.match(r"@nodes\[(\d+)\]", section_id)
                     if indexed_id_match:
@@ -1186,21 +1277,25 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
             
             # Convert to list format
             for proxy in proxy_sections.values():
+                pid = proxy.get("id", "")
                 proxies.append({
-                    "id": proxy.get("id", ""),
+                    "id": pid,
                     "type": proxy.get("type", "Unknown"),
                     "remarks": proxy.get("remarks", "Unnamed"),
                     "name": proxy.get("remarks", "Unnamed"),
                     "address": proxy.get("address", ""),
                     "port": proxy.get("port", ""),
-                    "enabled": proxy.get("enabled", "0") == "1"
+                    "enabled": proxy.get("enabled", "0") == "1",
+                    "is_active": bool(active_node_id) and pid == active_node_id,
                 })
-            
+
             logger.info(f"[list_proxies] Found {len(proxies)} proxies")
             return {
-                "success": True, 
+                "success": True,
                 "proxies": proxies,
+                "active_node_id": active_node_id,
                 "service_status": service_status,
+                "router_stats": router_stats,
                 "message": f"Found {len(proxies)} proxies"
             }
         
@@ -1312,6 +1407,140 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
             
             return {"success": True, "message": "Proxy disabled successfully"}
         
+        elif action == "use_proxy":
+            if proxy_id is None or proxy_id == "":
+                return {"success": False, "message": "Proxy ID must be provided for use_proxy action."}
+
+            # Only allow alphanumeric IDs (UCI section names) to prevent SSH injection.
+            safe_id = re.sub(r"[^A-Za-z0-9_]", "", str(proxy_id))
+            if not safe_id:
+                return {"success": False, "message": "Invalid proxy ID."}
+
+            remote_cmd = (
+                f"uci set passwall2.@global[0].node='{safe_id}' && "
+                "uci commit passwall2 && "
+                "/etc/init.d/passwall2 restart && "
+                "([ -x /usr/share/passwall2/holocron_refresh_gemini_ipset.sh ] && "
+                "/usr/share/passwall2/holocron_refresh_gemini_ipset.sh || true)"
+            )
+            ssh_cmd.append(remote_cmd)
+
+            logging.info(f"Setting active Passwall2 node to {safe_id}")
+            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   universal_newlines=True, timeout=45)
+
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or result.stdout.strip()
+                logging.error(f"Failed to set active node: {error_msg}")
+                return {"success": False, "message": f"Failed to switch node: {error_msg}"}
+
+            return {"success": True, "message": "Active node updated", "active_node_id": safe_id}
+
+        elif action == "test_node":
+            if not proxy_id:
+                return {"success": False, "message": "Proxy ID is required for test_node."}
+            safe_id = re.sub(r"[^A-Za-z0-9_]", "", str(proxy_id))
+            if not safe_id:
+                return {"success": False, "message": "Invalid proxy ID."}
+
+            test_urls = urls or [
+                "https://www.youtube.com",
+                "https://www.kixy.com",
+                "https://www.whatsapp.com",
+                "https://telegram.org",
+            ]
+            url_re = re.compile(r"^https?://[A-Za-z0-9._:/\-?&=%@~+]+$")
+            safe_urls = [u for u in test_urls if isinstance(u, str) and url_re.match(u)]
+            if not safe_urls:
+                return {"success": False, "message": "No valid URLs to test."}
+
+            # Kixy (company) URLs must always be tested through the jumpserver/bastion
+            # SSH node, regardless of which node the user is testing. This reflects the
+            # real Passwall2 shunt routing where *.kixy.com is pinned to the bastion.
+            KIXY_NODE_ID = "ssh_7Hd5rcr0"
+            kixy_re = re.compile(r"^https?://([A-Za-z0-9_-]+\.)*kixy\.com(?:[:/].*)?$", re.IGNORECASE)
+
+            def _node_for_url(u):
+                return KIXY_NODE_ID if kixy_re.match(u) else safe_id
+
+            # Use Passwall2's own per-URL test, which routes the request through
+            # the selected node (works for Shunt and Balancing rules too).
+            # Output of each call: "<url>\t<node>\t<http_code>:<seconds>" or "000:0" on failure.
+            pairs = []
+            for u in safe_urls:
+                node_for_u = _node_for_url(u)
+                u_q = "'" + u.replace("'", "'\\''") + "'"
+                n_q = "'" + node_for_u.replace("'", "'\\''") + "'"
+                pairs.append(f"{n_q} {u_q}")
+            pair_args = " ".join(pairs)
+            remote_cmd = (
+                "TEST=/usr/share/passwall2/test.sh; "
+                "if [ ! -f \"$TEST\" ]; then echo 'NOTEST'; exit 0; fi; "
+                "set -- " + pair_args + "; "
+                "while [ $# -ge 2 ]; do "
+                "  node=\"$1\"; u=\"$2\"; shift 2; "
+                "  out=$(sh \"$TEST\" url_test_node \"$node\" \"$u\" 2>/dev/null); "
+                "  echo \"$u\t$node\t$out\"; "
+                "done"
+            )
+
+            ssh_cmd.append(remote_cmd)
+            logger.info(
+                f"[test_node] URL-testing node {safe_id} on {len(safe_urls)} URLs "
+                f"(kixy URLs pinned to {KIXY_NODE_ID})"
+            )
+
+            # Each URL test spawns a temporary xray instance (~3-5s) so allow plenty of time.
+            total_timeout = max(60, 12 * len(safe_urls))
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       universal_newlines=True, timeout=total_timeout)
+            except subprocess.TimeoutExpired:
+                logger.error(f"[test_node] SSH timed out for node {safe_id}")
+                return {"success": False, "message": "SSH timed out"}
+
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or result.stdout.strip() or "Unknown error"
+                logger.error(f"[test_node] Failed: {error_msg}")
+                return {"success": False, "message": f"Test failed: {error_msg}"}
+
+            stdout = (result.stdout or "").strip()
+            logger.info(f"[test_node] Node {safe_id} raw: {stdout!r}")
+
+            if stdout == "NOTEST":
+                return {"success": False, "message": "Router missing /usr/share/passwall2/test.sh"}
+
+            results = {u: -1 for u in safe_urls}
+            tested_via = {}
+            for line in stdout.splitlines():
+                parts = line.split("\t")
+                if len(parts) < 2:
+                    continue
+                if len(parts) >= 3:
+                    url_part, node_part, out_part = parts[0].strip(), parts[1].strip(), parts[2].strip()
+                else:
+                    # Backward-compat: older output without node column
+                    url_part, out_part = parts[0].strip(), parts[1].strip()
+                    node_part = safe_id
+                # out_part format: "<code>:<seconds>" e.g. "204:0.532"
+                code = None
+                secs = None
+                if ":" in out_part:
+                    code_str, _, time_str = out_part.partition(":")
+                    code = code_str.strip()
+                    try:
+                        secs = float(time_str.strip())
+                    except ValueError:
+                        secs = None
+                if code in ("200", "204", "301", "302", "307", "308") and secs is not None:
+                    ms = max(1, int(secs * 1000))
+                    results[url_part] = ms
+                else:
+                    results[url_part] = -1
+                tested_via[url_part] = node_part
+
+            return {"success": True, "node_id": safe_id, "results": results, "tested_via": tested_via}
+
         elif action in ["start_service", "stop_service", "restart_service"]:
             service_action = action.split('_')[0]  # Extract: start, stop, restart
             remote_cmd = f"/etc/init.d/passwall2 {service_action}"
@@ -1327,6 +1556,793 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None):
                 return {"success": False, "message": f"Failed to {service_action} service: {error_msg}"}
             
             return {"success": True, "message": f"Passwall2 service {service_action}ed successfully"}
+
+        elif action in ("update_balance_nodes", "update_subscription"):
+            # Trigger a subscription refresh on the router; subscribe.lua fetches
+            # fresh nodes from the subscription URL and rebuilds all balance groups
+            # (including 'all balance youtube' and 'balancing whatsaap').
+            remote_cmd = "lua /usr/share/passwall2/subscribe.lua start all manual > /tmp/subscribe_update.log 2>&1; echo \"exit:$?\""
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[{action}] Triggering subscription update on {passwall2_host}")
+            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, timeout=120)
+            stdout = result.stdout.strip()
+            logger.info(f"[{action}] stdout: {stdout!r}, stderr: {result.stderr.strip()!r}")
+            # The script echoes 'exit:0' on success
+            if "exit:0" in stdout:
+                return {"success": True, "message": "Subscription updated. Node list and balance groups refreshed."}
+            error_msg = result.stderr.strip() or stdout or "Unknown error during subscription update"
+            logger.error(f"[{action}] Failed: {error_msg}")
+            return {"success": False, "message": f"Subscription update failed: {error_msg}"}
+
+        elif action == "optimize_balance_nodes":
+            remote_cmd = r"""
+TOP_N=5
+PROBE_INTERVAL=2m
+TEST=/usr/share/passwall2/test.sh
+YT_GROUP=o0bwijd1
+WA_GROUP=qk8qf_blc
+YT_URL=https://www.youtube.com/generate_204
+WA_URL=https://web.whatsapp.com/
+
+if [ ! -f "$TEST" ]; then
+    echo "ERROR|missing_test_script"
+    exit 2
+fi
+
+run_test() {
+    node_id="$1"
+    url="$2"
+    if command -v timeout >/dev/null 2>&1; then
+        out=$(timeout 14 sh "$TEST" url_test_node "$node_id" "$url" 2>/dev/null | tail -n 1 | tr -d '\r')
+    else
+        out=$(sh "$TEST" url_test_node "$node_id" "$url" 2>/dev/null | tail -n 1 | tr -d '\r')
+    fi
+    code=${out%%:*}
+    seconds=${out#*:}
+    case "$code" in
+        200|204|301|302|307|308)
+            awk -v seconds="$seconds" 'BEGIN { ms = int(seconds * 1000); if (ms < 1) ms = 1; print ms }'
+            ;;
+        *)
+            echo 999999
+            ;;
+    esac
+}
+
+is_valid_node() {
+    node_id="$1"
+    type=$(uci -q get passwall2.$node_id.type)
+    protocol=$(uci -q get passwall2.$node_id.protocol)
+    address=$(uci -q get passwall2.$node_id.address)
+    port=$(uci -q get passwall2.$node_id.port)
+    [ -n "$type" ] || return 1
+    [ -n "$protocol" ] || return 1
+    [ -n "$address" ] || return 1
+    [ -n "$port" ] || return 1
+    [ "$protocol" = "_balancing" ] && return 1
+    [ "$protocol" = "_shunt" ] && return 1
+    return 0
+}
+
+all_valid_nodes() {
+    uci show passwall2 | sed -n "s/^passwall2\.\([A-Za-z0-9_][A-Za-z0-9_]*\)=nodes$/\1/p" | while read -r node_id; do
+        if is_valid_node "$node_id"; then
+            echo "$node_id"
+        fi
+    done
+}
+
+group_candidates() {
+    group_id="$1"
+    nodes=""
+    for node_id in $(uci -q get passwall2.$group_id.balancing_node); do
+        if is_valid_node "$node_id"; then
+            nodes="$nodes $node_id"
+        else
+            echo "SKIP|$group_id|$node_id|invalid_or_stale"
+        fi
+    done
+
+    count=$(printf '%s\n' $nodes | awk 'NF { n++ } END { print n + 0 }')
+    if [ "$count" -lt "$TOP_N" ]; then
+        for node_id in $(all_valid_nodes); do
+            case " $nodes " in
+                *" $node_id "*) ;;
+                *) nodes="$nodes $node_id" ;;
+            esac
+        done
+    fi
+
+    printf '%s\n' $nodes | awk 'NF'
+}
+
+optimize_group() {
+    group_id="$1"
+    label="$2"
+    url="$3"
+    tmp="/tmp/holocron_opt_${group_id}_$$"
+    : > "$tmp"
+
+    nodes=$(group_candidates "$group_id")
+    if [ -z "$nodes" ]; then
+        echo "ERROR|$label|no_valid_candidates"
+        return 1
+    fi
+
+    for node_id in $nodes; do
+        ms=$(run_test "$node_id" "$url")
+        remarks=$(uci -q get passwall2.$node_id.remarks | tr '|' ' ')
+        printf '%06d|%s|%s\n' "$ms" "$node_id" "$remarks" >> "$tmp"
+        echo "TEST|$label|$node_id|$ms|$remarks"
+    done
+
+    selected=$(sort -n "$tmp" | awk -F'|' -v top="$TOP_N" '$1 < 999999 && count < top { print $2; count++ }')
+    if [ -z "$selected" ]; then
+        selected=$(printf '%s\n' $nodes | awk -v top="$TOP_N" 'NR <= top { print }')
+    fi
+
+    uci -q delete passwall2.$group_id.balancing_node >/dev/null 2>&1 || true
+    for node_id in $selected; do
+        uci add_list passwall2.$group_id.balancing_node="$node_id"
+    done
+    uci set passwall2.$group_id.balancingStrategy='leastPing'
+    uci set passwall2.$group_id.probeInterval="$PROBE_INTERVAL"
+
+    count=$(printf '%s\n' $selected | awk 'NF { n++ } END { print n + 0 }')
+    ids=$(printf '%s ' $selected)
+    echo "SUMMARY|$label|count=$count|interval=$PROBE_INTERVAL|nodes=$ids"
+    rm -f "$tmp"
+}
+
+echo "OPTIMIZE|start|top=$TOP_N|interval=$PROBE_INTERVAL"
+optimize_group "$YT_GROUP" youtube "$YT_URL"
+yt_status=$?
+optimize_group "$WA_GROUP" whatsapp "$WA_URL"
+wa_status=$?
+
+if [ "$yt_status" -ne 0 ] || [ "$wa_status" -ne 0 ]; then
+    echo "ERROR|optimize_failed|youtube=$yt_status|whatsapp=$wa_status"
+    exit 3
+fi
+
+uci commit passwall2
+/etc/init.d/passwall2 restart >/dev/null 2>&1 || /etc/init.d/passwall2 start >/dev/null 2>&1 || true
+[ -x /usr/share/passwall2/holocron_refresh_gemini_ipset.sh ] && /usr/share/passwall2/holocron_refresh_gemini_ipset.sh || true
+echo "OPTIMIZE|done"
+"""
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[optimize_balance_nodes] Optimizing balance groups on {passwall2_host}")
+            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    universal_newlines=True, timeout=900)
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[optimize_balance_nodes] stdout: {stdout!r}, stderr: {stderr!r}")
+            summaries = [line for line in stdout.splitlines() if line.startswith("SUMMARY|")]
+            if result.returncode != 0 and not summaries:
+                error_msg = stderr or stdout or "Unknown error during balance optimization"
+                logger.error(f"[optimize_balance_nodes] Failed: {error_msg}")
+                return {"success": False, "message": f"Balance optimization failed: {error_msg}"}
+
+            return {
+                "success": True,
+                "message": "Optimized YouTube and WhatsApp balance groups to up to 5 working nodes with 2m probes.",
+                "summary": summaries,
+                "output": stdout
+            }
+
+        elif action == "refresh_gemini_ipset":
+            # Re-resolve Gemini/Google AI domains and reload the router ipset so
+            # the PAC/iptables rules match again when Google rotates IPs.
+            remote_cmd = (
+                "SCRIPT=/usr/share/passwall2/holocron_refresh_gemini_ipset.sh; "
+                "if [ ! -x \"$SCRIPT\" ]; then echo 'ERROR|missing_script'; exit 2; fi; "
+                "\"$SCRIPT\" 2>&1; echo \"exit:$?\""
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[refresh_gemini_ipset] Refreshing Gemini ipset on {passwall2_host}")
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=120)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "Gemini ipset refresh timed out."}
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[refresh_gemini_ipset] stdout: {stdout!r}, stderr: {stderr!r}")
+            if "ERROR|missing_script" in stdout:
+                return {"success": False, "message": "Router is missing holocron_refresh_gemini_ipset.sh."}
+            if "exit:0" not in stdout:
+                error_msg = stderr or stdout or "Unknown error"
+                return {"success": False, "message": f"Gemini ipset refresh failed: {error_msg}"}
+            return {"success": True, "message": "Gemini ipset refreshed.", "output": stdout}
+
+        elif action == "pin_kixy_jumpserver":
+            # Pin *.kixy.com on Passwall2 to the bastion / jumpserver SSH node so
+            # company traffic always goes through the AWS bastion regardless of
+            # the active exit node.
+            jump_node = re.sub(r"[^A-Za-z0-9_]", "", str((proxy_data or {}).get("jumpNodeId") or proxy_id or "ssh_7Hd5rcr0"))
+            shunt_rule = re.sub(r"[^A-Za-z0-9_]", "", str((proxy_data or {}).get("shuntRuleId") or "iran_shunt_node"))
+            if not jump_node or not shunt_rule:
+                return {"success": False, "message": "Invalid jumpNodeId or shuntRuleId."}
+            domain_list = "domain:.kixy.com"
+            company_id = "company_sites"
+
+            remote_cmd = (
+                "set -e; "
+                f"JUMP={jump_node}; SHUNT={shunt_rule}; CID={company_id}; "
+                f"DLIST='{domain_list}'; "
+                "if ! uci -q get \"passwall2.$JUMP\" >/dev/null; then echo 'ERROR|missing_jump_node'; exit 2; fi; "
+                "if ! uci -q get \"passwall2.$SHUNT\" >/dev/null; then echo 'ERROR|missing_shunt_node'; exit 3; fi; "
+                "if ! uci -q get \"passwall2.$CID\" >/dev/null; then "
+                "  uci set \"passwall2.$CID=shunt_rules\"; "
+                "  uci set \"passwall2.$CID.remarks=Company Sites (Kixy via jumpserver)\"; "
+                "fi; "
+                "uci set \"passwall2.$CID.domain_list=$DLIST\"; "
+                "uci set \"passwall2.$CID.node=$JUMP\"; "
+                "uci set \"passwall2.$CID.enabled=1\"; "
+                "uci set \"passwall2.$SHUNT.$CID=$JUMP\"; "
+                "uci commit passwall2; "
+                "/etc/init.d/passwall2 restart >/dev/null 2>&1 || /etc/init.d/passwall2 reload >/dev/null 2>&1 || true; "
+                "echo \"PINNED|$CID|$JUMP|$DLIST\"; "
+                "echo \"exit:$?\""
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info(
+                f"[pin_kixy_jumpserver] Pinning {domain_list} -> {jump_node} via shunt {shunt_rule} on {passwall2_host}"
+            )
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=60)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "Pin Kixy timed out."}
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[pin_kixy_jumpserver] stdout: {stdout!r}, stderr: {stderr!r}")
+            if "ERROR|missing_jump_node" in stdout:
+                return {"success": False, "message": f"Jumpserver node '{jump_node}' not found on router."}
+            if "ERROR|missing_shunt_node" in stdout:
+                return {"success": False, "message": f"Shunt node '{shunt_rule}' not found on router."}
+            if "exit:0" not in stdout:
+                error_msg = stderr or stdout or "Unknown error"
+                return {"success": False, "message": f"Pin Kixy failed: {error_msg}"}
+            return {
+                "success": True,
+                "message": f"*.kixy.com pinned to {jump_node}.",
+                "output": stdout,
+            }
+
+        elif action == "list_subscriptions":
+            # Enumerate all passwall2 @subscribe_list[N] entries on the router,
+            # and additionally compute which balancing groups consume nodes from
+            # each subscription. Nodes imported by subscribe.lua carry a `group`
+            # field whose value equals the parent subscription's `remark`.
+            remote_cmd = (
+                "echo '---SUBS---'; "
+                "i=0; "
+                "while uci -q get passwall2.@subscribe_list[$i] >/dev/null 2>&1; do "
+                "  url=$(uci -q get passwall2.@subscribe_list[$i].url); "
+                "  remark=$(uci -q get passwall2.@subscribe_list[$i].remark); "
+                "  auto=$(uci -q get passwall2.@subscribe_list[$i].auto_update); "
+                "  ua=$(uci -q get passwall2.@subscribe_list[$i].user_agent); "
+                "  printf 'SUB\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$i\" \"$auto\" \"$ua\" \"$remark\" \"$url\"; "
+                "  i=$((i+1)); "
+                "done; "
+                "echo '---NODES---'; "
+                "for n in $(uci show passwall2 | sed -n 's/^passwall2\\.\\([A-Za-z0-9_]*\\)=nodes$/\\1/p'); do "
+                "  proto=$(uci -q get passwall2.$n.protocol); "
+                "  grp=$(uci -q get passwall2.$n.group); "
+                "  rem=$(uci -q get passwall2.$n.remarks); "
+                "  bnodes=$(uci -q get passwall2.$n.balancing_node | tr '\\n' ' '); "
+                "  printf 'NODE\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$n\" \"$proto\" \"$grp\" \"$rem\" \"$bnodes\"; "
+                "done"
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[list_subscriptions] Listing Passwall2 subscriptions on {passwall2_host}")
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=30)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "list_subscriptions timed out."}
+            if result.returncode != 0:
+                err = (result.stderr or result.stdout).strip()
+                logger.error(f"[list_subscriptions] Failed: {err}")
+                return {"success": False, "message": f"Failed to list Passwall2 subscriptions: {err}"}
+
+            section = None
+            subs = []
+            nodes = {}            # node_id -> {protocol, group, remarks, members}
+            for line in (result.stdout or "").splitlines():
+                line = line.rstrip("\r")
+                if line == "---SUBS---":
+                    section = "SUBS"; continue
+                if line == "---NODES---":
+                    section = "NODES"; continue
+                parts = line.split("\t")
+                if section == "SUBS" and parts and parts[0] == "SUB" and len(parts) >= 5:
+                    try:
+                        idx = int(parts[1])
+                    except ValueError:
+                        continue
+                    subs.append({
+                        "index": idx,
+                        "auto_update": parts[2].strip() == "1",
+                        "user_agent": parts[3].strip(),
+                        "remark": parts[4].strip() if len(parts) > 4 else "",
+                        "url": parts[5].strip() if len(parts) > 5 else "",
+                    })
+                elif section == "NODES" and parts and parts[0] == "NODE" and len(parts) >= 6:
+                    node_id = parts[1].strip()
+                    nodes[node_id] = {
+                        "protocol": parts[2].strip(),
+                        "group": parts[3].strip(),
+                        "remarks": parts[4].strip(),
+                        "members": [m for m in parts[5].strip().split() if m],
+                    }
+
+            # Build sub.remark -> [{id, name}] of balancing groups that reference it.
+            groups_by_remark = {}
+            nodes_count_by_remark = {}
+            for nid, ndata in nodes.items():
+                grp = ndata.get("group")
+                if grp and ndata.get("protocol") != "_balancing" and ndata.get("protocol") != "_shunt":
+                    nodes_count_by_remark[grp] = nodes_count_by_remark.get(grp, 0) + 1
+            for nid, ndata in nodes.items():
+                if ndata.get("protocol") != "_balancing":
+                    continue
+                grp_label = ndata.get("remarks") or nid
+                # Which subscription remarks are represented by this balancing group's members?
+                seen = set()
+                for member_id in ndata.get("members", []):
+                    member = nodes.get(member_id)
+                    if not member:
+                        continue
+                    member_grp = member.get("group")
+                    if not member_grp or member_grp in seen:
+                        continue
+                    seen.add(member_grp)
+                    bucket = groups_by_remark.setdefault(member_grp, [])
+                    if not any(g.get("id") == nid for g in bucket):
+                        bucket.append({"id": nid, "name": grp_label})
+
+            for s in subs:
+                rem = s.get("remark") or ""
+                s["balancing_groups"] = groups_by_remark.get(rem, [])
+                s["nodes_count"] = nodes_count_by_remark.get(rem, 0)
+
+            # Top-level: every balancing group on the router, with member info.
+            all_balancing_groups = []
+            for nid, ndata in nodes.items():
+                if ndata.get("protocol") != "_balancing":
+                    continue
+                member_ids = ndata.get("members", [])
+                # Which sub-remarks are represented in this group's members?
+                member_remarks = []
+                seen_r = set()
+                for mid in member_ids:
+                    member = nodes.get(mid)
+                    if not member:
+                        continue
+                    mr = member.get("group") or ""
+                    if mr and mr not in seen_r:
+                        seen_r.add(mr)
+                        member_remarks.append(mr)
+                all_balancing_groups.append({
+                    "id": nid,
+                    "name": ndata.get("remarks") or nid,
+                    "member_count": len(member_ids),
+                    "member_remarks": member_remarks,
+                })
+
+            return {
+                "success": True,
+                "subscriptions": subs,
+                "balancing_groups": all_balancing_groups,
+                "message": f"Found {len(subs)} subscriptions.",
+            }
+
+        elif action == "replace_subscription":
+            data = proxy_data or {}
+            try:
+                index = int(data.get("index"))
+            except (TypeError, ValueError):
+                return {"success": False, "message": "replace_subscription requires an integer 'index'."}
+            new_url = (data.get("newUrl") or "").strip()
+            new_remark = (data.get("newRemark") or "").strip()
+            trigger_update = bool(data.get("triggerUpdate", True))
+            if index < 0:
+                return {"success": False, "message": "Invalid subscription index."}
+            if not re.match(r"^https?://", new_url):
+                return {"success": False, "message": "newUrl must be an http(s) URL."}
+            # Only allow URL chars; reject anything that could break shell quoting.
+            if not re.match(r"^[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+$", new_url):
+                return {"success": False, "message": "newUrl contains unsafe characters."}
+            # Sanitize remark (keep it printable, no quotes/backticks).
+            safe_remark = re.sub(r"[`'\"\\]", "", new_remark)[:80]
+
+            set_remark_cmd = (
+                f"uci set passwall2.@subscribe_list[{index}].remark='{safe_remark}'; "
+                if safe_remark else ""
+            )
+            update_cmd = (
+                "lua /usr/share/passwall2/subscribe.lua start all manual "
+                ">/tmp/subscribe_update.log 2>&1; "
+                if trigger_update else ""
+            )
+            remote_cmd = (
+                "set -e; "
+                f"if ! uci -q get passwall2.@subscribe_list[{index}] >/dev/null 2>&1; then "
+                "  echo 'ERROR|missing_index'; exit 2; fi; "
+                f"OLD=$(uci -q get passwall2.@subscribe_list[{index}].url); "
+                f"uci set passwall2.@subscribe_list[{index}].url='{new_url}'; "
+                f"{set_remark_cmd}"
+                f"uci -q delete passwall2.@subscribe_list[{index}].md5 || true; "
+                "uci commit passwall2; "
+                "echo \"REPLACED|$OLD\"; "
+                f"{update_cmd}"
+                "echo \"exit:$?\""
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[replace_subscription] idx={index} new_url={new_url!r} remark={safe_remark!r}")
+            try:
+                # Subscription refresh can take a while if there are many nodes.
+                timeout = 180 if trigger_update else 30
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "replace_subscription timed out."}
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[replace_subscription] stdout: {stdout!r}, stderr: {stderr!r}")
+            if "ERROR|missing_index" in stdout:
+                return {"success": False, "message": f"Subscription index {index} does not exist on the router."}
+            if "exit:0" not in stdout and trigger_update:
+                err = stderr or stdout or "Unknown error"
+                return {"success": False, "message": f"Subscription refresh failed after URL swap: {err}"}
+            old_url = ""
+            for line in stdout.splitlines():
+                if line.startswith("REPLACED|"):
+                    old_url = line.split("|", 1)[1]
+                    break
+            return {
+                "success": True,
+                "message": (
+                    f"Slot {index} replaced. Subscription refresh triggered."
+                    if trigger_update else f"Slot {index} URL updated."
+                ),
+                "index": index,
+                "old_url": old_url,
+                "new_url": new_url,
+                "remark": safe_remark or None,
+            }
+
+        elif action == "add_subscription":
+            data = proxy_data or {}
+            url = (data.get("url") or "").strip()
+            remark = (data.get("remark") or "").strip()
+            user_agent = (data.get("userAgent") or "v2rayN/6.40").strip()
+            auto_update = "1" if data.get("autoUpdate", True) else "0"
+            trigger_update = bool(data.get("triggerUpdate", True))
+            if not re.match(r"^https?://", url):
+                return {"success": False, "message": "add_subscription: url must be http(s)."}
+            if not re.match(r"^[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+$", url):
+                return {"success": False, "message": "add_subscription: url contains unsafe characters."}
+            safe_remark = re.sub(r"[`'\"\\]", "", remark)[:80] or "user-added"
+            safe_ua = re.sub(r"[`'\"\\]", "", user_agent)[:80]
+            set_ua_cmd = f"uci set passwall2.@subscribe_list[$IDX].user_agent='{safe_ua}'; " if safe_ua else ""
+            update_cmd = (
+                "lua /usr/share/passwall2/subscribe.lua start all manual "
+                ">/tmp/subscribe_update.log 2>&1; "
+                if trigger_update else ""
+            )
+            remote_cmd = (
+                "set -e; "
+                "IDX=0; while uci -q get passwall2.@subscribe_list[$IDX] >/dev/null 2>&1; do IDX=$((IDX+1)); done; "
+                "uci add passwall2 subscribe_list >/dev/null; "
+                f"uci set passwall2.@subscribe_list[$IDX].url='{url}'; "
+                f"uci set passwall2.@subscribe_list[$IDX].auto_update='{auto_update}'; "
+                f"uci set passwall2.@subscribe_list[$IDX].remark='{safe_remark}'; "
+                f"{set_ua_cmd}"
+                "uci commit passwall2; "
+                "echo \"ADDED|$IDX\"; "
+                f"{update_cmd}"
+                "echo \"exit:$?\""
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[add_subscription] url={url!r} remark={safe_remark!r} trigger_update={trigger_update}")
+            timeout = 180 if trigger_update else 30
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "add_subscription timed out."}
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[add_subscription] stdout={stdout!r} stderr={stderr!r}")
+            added_idx = None
+            for line in stdout.splitlines():
+                if line.startswith("ADDED|"):
+                    try:
+                        added_idx = int(line.split("|", 1)[1])
+                    except ValueError:
+                        pass
+                    break
+            if added_idx is None:
+                return {"success": False, "message": f"Add failed: {stderr or stdout or 'unknown error'}"}
+            if trigger_update and "exit:0" not in stdout:
+                return {"success": False, "message": f"Subscription added (slot {added_idx}) but refresh failed: {stderr or stdout}"}
+            return {
+                "success": True,
+                "index": added_idx,
+                "remark": safe_remark,
+                "message": (
+                    f"Added as slot {added_idx} (\"{safe_remark}\"). Subscription refresh triggered."
+                    if trigger_update else f"Added as slot {added_idx} (\"{safe_remark}\")."
+                ),
+            }
+
+        elif action == "remove_subscription":
+            data = proxy_data or {}
+            try:
+                index = int(data.get("index"))
+            except (TypeError, ValueError):
+                return {"success": False, "message": "remove_subscription requires an integer 'index'."}
+            delete_nodes = bool(data.get("deleteNodes", True))
+            restart_service = bool(data.get("restartService", True))
+            if index < 0:
+                return {"success": False, "message": "Invalid index."}
+            parts = [
+                "set -e; ",
+                f"if ! uci -q get passwall2.@subscribe_list[{index}] >/dev/null 2>&1; then echo 'ERROR|missing_index'; exit 2; fi; ",
+                f"REMARK=$(uci -q get passwall2.@subscribe_list[{index}].remark); ",
+                "DELETED=0; ",
+            ]
+            if delete_nodes:
+                parts.append(
+                    "if [ -n \"$REMARK\" ]; then "
+                    "  NODES=$(uci show passwall2 | grep -F \".group='$REMARK'\" | sed -n 's/^passwall2\\.\\([A-Za-z0-9_]*\\)\\.group=.*/\\1/p'); "
+                    "  for n in $NODES; do "
+                    "    for grp in $(uci show passwall2 | sed -n \"s/^passwall2\\.\\([A-Za-z0-9_]*\\)\\.protocol='_balancing'$/\\1/p\"); do "
+                    "      uci del_list passwall2.$grp.balancing_node=\"$n\" 2>/dev/null || true; "
+                    "    done; "
+                    "    uci -q delete passwall2.$n && DELETED=$((DELETED+1)) || true; "
+                    "  done; "
+                    "fi; "
+                )
+            parts.append(
+                f"uci delete passwall2.@subscribe_list[{index}]; "
+                "uci commit passwall2; "
+                "echo \"REMOVED|$REMARK|$DELETED\"; "
+            )
+            if restart_service:
+                parts.append("/etc/init.d/passwall2 restart >/dev/null 2>&1; ")
+            parts.append("echo \"exit:$?\"")
+            remote_cmd = "".join(parts)
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[remove_subscription] idx={index} delete_nodes={delete_nodes}")
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=60)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "remove_subscription timed out."}
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[remove_subscription] stdout={stdout!r} stderr={stderr!r}")
+            if "ERROR|missing_index" in stdout:
+                return {"success": False, "message": f"Subscription index {index} not found."}
+            deleted = 0
+            remark_out = ""
+            for line in stdout.splitlines():
+                if line.startswith("REMOVED|"):
+                    p2 = line.split("|")
+                    if len(p2) >= 3:
+                        remark_out = p2[1]
+                        try:
+                            deleted = int(p2[2])
+                        except ValueError:
+                            pass
+                    break
+            if "exit:0" not in stdout:
+                return {"success": False, "message": f"Remove may have failed: {stderr or stdout}"}
+            return {
+                "success": True,
+                "message": f"Removed slot {index} (\"{remark_out}\") and {deleted} node(s).",
+                "index": index,
+                "remark": remark_out,
+                "deleted_nodes": deleted,
+            }
+
+        elif action == "optimize_balancing_with_remark":
+            data = proxy_data or {}
+            remark = (data.get("remark") or "").strip()
+            probes = max(1, min(int(data.get("probes", 3)), 5))
+            min_advantage = max(0, int(data.get("minAdvantage", 1)))
+            only_group = (data.get("onlyGroup") or "").strip()
+            if only_group and not re.match(r"^[A-Za-z0-9_]+$", only_group):
+                return {"success": False, "message": "onlyGroup must be a uci section id."}
+            if not remark:
+                return {"success": False, "message": "remark required."}
+            safe_remark = re.sub(r"[`'\"\\]", "", remark)[:80]
+            if not safe_remark:
+                return {"success": False, "message": "remark contained no safe characters."}
+
+            # Stage 1: gather node metadata.
+            gather_cmd = (
+                "for n in $(uci show passwall2 | sed -n 's/^passwall2\\.\\([A-Za-z0-9_]*\\)=nodes$/\\1/p'); do "
+                "  proto=$(uci -q get passwall2.$n.protocol); "
+                "  grp=$(uci -q get passwall2.$n.group); "
+                "  addr=$(uci -q get passwall2.$n.address); "
+                "  port=$(uci -q get passwall2.$n.port); "
+                "  bnodes=$(uci -q get passwall2.$n.balancing_node | tr '\\n' ' '); "
+                "  printf 'N\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$n\" \"$proto\" \"$grp\" \"$addr\" \"$port\" \"$bnodes\"; "
+                "done"
+            )
+            ssh_cmd_gather = list(ssh_cmd) + [gather_cmd]
+            try:
+                result = subprocess.run(ssh_cmd_gather, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=30)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "optimize_balancing: gather timed out."}
+            if result.returncode != 0:
+                return {"success": False, "message": f"Gather failed: {(result.stderr or '').strip()}"}
+
+            nodes = {}
+            for line in (result.stdout or "").splitlines():
+                p2 = line.split("\t")
+                if not p2 or p2[0] != "N" or len(p2) < 6:
+                    continue
+                nid = p2[1]
+                nodes[nid] = {
+                    "protocol": p2[2],
+                    "group": p2[3],
+                    "address": p2[4],
+                    "port": p2[5],
+                    "members": [m for m in (p2[6].strip().split() if len(p2) > 6 else []) if m],
+                }
+
+            candidates = {nid: n for nid, n in nodes.items()
+                          if n["group"] == safe_remark
+                          and n["protocol"] not in ("_balancing", "_shunt")
+                          and n["address"] and n["port"]}
+            balancing_groups = {nid: n for nid, n in nodes.items() if n["protocol"] == "_balancing"}
+            if only_group:
+                balancing_groups = {gid: g for gid, g in balancing_groups.items() if gid == only_group}
+                if not balancing_groups:
+                    return {"success": False, "message": f"Balancing group '{only_group}' not found."}
+            if not candidates:
+                return {"success": True, "message": f"No nodes found for remark '{safe_remark}'.", "added": []}
+            if not balancing_groups:
+                return {"success": True, "message": "No balancing groups configured.", "added": []}
+
+            to_probe = set(candidates.keys())
+            for grp in balancing_groups.values():
+                for m in grp["members"]:
+                    if m in nodes and nodes[m]["address"] and nodes[m]["port"]:
+                        to_probe.add(m)
+
+            # Stage 2: TCP-probe each (probes attempts, count successes).
+            probe_lines = []
+            for nid in to_probe:
+                n = nodes[nid]
+                addr = (n["address"] or "").replace("'", "")
+                port = (n["port"] or "").replace("'", "")
+                if not addr or not port:
+                    continue
+                probe_lines.append(
+                    f"OK=0; for i in $(seq 1 {probes}); do nc -zw2 '{addr}' '{port}' 2>/dev/null && OK=$((OK+1)); done; echo 'P|{nid}|'$OK"
+                )
+            probe_cmd = "; ".join(probe_lines) if probe_lines else "echo no-probes"
+            ssh_cmd_probe = list(ssh_cmd) + [probe_cmd]
+            try:
+                result = subprocess.run(ssh_cmd_probe, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=30 + 4 * len(to_probe))
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "optimize_balancing: probing timed out."}
+
+            scores = {}
+            for line in (result.stdout or "").splitlines():
+                p2 = line.split("|")
+                if p2 and p2[0] == "P" and len(p2) >= 3:
+                    try:
+                        scores[p2[1]] = int(p2[2])
+                    except ValueError:
+                        pass
+
+            # Stage 3: pick winners per balancing group.
+            additions = []  # (group_id, node_id, score, threshold)
+            for grp_id, grp in balancing_groups.items():
+                member_scores = [scores.get(m, 0) for m in grp["members"] if m in nodes]
+                if member_scores:
+                    sorted_ms = sorted(member_scores)
+                    median = sorted_ms[len(sorted_ms) // 2]
+                else:
+                    median = 0
+                existing = set(grp["members"])
+                for cid in candidates:
+                    if cid in existing:
+                        continue
+                    cs = scores.get(cid, 0)
+                    if cs > 0 and cs >= median + min_advantage:
+                        additions.append((grp_id, cid, cs, median))
+
+            if not additions:
+                return {
+                    "success": True,
+                    "message": "No new nodes beat existing balancing members.",
+                    "added": [],
+                    "scores": scores,
+                }
+
+            # Stage 4: apply uci changes.
+            apply_parts = ["set -e; "]
+            for grp_id, nid, _, _ in additions:
+                apply_parts.append(f"uci add_list passwall2.{grp_id}.balancing_node='{nid}'; ")
+            apply_parts.append("uci commit passwall2; /etc/init.d/passwall2 restart >/dev/null 2>&1; echo 'APPLY_OK'")
+            ssh_cmd_apply = list(ssh_cmd) + ["".join(apply_parts)]
+            try:
+                result = subprocess.run(ssh_cmd_apply, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=30)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "optimize_balancing: apply timed out."}
+            if "APPLY_OK" not in (result.stdout or ""):
+                return {"success": False, "message": f"Apply failed: {(result.stderr or '').strip() or (result.stdout or '').strip()}"}
+
+            return {
+                "success": True,
+                "message": f"Added {len(additions)} new node(s) to {len({a[0] for a in additions})} balancing group(s).",
+                "added": [{"group": g, "node": n, "score": s, "threshold": t} for (g, n, s, t) in additions],
+                "scores": scores,
+            }
+
+        elif action == "remove_sub_from_balancing_group":
+            data = proxy_data or {}
+            group_id = (data.get("groupId") or "").strip()
+            remark = (data.get("remark") or "").strip()
+            restart_service = bool(data.get("restartService", True))
+            if not re.match(r"^[A-Za-z0-9_]+$", group_id):
+                return {"success": False, "message": "groupId must be a uci section id."}
+            safe_remark = re.sub(r"[`'\"\\]", "", remark)[:80]
+            if not safe_remark:
+                return {"success": False, "message": "remark required."}
+            remote_cmd = (
+                "set -e; "
+                f"if [ \"$(uci -q get passwall2.{group_id}.protocol)\" != \"_balancing\" ]; then echo 'ERROR|not_balancing'; exit 2; fi; "
+                # Find node IDs whose group matches the given remark.
+                f"NODES=$(uci show passwall2 | grep -F \".group='{safe_remark}'\" | sed -n 's/^passwall2\\.\\([A-Za-z0-9_]*\\)\\.group=.*/\\1/p'); "
+                "REMOVED=0; "
+                "for n in $NODES; do "
+                f"  if uci del_list passwall2.{group_id}.balancing_node=\"$n\" 2>/dev/null; then REMOVED=$((REMOVED+1)); fi; "
+                "done; "
+                "uci commit passwall2; "
+                + ("/etc/init.d/passwall2 restart >/dev/null 2>&1; " if restart_service else "")
+                + "echo \"DONE|$REMOVED\""
+            )
+            ssh_cmd.append(remote_cmd)
+            logger.info(f"[remove_sub_from_balancing_group] group_id={group_id} remark={safe_remark!r}")
+            try:
+                result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        universal_newlines=True, timeout=30)
+            except subprocess.TimeoutExpired:
+                return {"success": False, "message": "remove_sub_from_balancing_group timed out."}
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            logger.info(f"[remove_sub_from_balancing_group] stdout={stdout!r} stderr={stderr!r}")
+            if "ERROR|not_balancing" in stdout:
+                return {"success": False, "message": f"Section '{group_id}' is not a balancing group."}
+            removed = 0
+            for line in stdout.splitlines():
+                if line.startswith("DONE|"):
+                    try:
+                        removed = int(line.split("|", 1)[1])
+                    except ValueError:
+                        pass
+                    break
+            return {
+                "success": True,
+                "message": f"Removed {removed} node(s) (group='{safe_remark}') from balancing group '{group_id}'.",
+                "group": group_id,
+                "remark": safe_remark,
+                "removed": removed,
+            }
 
     except subprocess.TimeoutExpired:
         logging.error(f"Timeout: Passwall2 command '{action}' took too long")
@@ -1752,6 +2768,436 @@ def handle_test_router_connection(message):
         logging.error(f"Router connection test error: {e}", exc_info=True)
         return {"success": False, "message": f"Test failed: {str(e)}"}
 
+
+def _parse_subscription_userinfo(header_value):
+    """Parse a 'Subscription-Userinfo' header into an int dict.
+
+    Format (case-insensitive): upload=X; download=Y; total=Z; expire=T
+    Values are bytes (or unix seconds for expire). Returns {} on parse failure.
+    """
+    info = {}
+    if not header_value:
+        return info
+    for part in str(header_value).split(';'):
+        part = part.strip()
+        if '=' not in part:
+            continue
+        k, _, v = part.partition('=')
+        k = k.strip().lower()
+        v = v.strip()
+        try:
+            info[k] = int(v)
+        except ValueError:
+            continue
+    return info
+
+
+def _label_from_subscription_url(url):
+    """Derive a short label from a subscription URL (uses #fragment if present)."""
+    try:
+        from urllib.parse import urlsplit, unquote
+        parts = urlsplit(url)
+        if parts.fragment:
+            return unquote(parts.fragment)
+        host = parts.netloc or url
+        # last path segment as fallback
+        seg = (parts.path or "").rstrip("/").rsplit("/", 1)[-1]
+        return f"{host}/{seg}" if seg else host
+    except Exception:
+        return url
+
+
+def check_subscription_quota(urls):
+    """Fetch each subscription URL and parse its remaining-volume header.
+
+    Returns a list of per-URL summaries. Each summary contains:
+      - url, label
+      - success (bool), error (str|None)
+      - upload, download, used, total, remaining (bytes; -1 if unknown)
+      - expire (unix seconds; 0 if unknown)
+      - days_remaining (int; -1 if unknown)
+      - percent_used (float, 0-100; -1 if unknown)
+      - via (str: 'direct' or 'socks5://host:port')
+    """
+    if not isinstance(urls, list) or not urls:
+        return {"success": False, "message": "No subscription URLs provided.", "results": []}
+
+    # Many VPN providers gate the userinfo header on a recognised client UA.
+    headers = {
+        "User-Agent": "v2rayN/6.40",
+        "Accept": "*/*",
+    }
+
+    # Try direct first; on network/SSL failure, automatically retry through any
+    # local SOCKS proxy that's already listening (Holocron tunnels expose 1081
+    # / 1090 / 1080 by default).
+    candidate_proxies = []
+    for port in (1081, 1090, 1080):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                candidate_proxies.append(f"socks5h://127.0.0.1:{port}")
+        except OSError:
+            pass
+
+    def _fetch(url, proxy_url):
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        # HEAD first (cheap); fall back to GET if HEAD missing the header.
+        resp = requests.head(url, headers=headers, timeout=15,
+                             allow_redirects=True, proxies=proxies)
+        userinfo = resp.headers.get("Subscription-Userinfo") or resp.headers.get("subscription-userinfo")
+        status_code = resp.status_code
+        if not userinfo:
+            resp2 = requests.get(url, headers=headers, timeout=20,
+                                 allow_redirects=True, stream=True, proxies=proxies)
+            userinfo = resp2.headers.get("Subscription-Userinfo") or resp2.headers.get("subscription-userinfo")
+            status_code = resp2.status_code
+            try:
+                resp2.close()
+            except Exception:
+                pass
+        return userinfo, status_code
+
+    results = []
+    for raw_url in urls:
+        url = str(raw_url or "").strip()
+        if not url or not re.match(r"^https?://", url):
+            results.append({
+                "url": url,
+                "label": _label_from_subscription_url(url),
+                "success": False,
+                "error": "Invalid URL",
+                "via": "direct",
+            })
+            continue
+
+        entry = {
+            "url": url,
+            "label": _label_from_subscription_url(url),
+            "success": False,
+            "error": None,
+            "upload": -1,
+            "download": -1,
+            "used": -1,
+            "total": -1,
+            "remaining": -1,
+            "expire": 0,
+            "days_remaining": -1,
+            "percent_used": -1,
+            "via": "direct",
+        }
+
+        attempts = [(None, "direct")] + [(p, p) for p in candidate_proxies]
+        last_error = None
+        userinfo = None
+        last_status = None
+        used_via = "direct"
+        for proxy_url, via_label in attempts:
+            try:
+                userinfo, last_status = _fetch(url, proxy_url)
+                used_via = via_label
+                if userinfo:
+                    break
+                # No header on this attempt; try the next route if any.
+                last_error = f"Server did not return a Subscription-Userinfo header (HTTP {last_status})."
+            except requests.exceptions.Timeout:
+                last_error = "Timed out fetching subscription."
+            except requests.exceptions.SSLError as e:
+                last_error = f"SSL error: {e}"
+            except requests.exceptions.ProxyError as e:
+                last_error = f"Proxy error: {e}"
+            except requests.exceptions.ConnectionError as e:
+                last_error = f"Connection error: {e}"
+            except requests.exceptions.RequestException as e:
+                last_error = f"Network error: {e}"
+            except Exception as e:
+                logging.warning(f"[check_subscription_quota] Unexpected error for {url} via {via_label}: {e}")
+                last_error = f"Unexpected error: {e}"
+
+        entry["via"] = used_via
+        if not userinfo:
+            entry["error"] = last_error or "Could not retrieve quota header."
+            results.append(entry)
+            continue
+
+        info = _parse_subscription_userinfo(userinfo)
+        upload = info.get("upload", 0)
+        download = info.get("download", 0)
+        total = info.get("total", 0)
+        expire = info.get("expire", 0)
+        used = upload + download
+        remaining = max(total - used, 0) if total > 0 else -1
+        percent = (used / total * 100.0) if total > 0 else -1
+        days_left = -1
+        if expire > 0:
+            days_left = max(0, int((expire - time.time()) // 86400))
+
+        entry.update({
+            "success": True,
+            "upload": upload,
+            "download": download,
+            "used": used,
+            "total": total,
+            "remaining": remaining,
+            "expire": expire,
+            "days_remaining": days_left,
+            "percent_used": percent,
+        })
+        results.append(entry)
+
+    return {"success": True, "results": results}
+
+
+# ---------------------------------------------------------------------------
+# Subscription node quality check
+# ---------------------------------------------------------------------------
+
+def _decode_subscription_body(body):
+    """Try to base64-decode a subscription body; if that fails, return as-is."""
+    import base64
+    if not body:
+        return ""
+    text = body.strip()
+    # The body is usually one big base64 blob of all node URIs separated by \n.
+    try:
+        # urlsafe variant tolerant of missing padding.
+        padded = text + "=" * (-len(text) % 4)
+        decoded = base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
+        if "://" in decoded:
+            return decoded
+    except Exception:
+        pass
+    try:
+        padded = text + "=" * (-len(text) % 4)
+        decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
+        if "://" in decoded:
+            return decoded
+    except Exception:
+        pass
+    return text
+
+
+def _parse_node_uri(uri):
+    """Extract {scheme, name, host, port} from a node URI.
+
+    Supports vless, vmess, trojan, ss, hysteria, hysteria2, hy2, tuic.
+    Returns None if the URI can't be parsed.
+    """
+    import base64
+    from urllib.parse import urlsplit, unquote, parse_qs
+
+    uri = (uri or "").strip()
+    if not uri or "://" not in uri:
+        return None
+
+    scheme, _, rest = uri.partition("://")
+    scheme = scheme.lower()
+
+    if scheme == "vmess":
+        # vmess://base64({add,port,ps,...})
+        try:
+            blob = rest.split("#", 1)[0]
+            padded = blob + "=" * (-len(blob) % 4)
+            try:
+                raw = base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
+            except Exception:
+                raw = base64.b64decode(padded).decode("utf-8", errors="ignore")
+            data = json.loads(raw)
+            host = (data.get("add") or data.get("host") or "").strip()
+            port = int(str(data.get("port") or 0))
+            name = (data.get("ps") or "").strip() or f"{host}:{port}"
+            if host and port:
+                return {"scheme": "vmess", "name": name, "host": host, "port": port}
+        except Exception:
+            return None
+        return None
+
+    if scheme == "ss":
+        # ss://base64(method:password)@host:port#name  OR  ss://base64(method:password@host:port)#name
+        try:
+            frag = ""
+            body = rest
+            if "#" in body:
+                body, frag = body.split("#", 1)
+            if "@" in body:
+                # auth@host:port
+                _, _, hostport = body.rpartition("@")
+            else:
+                # whole thing might be base64
+                padded = body + "=" * (-len(body) % 4)
+                try:
+                    raw = base64.urlsafe_b64decode(padded).decode("utf-8", errors="ignore")
+                except Exception:
+                    raw = base64.b64decode(padded).decode("utf-8", errors="ignore")
+                _, _, hostport = raw.rpartition("@")
+            host, _, port_s = hostport.partition(":")
+            port_s = port_s.split("/", 1)[0].split("?", 1)[0]
+            port = int(port_s) if port_s.isdigit() else 0
+            name = unquote(frag) if frag else f"{host}:{port}"
+            if host and port:
+                return {"scheme": "ss", "name": name, "host": host, "port": port}
+        except Exception:
+            return None
+        return None
+
+    # Generic URL-style: scheme://[user@]host:port[/path][?query]#name
+    try:
+        parts = urlsplit(uri)
+        host = parts.hostname or ""
+        port = parts.port or 0
+        if not port:
+            # Some providers omit the explicit port for hy2/tuic; bail out.
+            return None
+        name = unquote(parts.fragment) if parts.fragment else f"{host}:{port}"
+        return {"scheme": scheme, "name": name, "host": host, "port": int(port)}
+    except Exception:
+        return None
+
+
+def _tcp_ping(host, port, timeout=3.0):
+    """Return (latency_ms, error). latency_ms is int >=1; -1 on failure."""
+    start = time.monotonic()
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            elapsed = (time.monotonic() - start) * 1000.0
+            return max(1, int(elapsed)), None
+    except (socket.gaierror, socket.timeout, ConnectionRefusedError, OSError) as e:
+        return -1, type(e).__name__
+
+
+def check_subscription_nodes(urls, max_nodes_per_sub=120, concurrency=24, timeout=3.0):
+    """Fetch each subscription URL, parse the node list, and TCP-ping each node.
+
+    Returns {success, results: [{url, label, total, alive, dead, best_ms,
+    median_ms, by_scheme: {vless: {alive, total}, ...}, top: [...]}]}.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if not isinstance(urls, list) or not urls:
+        return {"success": False, "message": "No subscription URLs provided.", "results": []}
+
+    headers = {"User-Agent": "v2rayN/6.40", "Accept": "*/*"}
+
+    # Auto-discover local SOCKS proxies (same fallback strategy as quota check).
+    candidate_proxies = []
+    for port in (1081, 1090, 1080):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                candidate_proxies.append(f"socks5h://127.0.0.1:{port}")
+        except OSError:
+            pass
+
+    def _fetch_body(url):
+        last_err = None
+        for proxy_url, via in [(None, "direct")] + [(p, p) for p in candidate_proxies]:
+            proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+            try:
+                resp = requests.get(url, headers=headers, timeout=20,
+                                    allow_redirects=True, proxies=proxies)
+                if resp.status_code == 200 and resp.text:
+                    return resp.text, via, None
+                last_err = f"HTTP {resp.status_code}"
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+        return None, "direct", last_err
+
+    results = []
+    for raw_url in urls:
+        url = str(raw_url or "").strip()
+        entry = {
+            "url": url,
+            "label": _label_from_subscription_url(url),
+            "success": False,
+            "error": None,
+            "via": "direct",
+            "total": 0,
+            "alive": 0,
+            "dead": 0,
+            "best_ms": -1,
+            "median_ms": -1,
+            "by_scheme": {},
+            "top": [],
+        }
+        if not url or not re.match(r"^https?://", url):
+            entry["error"] = "Invalid URL"
+            results.append(entry)
+            continue
+
+        body, via, err = _fetch_body(url)
+        entry["via"] = via
+        if not body:
+            entry["error"] = err or "Empty subscription response."
+            results.append(entry)
+            continue
+
+        decoded = _decode_subscription_body(body)
+        nodes = []
+        for line in decoded.splitlines():
+            parsed = _parse_node_uri(line)
+            if parsed:
+                nodes.append(parsed)
+            if len(nodes) >= max_nodes_per_sub:
+                break
+
+        entry["total"] = len(nodes)
+        if not nodes:
+            entry["error"] = "Could not parse any nodes from this subscription."
+            results.append(entry)
+            continue
+
+        # Concurrent TCP ping.
+        pinged = []
+        with ThreadPoolExecutor(max_workers=min(concurrency, max(1, len(nodes)))) as ex:
+            future_map = {
+                ex.submit(_tcp_ping, n["host"], n["port"], timeout): n
+                for n in nodes
+            }
+            for fut in as_completed(future_map):
+                n = future_map[fut]
+                try:
+                    ms, err = fut.result()
+                except Exception as e:
+                    ms, err = -1, type(e).__name__
+                pinged.append({
+                    "scheme": n["scheme"],
+                    "name": n["name"],
+                    "host": n["host"],
+                    "port": n["port"],
+                    "ms": ms,
+                    "error": err,
+                })
+
+        alive = [n for n in pinged if n["ms"] > 0]
+        dead = [n for n in pinged if n["ms"] <= 0]
+        entry["alive"] = len(alive)
+        entry["dead"] = len(dead)
+
+        if alive:
+            sorted_alive = sorted(alive, key=lambda n: n["ms"])
+            entry["best_ms"] = sorted_alive[0]["ms"]
+            mid = len(sorted_alive) // 2
+            entry["median_ms"] = (
+                sorted_alive[mid]["ms"]
+                if len(sorted_alive) % 2 == 1
+                else (sorted_alive[mid - 1]["ms"] + sorted_alive[mid]["ms"]) // 2
+            )
+            # Top 10 fastest for the UI.
+            entry["top"] = sorted_alive[:10]
+
+        # Per-scheme breakdown.
+        by_scheme = {}
+        for n in pinged:
+            s = n["scheme"]
+            slot = by_scheme.setdefault(s, {"total": 0, "alive": 0})
+            slot["total"] += 1
+            if n["ms"] > 0:
+                slot["alive"] += 1
+        entry["by_scheme"] = by_scheme
+        entry["success"] = True
+        results.append(entry)
+
+    return {"success": True, "results": results}
+
+
 def execute_router_command(router_command, config):
     """
     Execute arbitrary command on OpenWrt router via SSH.
@@ -1869,15 +3315,38 @@ def main():
                 response = status
                 
                 if config and config.get("type") == "openwrt_passwall2":
-                    # For Passwall2, the 'connected' status is whether the service is enabled.
-                    # We don't perform web checks or tcp pings against a local SOCKS port.
-                    response.update({
-                        "web_check_latency_ms": -1,
-                        "web_check_status": "N/A (OpenWrt Service)",
-                        "tcp_ping_ms": -1,
-                        "connection_type": "openwrt_service",
-                        "passwall2_status": status.get("passwall2_status", "unknown")
-                    })
+                    # For Passwall2, perform the web/tcp checks through the router's
+                    # exposed SOCKS port so the latency charts get real data.
+                    router_host = (config.get("openwrtHost") or config.get("passwall2Host") or "").strip()
+                    try:
+                        router_socks_port = int(config.get("openwrtSocksPort") or config.get("passwall2SocksPort") or 1080)
+                    except (TypeError, ValueError):
+                        router_socks_port = 1080
+
+                    if status.get("connected") and router_host:
+                        proxy_check_config = {
+                            "protocol": "SOCKS5",
+                            "host": router_host,
+                            "port": router_socks_port,
+                        }
+                        web_latency, web_status, _ = perform_web_check(url=message.get("webCheckUrl"), proxy_config=proxy_check_config)
+                        tcp_latency, _ = perform_tcp_ping(host=message.get("pingHost", "youtube.com"), proxy_config=proxy_check_config)
+                        response.update({
+                            "web_check_latency_ms": web_latency,
+                            "web_check_status": web_status,
+                            "tcp_ping_ms": tcp_latency,
+                            "connection_type": "openwrt_service",
+                            "socks_port": router_socks_port,
+                            "passwall2_status": status.get("passwall2_status", "unknown"),
+                        })
+                    else:
+                        response.update({
+                            "web_check_latency_ms": -1,
+                            "web_check_status": "N/A (OpenWrt Service)",
+                            "tcp_ping_ms": -1,
+                            "connection_type": "openwrt_service",
+                            "passwall2_status": status.get("passwall2_status", "unknown"),
+                        })
                 elif status.get("connected") and status.get("socks_port"):
                     # For external proxies, we must use the configured host.
                     # For tunnel-based proxies, the host is always 127.0.0.1.
@@ -1936,13 +3405,23 @@ def main():
                 config = message.get("config")
                 proxy_id = message.get("proxyId")
                 proxy_data = message.get("proxyData")
-                response = execute_passwall2_command(action, config, proxy_id, proxy_data)
+                urls = message.get("urls")
+                response = execute_passwall2_command(action, config, proxy_id, proxy_data, urls)
             elif command == "testRouterConnection":
                 response = handle_test_router_connection(message)
             elif command == "executeRouterCommand":
                 router_command = message.get("routerCommand")
                 config = message.get("config")
                 response = execute_router_command(router_command, config)
+            elif command == "checkSubscriptionQuota":
+                response = check_subscription_quota(message.get("urls") or [])
+            elif command == "checkSubscriptionNodes":
+                response = check_subscription_nodes(
+                    message.get("urls") or [],
+                    max_nodes_per_sub=int(message.get("maxNodes") or 120),
+                    concurrency=int(message.get("concurrency") or 24),
+                    timeout=float(message.get("timeout") or 3.0),
+                )
             else:
                 logging.warning(f"Unknown command received: {command}")
                 continue

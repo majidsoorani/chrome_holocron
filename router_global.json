@@ -1,0 +1,181 @@
+{
+  "outbounds": [
+    {
+      "mux": {
+        "enabled": false
+      },
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "password": "",
+            "port": 1032,
+            "address": "127.0.0.1"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw",
+        "sockopt": {
+          "mark": 255
+        }
+      },
+      "tag": "aUxiKWRo:Remarks"
+    },
+    {
+      "proxySettings": {
+        "tag": "direct"
+      },
+      "settings": {
+        "port": 53,
+        "network": "udp",
+        "address": "192.168.0.254",
+        "blockTypes": [
+          65
+        ],
+        "nonIPQuery": "skip"
+      },
+      "protocol": "dns",
+      "tag": "dns-out"
+    },
+    {
+      "streamSettings": {
+        "sockopt": {
+          "mark": 255
+        }
+      },
+      "settings": {
+        "domainStrategy": "UseIP"
+      },
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "blackhole"
+    }
+  ],
+  "log": {
+    "loglevel": "info"
+  },
+  "dns": {
+    "disableFallback": true,
+    "queryStrategy": "UseIP",
+    "disableFallbackIfMatch": true,
+    "servers": [
+      {
+        "queryStrategy": "UseIP",
+        "port": 53,
+        "tag": "dns-in-default",
+        "address": "tcp:\/\/8.8.8.8:53"
+      },
+      {
+        "port": 53,
+        "address": "192.168.0.254",
+        "queryStrategy": "UseIP",
+        "domains": [
+          "full:mail.somedayy.com"
+        ],
+        "tag": "dns-in-logic-vpslist"
+      }
+    ],
+    "disableCache": false,
+    "tag": "dns-global"
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": false,
+        "statsUserDownlink": false
+      }
+    }
+  },
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "inboundTag": [
+          "dns-in-default"
+        ],
+        "outboundTag": "aUxiKWRo:Remarks"
+      },
+      {
+        "inboundTag": [
+          "dns-in-logic-vpslist"
+        ],
+        "outboundTag": "direct"
+      },
+      {
+        "inboundTag": [
+          "dns-in"
+        ],
+        "outboundTag": "dns-out"
+      },
+      {
+        "network": "tcp,udp",
+        "ruleTag": "default",
+        "outboundTag": "aUxiKWRo:Remarks"
+      }
+    ],
+    "domainMatcher": "hybrid"
+  },
+  "inbounds": [
+    {
+      "port": 1080,
+      "protocol": "socks",
+      "sniffing": {
+        "enabled": false
+      },
+      "settings": {
+        "udp": true,
+        "auth": "noauth"
+      },
+      "listen": "0.0.0.0",
+      "tag": "socks-in"
+    },
+    {
+      "port": 1041,
+      "protocol": "dokodemo-door",
+      "streamSettings": {
+        "sockopt": {
+          "tproxy": "redirect"
+        }
+      },
+      "sniffing": {
+        "enabled": false
+      },
+      "settings": {
+        "network": "tcp",
+        "followRedirect": true
+      },
+      "tag": "tcp_redir"
+    },
+    {
+      "port": 1041,
+      "protocol": "dokodemo-door",
+      "streamSettings": {
+        "sockopt": {
+          "tproxy": "tproxy"
+        }
+      },
+      "sniffing": {
+        "enabled": false
+      },
+      "settings": {
+        "network": "udp",
+        "followRedirect": true
+      },
+      "tag": "udp_redir"
+    },
+    {
+      "port": 15353,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "network": "tcp,udp",
+        "address": "0.0.0.0"
+      },
+      "tag": "dns-in",
+      "listen": "127.0.0.1"
+    }
+  ]
+}

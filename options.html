@@ -139,30 +139,65 @@
                 <div class="tab-panel active" id="panel-connections">
                     <div class="main-layout-grid">
                         <div class="main-content">
+                            <section class="card" id="health-history-card">
+                                <h2>📈 Connection Health History</h2>
+                                <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
+                                <div class="chart-wrapper">
+                                    <canvas id="web-latency-chart"></canvas>
+                                </div>
+                                <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
+                                <div class="chart-wrapper">
+                                    <canvas id="tcp-ping-chart"></canvas>
+                                </div>
+                            </section>
+                            <section class="card" id="connections-passwall2-nodes-card" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h2 style="margin: 0;">🏠 Passwall2 Nodes</h2>
+                                    <div style="display: flex; gap: 6px;">
+                                        <button type="button" id="connections-passwall2-optimize-balance-btn" class="button passwall2-optimize-balance-btn" title="Test balance groups, keep up to 5 working nodes, and set 2m probes" style="background: #009688;">🎯 Optimize</button>
+                                        <button type="button" id="connections-passwall2-pin-kixy-btn" class="button passwall2-pin-kixy-btn" title="Pin *.kixy.com to the jumpserver SSH node (bastion)" style="background: #607D8B;">🛡 Pin Kixy</button>
+                                        <button type="button" id="connections-passwall2-fix-gemini-btn" class="button passwall2-fix-gemini-btn" title="Re-resolve Gemini/Google AI domains and reload ipset (run when Gemini stops working)" style="background: #795548;">✨ Fix Gemini</button>
+                                        <button type="button" id="connections-passwall2-update-sub-btn" class="button passwall2-update-sub-btn" title="Fetch fresh nodes from subscription URL" style="background: #9C27B0;">📡 Update Sub</button>
+                                        <button type="button" id="connections-passwall2-update-balance-btn" class="button passwall2-update-balance-btn" title="Fetch fresh nodes and rebuild balance groups" style="background: #FF9800;">⬆ Update Balance</button>
+                                        <button type="button" id="connections-passwall2-refresh-btn" class="button passwall2-refresh-btn" style="background: #2196F3;">🔄 Refresh</button>
+                                        <button type="button" id="connections-passwall2-restart-btn" class="button passwall2-restart-btn" title="Restart Passwall2 service on the router" style="background: #e91e63; color: white;">⚡ Restart Service</button>
+                                        <button type="button" id="connections-passwall2-reset-refresh-btn" class="button passwall2-reset-refresh-btn" title="Delete all nodes and fetch fresh nodes from subscription (dangerous!)" style="background: #f44336; color: white;">🗑️ Reset & Refresh</button>
+                                    </div>
+                                </div>
+                                <p><small>The router's currently active Passwall2 node. Click <strong>Use</strong> to switch.</small></p>
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                    <span><strong>Service:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: #666;">Not Connected</span></span>
+                                    <span class="passwall2-proxy-count" style="color: #666; font-size: 0.9em;">0 nodes</span>
+                                </div>
+                                <div class="passwall2-proxies-list" id="connections-passwall2-proxies-list" style="max-height: 420px; overflow-y: auto; border: 1px solid var(--border-color-light, #ddd); border-radius: 4px; padding: 10px; background: white;">
+                                    <div style="text-align: center; padding: 30px; color: #999;">
+                                        <div style="font-size: 40px; margin-bottom: 10px;">🔌</div>
+                                        <div>Click "Refresh" to load nodes from the router.</div>
+                                    </div>
+                                </div>
+                            </section>
+                            <section class="card" id="subscription-quota-card">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h2 style="margin: 0;">📊 Subscription Quota</h2>
+                                    <div style="display: flex; gap: 6px;">
+                                        <button type="button" id="subscription-quota-check-btn" class="button" title="Fetch remaining volume for each subscription URL" style="background: #009688;">📥 Show Remaining</button>
+                                        <button type="button" id="subscription-nodes-check-btn" class="button" title="Decode each subscription, TCP-ping all nodes, and report alive/best/median latency" style="background: #FF9800;">🧪 Test Nodes</button>
+                                        <button type="button" id="subscription-quota-save-btn" class="button" title="Save the subscription URL list" style="background: #2196F3;">💾 Save URLs</button>
+                                    </div>
+                                </div>
+                                <p><small>Paste your subscription URLs (one per line). The remaining volume and expiry days are read from the server's <code>Subscription-Userinfo</code> response header.</small></p>
+                                <textarea id="subscription-quota-urls" rows="5" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="https://multiservers.info/sub/...#QK8QF&#10;https://cmr.zarink.ir/sub/..." style="width: 100%; box-sizing: border-box; font-family: monospace; font-size: 12px; padding: 8px; border: 1px solid var(--border-color-light, #ddd); border-radius: 4px;"></textarea>
+                                <div id="subscription-quota-results" style="margin-top: 12px;"></div>
+                            </section>
                             <section class="card">
                                 <h2>Core Configurations</h2>
                                 <div id="core-configurations-list">
                                     <!-- Configurations will be dynamically inserted here -->
                                 </div>
                                 <div class="button-group" style="margin-top: 1em; display: flex; gap: 10px;">
-                                    <button id="add-config-button" class="add-button" style="margin-top: 0;">+ Add Custom Configuration</button>
-                                    <button id="add-predefined-config-button" class="add-button" style="margin-top: 0;">+ Add Predefined Profile</button>
+                                    <button id="add-config-button" class="add-button" style="margin-top: 0;" title="Add a new custom SSH/proxy configuration">+ Add Custom Configuration</button>
+                                    <button id="add-predefined-config-button" class="add-button" style="margin-top: 0;" title="Add a predefined configuration profile">+ Add Predefined Profile</button>
                                 </div>
-                            </section>
-                             <section class="card">
-                                <details>
-                                    <summary>
-                                        <h3>Connection Health History</h3>
-                                    </summary>
-                                    <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
-                                    <div class="chart-wrapper">
-                                        <canvas id="web-latency-chart"></canvas>
-                                    </div>
-                                    <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
-                                    <div class="chart-wrapper">
-                                        <canvas id="tcp-ping-chart"></canvas>
-                                    </div>
-                                </details>
                             </section>
                         </div>
                         <div class="sidebar-content">
@@ -173,7 +208,7 @@
                                     <div id="wifi-networks-list">
                                         <!-- Wi-Fi SSIDs will be inserted here -->
                                     </div>
-                                    <button id="add-wifi-button" class="add-button">+ Add Wi-Fi Network</button>
+                                    <button id="add-wifi-button" class="add-button" title="Add a Wi-Fi SSID for auto-connect">+ Add Wi-Fi Network</button>
                                 </div>
                                 <div class="form-group checkbox-group">
                                     <input type="checkbox" id="auto-reconnect-enabled" name="auto-reconnect-enabled">
@@ -187,7 +222,7 @@
                                 </div>
                                 <div class="form-group" id="manual-reconnect-container" style="display: none;">
                                     <label for="reconnect-now-button">Manual Reconnect</label>
-                                    <button id="reconnect-now-button" class="button-success">Reconnect Now</button>
+                                    <button id="reconnect-now-button" class="button-success" title="Force reconnect the tunnel now">Reconnect Now</button>
                                     <small>If the tunnel is disconnected, you can force a reconnection attempt.</small>
                                 </div>
                             </section>
@@ -220,8 +255,8 @@
                             <h2>Proxy Bypass Rules</h2>
                             <p>Define global rules for when to bypass the active proxy tunnel. The generated PAC script on the right will update as you make changes.</p>
                             <div class="proxy-actions-bar form-group">
-                                <button id="apply-proxy-button" class="button-info" style="display: none;">Apply Proxy</button>
-                                <button id="revert-proxy-button" class="button-warn" style="display: none;">Revert Proxy</button>
+                                <button id="apply-proxy-button" class="button-info" style="display: none;" title="Apply proxy settings for the active tunnel">Apply Proxy</button>
+                                <button id="revert-proxy-button" class="button-warn" style="display: none;" title="Revert proxy settings to previous state">Revert Proxy</button>
                                 <button id="disable-pac-button" class="button-warn" title="Clear any proxy settings set by this extension and revert to your browser's default.">Disable Proxy</button>
                                 <small>Apply or revert proxy for the active tunnel. 'Disable Proxy' clears any proxy settings set by this extension.</small>
                             </div>
@@ -278,15 +313,15 @@
                                         <!-- Custom rules will be inserted here -->
                                     </div>
                                     <div class="rule-actions" style="display: flex; gap: 10px; align-items: center; margin-top: 1em;">
-                                        <button id="add-proxy-rule-button" class="add-button" style="margin-top: 0;">+ Add Rule</button>
-                                        <button id="ai-suggest-rule-button" class="button-info" style="margin-top: 0;">Get AI Suggestion</button>
+                                        <button id="add-proxy-rule-button" class="add-button" style="margin-top: 0;" title="Add a new custom proxy bypass rule">+ Add Rule</button>
+                                        <button id="ai-suggest-rule-button" class="button-info" style="margin-top: 0;" title="Get an AI-generated suggestion for a proxy rule">Get AI Suggestion</button>
                                     </div>
                                     <small>Define domains and choose whether to send them DIRECT (bypass) or through a specific active tunnel. Use the prompt for the AI for suggestions like "Bypass all social media sites".</small>
                                 </div>
                                 <div class="settings-column">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <h3 class="sub-heading">Generated PAC Script Preview</h3>
-                                        <button id="copy-pac-button" class="button-secondary" style="padding: 4px 8px; font-size: 0.8em;">Copy</button>
+                                        <button id="copy-pac-button" class="button-secondary" style="padding: 4px 8px; font-size: 0.8em;" title="Copy the generated PAC script to clipboard">Copy</button>
                                     </div>
                                     <pre id="pac-script-preview-container"><code>// PAC script will be generated here...</code></pre>
                                 </div>
@@ -386,6 +421,7 @@
                                 </div>
                                 <div style="display: flex; gap: 8px;">
                                     <button type="button" class="passwall2-refresh-btn button" style="background: #2196F3;">🔄 Refresh List</button>
+                                    <button type="button" class="passwall2-restart-btn button" style="background: #e91e63; color: white;" title="Restart Passwall2 service on the router">⚡ Restart Service</button>
                                 </div>
                             </div>
                             
@@ -419,9 +455,9 @@
                                 <pre id="log-viewer-content">Waiting for log entries...</pre>
                             </div>
                             <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
-                                <button id="toggle-log-polling-button" class="button-secondary">Pause Log</button>
-                                <button id="copy-log-button" class="button-secondary">Copy Log</button>
-                                <button id="clear-log-button" class="button-warn">Clear Log</button>
+                                <button id="toggle-log-polling-button" class="button-secondary" title="Pause or resume live log updates">Pause Log</button>
+                                <button id="copy-log-button" class="button-secondary" title="Copy the log contents to clipboard">Copy Log</button>
+                                <button id="clear-log-button" class="button-warn" title="Clear all log entries from the viewer">Clear Log</button>
                             </div>
                         </section>
                         <section class="card">
@@ -429,15 +465,15 @@
                             <div class="database-status" style="border-top: none; margin-top: 0; padding-top: 0;">
                                 <div id="geoip-status">GeoIP: Loading...</div>
                                 <div id="geosite-status">GeoSite: Loading...</div>
-                                <button id="update-db-button">Update Databases Now</button>
+                                <button id="update-db-button" title="Download and update GeoIP/GeoSite databases">Update Databases Now</button>
                             </div>
                         </section>
                         <section class="card">
                             <h2>Configuration Management</h2>
                             <p><small>Export all your settings to a JSON file for backup or to share with others. Import a file to restore your settings.</small></p>
                             <div class="button-group" style="display: flex; gap: 10px; margin-top: 1em;">
-                                <button id="export-settings-button" class="button-secondary">Export Settings</button>
-                                <button id="import-settings-button" class="button-secondary">Import Settings</button>
+                                <button id="export-settings-button" class="button-secondary" title="Export all extension settings to a JSON file">Export Settings</button>
+                                <button id="import-settings-button" class="button-secondary" title="Import settings from a JSON file">Import Settings</button>
                                 <input type="file" id="import-file-input" style="display: none;" accept=".json">
                             </div>
                         </section>

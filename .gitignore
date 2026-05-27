@@ -7,3 +7,8 @@ backends/log/
 # IDE-specific files
 .idea/
 .vscode/
+*.pyc
+backends/python/__pycache__/holocron_native_host.cpython-313.pyc
+com.holocron.passwall2_watchdog.plist.template
+.env
+

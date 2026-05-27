@@ -425,8 +425,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 /* Chart Styles */
 .chart-wrapper {
     position: relative;
-    /* A more reasonable height than 50px, controlled via CSS for better responsiveness. */
-    height: 80px;
+    height: 220px;
     width: 100%;
     margin-bottom: 1em; /* Add space between charts */
 }

@@ -1,5 +1,19 @@
 # Troubleshooting Guide
 
+## Release Notes: 2026-02-26
+
+### Addition of Auto Refresh Proxy Script
+
+- **New Feature:** Created `auto_refresh_proxy.py` to automate testing and applying the fastest Cloudflare proxy node to the Passwall2 router configuration.
+- **Resilience:** Implemented a robust fallback sequence that will fall back to a local SOCKS5 proxy (`127.0.0.1:1032`) if Cloudflare fetching fails, and will issue a router reboot command if that fallback also fails.
+- **Optimization:** Added `check_if_node_changed()` and `is_node_active()` safeguards to ensure the script only restarts Passwall2 and interrupts the network when the underlying proxy details have actually changed.
+
+### Impact Analysis
+
+- **Business Process:** No impact on existing manual connections. Provides a 24/7 background worker to manage default proxy routing stability.
+- **Data Pipelines:** None.
+- **Breaking Changes:** Replaces previous ad-hoc manual scripts but functions completely identically.
+
 ## Release Notes: 2026-02-11
 
 ### Update to Monitor Modems Script

@@ -9,8 +9,8 @@ const NATIVE_HOST_NAME = 'com.holocron.native_host';
 // --- State Variables ---
 let lastStatus = { connected: false }; // Store the last known status.
 // Use raw GitHub URLs as a fallback for jsDelivr, which can sometimes have caching/availability issues.
-const GEOIP_URL = 'https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/main/direct/iran-ip.txt'; // For IP ranges (CIDR)
-const GEOSITE_URL = 'https://raw.githubusercontent.com/chocolate4u/Iran-sing-box-rules/main/direct/iran-domain.txt'; // For domains
+const GEOIP_URL = 'https://raw.githubusercontent.com/v2fly/geoip/release/text/ir.txt'; // For IP ranges (CIDR)
+const GEOSITE_URL = 'https://github.com/bootmortis/iran-hosted-domains/releases/latest/download/domains.txt'; // For domains
 const GEOIP_UPDATE_COOLDOWN_HOURS = 24;
 
 // --- State Variables ---
@@ -212,17 +212,33 @@ async function updateGeoSiteDatabase(force = false) {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const text = await response.text();
-        const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+        const lines = text.split('\n').map(line => line.trim().toLowerCase()).filter(Boolean);
         const subdomains = [];
         const full = [];
 
         lines.forEach(line => {
+            let domain = line;
+            let isFull = false;
+
             if (line.startsWith('domain:')) {
-                subdomains.push(line.substring(7));
+                domain = line.substring(7);
             } else if (line.startsWith('full:')) {
-                full.push(line.substring(5));
+                domain = line.substring(5);
+                isFull = true;
+            } else if (line.startsWith('regexp:') || line.startsWith('#')) {
+                return; // Ignore comments or unsupported formats
             }
-            // Silently ignore other formats like 'regexp:' which are not supported in PAC scripts.
+
+            // Skip .ir domains to save size (bypassed globally by default)
+            if (domain.endsWith('.ir')) {
+                return;
+            }
+
+            if (isFull) {
+                full.push(domain);
+            } else {
+                subdomains.push(domain);
+            }
         });
 
         const domains = { subdomains, full };
@@ -470,20 +486,25 @@ async function updateStateAndBroadcast(newStatus, errorMessage = null) {
   const wasConnected = lastStatus.connected;
   lastStatus = newStatus;
 
-  // --- Store latency history if connected ---
-  if (newStatus.connected && typeof newStatus.web_check_latency_ms !== 'undefined' && typeof newStatus.tcp_ping_ms !== 'undefined') {
-    // Only store valid readings (greater than -1)
-    if (newStatus.web_check_latency_ms > -1 && newStatus.tcp_ping_ms > -1) {
+  // --- Store latency history (always, even when disconnected) ---
+  // We record any valid reading we have; missing readings are stored as null
+  // so the chart can show gaps but the time axis still progresses.
+  {
+    const web = typeof newStatus.web_check_latency_ms === 'number' && newStatus.web_check_latency_ms > -1
+      ? newStatus.web_check_latency_ms : null;
+    const tcp = typeof newStatus.tcp_ping_ms === 'number' && newStatus.tcp_ping_ms > -1
+      ? newStatus.tcp_ping_ms : null;
+
+    if (web !== null || tcp !== null) {
       const newHistoryPoint = {
         timestamp: Date.now(),
-        web: newStatus.web_check_latency_ms,
-        tcp: newStatus.tcp_ping_ms,
+        web,
+        tcp,
+        connected: !!newStatus.connected,
       };
-      // Use an async IIFE to avoid holding up the broadcast
       (async () => {
         const { [STORAGE_KEYS.LATENCY_HISTORY]: history = [] } = await chrome.storage.local.get(STORAGE_KEYS.LATENCY_HISTORY);
         history.push(newHistoryPoint);
-        // Keep the history to a reasonable size, e.g., last 200 points
         if (history.length > 200) {
           history.shift();
         }
@@ -606,8 +627,30 @@ async function updateStatus() {
   try {
     const connectedConfig = await getCurrentlyConnectedConfig();
     if (!connectedConfig) {
-      // If we think we are disconnected, report it.
-      updateStateAndBroadcast({ connected: false, activeConfigId: null });
+      // Disconnected — still take a direct measurement so the chart keeps moving.
+      const {
+        [STORAGE_KEYS.PING_HOST]: pingHost = 'youtube.com',
+        [STORAGE_KEYS.WEB_CHECK_URL]: webCheckUrl = 'https://gemini.google.com/app'
+      } = await chrome.storage.sync.get([
+        STORAGE_KEYS.PING_HOST,
+        STORAGE_KEYS.WEB_CHECK_URL
+      ]);
+      try {
+        const [webResult, tcpResult] = await Promise.all([
+          communicateWithNativeHost({ command: 'webCheck', url: webCheckUrl }).catch(() => ({ latency: -1, status: 'N/A' })),
+          communicateWithNativeHost({ command: 'tcpPing', host: pingHost }).catch(() => ({ latency: -1 }))
+        ]);
+        updateStateAndBroadcast({
+          connected: false,
+          activeConfigId: null,
+          web_check_latency_ms: webResult.latency,
+          web_check_status: webResult.status || (webResult.latency > -1 ? 'OK' : 'N/A'),
+          tcp_ping_ms: tcpResult.latency,
+          connection_type: 'direct'
+        });
+      } catch (e) {
+        updateStateAndBroadcast({ connected: false, activeConfigId: null });
+      }
       return; // The 'finally' block will still execute.
     }
 
@@ -655,6 +698,7 @@ async function updateStatus() {
         webCheckUrl
       }), 15000); // 15-second timeout
       response.activeConfigId = connectedConfig.id; // Add the active ID to the status object
+      response.activeConfig = connectedConfig; // Provide the full config so popup/options can call passwall2 commands.
       if (response && response.connected) {
         updateStateAndBroadcast(response);
       } else {
@@ -776,7 +820,9 @@ function FindProxyForURL(url, host) {
     // Bypass for local, non-qualified, and common internal domains.
     if (isPlainHostName(host) ||
       shExpMatch(host, "localhost") ||
-      shExpMatch(host, "*.local")) {
+      shExpMatch(host, "*.local") ||
+      host.endsWith(".ir") ||
+      shExpMatch(host, "*.ir")) {
     return DIRECT;
     }
     try {
@@ -848,20 +894,27 @@ function FindProxyForURL(url, host) {
     // This is checked before GeoIP because it is more reliable and avoids DNS lookups.
 `;
             if (storedDomains.subdomains?.length > 0) {
-                pacScript += `    const geoSiteSubdomains = ${JSON.stringify(storedDomains.subdomains)};
-    for (let i = 0; i < geoSiteSubdomains.length; i++) {
-        if (dnsDomainIs(host, geoSiteSubdomains[i])) {
+                // Convert array to lookup map
+                const subdomainMap = {};
+                storedDomains.subdomains.forEach(d => { subdomainMap[d] = 1; });
+                pacScript += `    const geoSiteSubdomains = ${JSON.stringify(subdomainMap)};
+    let currentHost = host;
+    while (currentHost) {
+        if (geoSiteSubdomains[currentHost]) {
             return DIRECT;
         }
+        const dotIndex = currentHost.indexOf('.');
+        if (dotIndex === -1) break;
+        currentHost = currentHost.substring(dotIndex + 1);
     }
 `;
             }
             if (storedDomains.full?.length > 0) {
-                pacScript += `    const geoSiteFullDomains = ${JSON.stringify(storedDomains.full)};
-    for (let i = 0; i < geoSiteFullDomains.length; i++) {
-        if (host === geoSiteFullDomains[i]) {
-            return DIRECT;
-        }
+                const fullMap = {};
+                storedDomains.full.forEach(d => { fullMap[d] = 1; });
+                pacScript += `    const geoSiteFullDomains = ${JSON.stringify(fullMap)};
+    if (geoSiteFullDomains[host]) {
+        return DIRECT;
     }
 `;
             }
@@ -1420,6 +1473,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Indicate async response
   }
 
+  if (request.command === COMMANDS.CHECK_SUBSCRIPTION_QUOTA) {
+    (async () => {
+      try {
+        const urls = Array.isArray(request.urls) ? request.urls : [];
+        const response = await communicateWithNativeHost({
+          command: COMMANDS.CHECK_SUBSCRIPTION_QUOTA,
+          urls
+        });
+        sendResponse(response || { success: false, message: 'No response from native host' });
+      } catch (error) {
+        console.error('[BG] Subscription quota error:', error);
+        sendResponse({ success: false, message: `Subscription quota failed: ${error.message}` });
+      }
+    })();
+    return true;
+  }
+
+  if (request.command === COMMANDS.CHECK_SUBSCRIPTION_NODES) {
+    (async () => {
+      try {
+        const urls = Array.isArray(request.urls) ? request.urls : [];
+        const response = await communicateWithNativeHost({
+          command: COMMANDS.CHECK_SUBSCRIPTION_NODES,
+          urls,
+          maxNodes: request.maxNodes,
+          concurrency: request.concurrency,
+          timeout: request.timeout
+        });
+        sendResponse(response || { success: false, message: 'No response from native host' });
+      } catch (error) {
+        console.error('[BG] Subscription nodes error:', error);
+        sendResponse({ success: false, message: `Subscription nodes check failed: ${error.message}` });
+      }
+    })();
+    return true;
+  }
+
   if (request.command === COMMANDS.PASSWALL2) {
     console.log('[BG] PASSWALL2 command received:', request);
     (async () => {
@@ -1436,7 +1526,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           action: request.action, // list_proxies, add_proxy, delete_proxy, enable_proxy, disable_proxy, start_service, stop_service, restart_service
           config: request.config,
           proxyId: request.proxyId, // For enable/disable/delete operations
-          proxyData: request.proxyData // For add_proxy operation
+          proxyData: request.proxyData, // For add_proxy operation
+          urls: request.urls // For test_node action
         });
         
         console.log('[BG] Native host response:', response);

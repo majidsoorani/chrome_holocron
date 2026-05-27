@@ -9,11 +9,14 @@
     "alarms",
     "nativeMessaging",
     "offscreen",
-    "privacy"
+    "privacy",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "https://cdn.jsdelivr.net/",
-    "https://openrouter.ai/"
+    "https://openrouter.ai/",
+    "https://github.com/",
+    "https://*.githubusercontent.com/"
   ],
   "background": {
     "service_worker": "background.js",
