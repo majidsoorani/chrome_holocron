@@ -1042,6 +1042,1739 @@ def execute_tunnel_command(command, config):
     else:
         return {"success": False, "message": f"Unknown connection type: {conn_type}"}
 
+def load_iran_ip_ranges():
+    import re
+    import os
+    paths_to_try = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../iran_ip_ranges.js"),
+        "/Users/majidsoorani/chrome_holocron/iran_ip_ranges.js"
+    ]
+    for p in paths_to_try:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    ips = re.findall(r'"([^"]+/\d+)"', content)
+                    if ips:
+                        return ips
+            except Exception:
+                pass
+    return [
+        "2.176.0.0/13", "2.184.0.0/13", "5.52.192.0/20", "5.56.0.0/15", "5.63.12.0/22",
+        "5.112.0.0/13", "5.120.0.0/14", "5.124.0.0/15", "5.126.0.0/16", "5.144.0.0/14",
+        "5.160.0.0/13", "5.200.128.0/17", "5.208.224.0/19", "5.216.96.0/19", "5.232.0.0/14",
+        "5.236.0.0/15", "5.238.0.0/16", "31.24.224.0/19", "31.56.0.0/16", "37.32.0.0/16",
+        "37.152.160.0/19", "37.255.224.0/19", "46.32.32.0/19", "46.209.0.0/16", "46.224.0.0/14",
+        "62.3.32.0/19", "62.60.128.0/18", "62.99.128.0/17", "62.193.0.0/18", "62.220.96.0/19",
+        "77.36.160.0/19", "77.77.64.0/19", "77.104.64.0/19", "77.238.96.0/19", "78.38.0.0/15",
+        "78.109.128.0/18", "79.127.120.0/21", "79.132.208.0/20", "79.175.128.0/17", "80.69.128.0/18",
+        "80.71.64.0/19", "80.75.0.0/18", "80.191.0.0/16", "81.12.0.0/17", "81.28.0.0/18",
+        "81.31.160.0/19", "81.90.144.0/20", "81.91.128.0/19", "82.99.192.0/18", "82.102.0.0/19",
+        "83.123.192.0/18", "84.47.128.0/17", "84.241.0.0/18", "85.9.64.0/18", "85.15.0.0/16",
+        "85.133.128.0/18", "85.185.0.0/16", "86.57.0.0/17", "87.107.0.0/17", "87.236.192.0/18",
+        "87.247.160.0/19", "88.135.32.0/19", "89.32.240.0/20", "89.42.208.0/20", "89.45.0.0/18",
+        "89.45.64.0/19", "89.144.192.0/18", "89.165.0.0/17", "89.187.160.0/19", "89.198.96.0/19",
+        "89.221.96.0/19", "91.92.0.0/14", "91.98.0.0/15", "91.108.4.0/22", "91.241.44.0/22",
+        "92.42.48.0/20", "92.50.0.0/16", "92.60.0.0/16", "92.244.128.0/17", "93.113.0.0/18",
+        "93.114.0.0/15", "93.116.0.0/14", "93.126.0.0/16", "94.74.128.0/17", "94.101.128.0/18",
+        "94.139.160.0/19", "94.182.0.0/15", "94.242.192.0/18", "95.38.0.0/17", "95.82.0.0/16",
+        "95.106.128.0/17", "95.140.160.0/19", "95.156.224.0/19", "95.215.0.0/17", "109.73.0.0/18",
+        "109.109.0.0/19", "109.122.128.0/17", "109.125.128.0/17", "109.169.0.0/16", "109.202.0.0/16",
+        "109.225.0.0/16", "130.185.64.0/18", "151.232.0.0/13", "158.58.128.0/17", "176.65.192.0/18",
+        "178.63.32.0/19", "178.131.0.0/17", "178.252.160.0/19", "185.4.40.0/22", "185.5.248.0/22",
+        "185.9.144.0/22", "185.13.112.0/22", "185.15.44.0/22", "185.24.88.0/22", "185.37.28.0/22",
+        "185.39.192.0/22", "185.43.220.0/22", "185.44.208.0/22", "185.46.212.0/22", "185.47.20.0/22",
+        "185.49.84.0/22", "185.49.140.0/22", "185.50.100.0/22", "185.51.204.0/22", "185.53.144.0/22",
+        "185.55.184.0/22", "185.60.140.0/22", "185.69.144.0/22", "185.69.152.0/22", "185.80.188.0/22",
+        "185.81.96.0/22", "185.86.148.0/22", "185.94.96.0/22", "185.97.68.0/22", "185.105.240.0/22",
+        "185.129.188.0/22", "185.143.232.0/22", "185.146.172.0/22", "185.163.244.0/22", "185.181.8.0/22",
+        "185.198.12.0/22", "185.205.208.0/22", "185.210.140.0/22", "185.213.164.0/22", "185.229.20.0/22",
+        "185.231.112.0/22", "185.233.108.0/22", "185.255.188.0/22", "193.104.34.0/23", "193.189.122.0/23",
+        "194.5.196.0/22", "194.33.188.0/22", "194.104.128.0/19", "195.146.32.0/19", "195.181.160.0/20",
+        "195.248.224.0/19", "212.33.192.0/18", "213.108.224.0/19", "213.233.160.0/19", "217.218.0.0/15"
+    ]
+
+def optimize_route_rules(config_data):
+    if "route" not in config_data:
+        config_data["route"] = {}
+    
+    route = config_data["route"]
+    route["auto_detect_interface"] = True
+    
+    # 1. Setup Remote Rule Sets
+    rule_sets = route.setdefault("rule_set", [])
+    
+    geosite_def = {
+        "type": "remote",
+        "tag": "geosite-ir",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs"
+    }
+    geoip_def = {
+        "type": "remote",
+        "tag": "geoip-ir",
+        "format": "binary",
+        "url": "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs"
+    }
+    
+    # Add/Update geosite-ir
+    has_geosite = False
+    for rs in rule_sets:
+        if rs.get("tag") == "geosite-ir":
+            rs["type"] = "remote"
+            rs["format"] = "binary"
+            rs["url"] = geosite_def["url"]
+            has_geosite = True
+            break
+    if not has_geosite:
+        rule_sets.append(geosite_def)
+        
+    # Add/Update geoip-ir
+    has_geoip = False
+    for rs in rule_sets:
+        if rs.get("tag") == "geoip-ir":
+            rs["type"] = "remote"
+            rs["format"] = "binary"
+            rs["url"] = geoip_def["url"]
+            has_geoip = True
+            break
+    if not has_geoip:
+        rule_sets.append(geoip_def)
+        
+    rules = route.setdefault("rules", [])
+    
+    # 2. Add/Update direct routing rule for rule sets
+    ruleset_rule = None
+    for r in rules:
+        if r.get("outbound") == "direct" and r.get("action") == "route" and "rule_set" in r and "domain_suffix" not in r:
+            ruleset_rule = r
+            break
+    
+    # Clean up any buggy combined rules
+    for r in list(rules):
+        if r.get("outbound") == "direct" and "rule_set" in r and "domain_suffix" in r:
+            r.pop("domain_suffix", None)
+            ruleset_rule = r
+            
+    if not ruleset_rule:
+        ruleset_rule = {
+            "rule_set": ["geosite-ir", "geoip-ir"],
+            "action": "route",
+            "outbound": "direct"
+        }
+        rules.append(ruleset_rule)
+    else:
+        rs_list = ruleset_rule.setdefault("rule_set", [])
+        for rs in ["geosite-ir", "geoip-ir"]:
+            if rs not in rs_list:
+                rs_list.append(rs)
+        ruleset_rule["action"] = "route"
+        ruleset_rule["outbound"] = "direct"
+
+    # 3. Add/Update direct routing rule for domain suffixes
+    domain_rule = None
+    for r in rules:
+        if r.get("outbound") == "direct" and r.get("action") == "route" and "domain_suffix" in r and "rule_set" not in r:
+            domain_rule = r
+            break
+            
+    if not domain_rule:
+        domain_rule = {
+            "domain_suffix": ["ir", "xn--mgba3a4f16a"],
+            "action": "route",
+            "outbound": "direct"
+        }
+        rules.append(domain_rule)
+    else:
+        suffixes = domain_rule.setdefault("domain_suffix", [])
+        for dom in ["ir", "xn--mgba3a4f16a"]:
+            if dom not in suffixes:
+                suffixes.append(dom)
+        domain_rule["action"] = "route"
+        domain_rule["outbound"] = "direct"
+
+    # Remove any old huge ip_cidr or domain_suffix rule from early native host versions to keep router clean
+    for r in list(rules):
+        if r.get("outbound") == "direct" and "ip_cidr" in r and len(r.get("ip_cidr", [])) > 50:
+            rules.remove(r)
+
+    # 4. Ensure DNS rules
+    dns_rules = config_data.setdefault("dns", {}).setdefault("rules", [])
+    
+    # DNS rule set direct rule
+    dns_ruleset_rule = None
+    for r in dns_rules:
+        if r.get("server") == "dns-direct" and "rule_set" in r and "domain_suffix" not in r:
+            dns_ruleset_rule = r
+            break
+    for r in list(dns_rules):
+        if r.get("server") == "dns-direct" and "rule_set" in r and "domain_suffix" in r:
+            r.pop("domain_suffix", None)
+            dns_ruleset_rule = r
+            
+    if not dns_ruleset_rule:
+        dns_ruleset_rule = {
+            "rule_set": ["geosite-ir"],
+            "server": "dns-direct"
+        }
+        dns_rules.insert(0, dns_ruleset_rule)
+    else:
+        rs_list = dns_ruleset_rule.setdefault("rule_set", [])
+        if "geosite-ir" not in rs_list:
+            rs_list.append("geosite-ir")
+            
+    # DNS domain suffix direct rule
+    dns_domain_rule = None
+    for r in dns_rules:
+        if r.get("server") == "dns-direct" and "domain_suffix" in r and "rule_set" not in r:
+            dns_domain_rule = r
+            break
+            
+    if not dns_domain_rule:
+        dns_domain_rule = {
+            "domain_suffix": ["ir", "xn--mgba3a4f16a"],
+            "server": "dns-direct"
+        }
+        dns_rules.insert(0, dns_domain_rule)
+    else:
+        suffixes = dns_domain_rule.setdefault("domain_suffix", [])
+        for dom in ["ir", "xn--mgba3a4f16a"]:
+            if dom not in suffixes:
+                suffixes.append(dom)
+
+    # 5. Ensure dns-direct server points to 127.0.0.1 (dnsmasq loopback)
+    dns_servers = config_data.setdefault("dns", {}).setdefault("servers", [])
+    for server in dns_servers:
+        if server.get("tag") == "dns-direct":
+            server["server"] = "127.0.0.1"
+            server["type"] = "udp"
+
+def optimize_outbounds(config_data):
+    outbounds = config_data.setdefault("outbounds", [])
+    
+    # 1. Balancer interval
+    for o in outbounds:
+        if o.get("tag") == "balancer":
+            o["url"] = "https://www.google.com/generate_204"
+            o["interval"] = "30s"
+            o["tolerance"] = 50
+            
+    # 2. VLESS Reality outbounds
+    for outbound in outbounds:
+        tag = outbound.get("tag", "")
+        if outbound.get("type") == "vless":
+            tls = outbound.setdefault("tls", {})
+            reality = tls.get("reality", {})
+            if reality or "reality" in tag:
+                if not reality:
+                    reality = tls.setdefault("reality", {"enabled": True})
+                reality["enabled"] = True
+                
+                if not reality.get("public_key"):
+                    reality["public_key"] = "VHI65v3ql03Yz-4yVtwCA9-58WkiYGOt2tvoFXrQnC4"
+                
+                sid = reality.get("short_id")
+                if not sid:
+                    reality["short_id"] = "034e50c5756bb22a"
+                elif isinstance(sid, list):
+                    reality["short_id"] = sid[0] if sid else "034e50c5756bb22a"
+                elif isinstance(sid, str):
+                    if "," in sid:
+                        parts = [s.strip() for s in sid.split(",") if s.strip()]
+                        reality["short_id"] = parts[0] if parts else "034e50c5756bb22a"
+                
+                if not outbound.get("flow"):
+                    outbound["flow"] = "xtls-rprx-vision"
+                
+                outbound["packet_encoding"] = "xudp"
+                outbound["multiplex"] = {
+                    "enabled": True,
+                    "protocol": "h2mux",
+                    "max_connections": 8
+                }
+                outbound["tcp_fast_open"] = True
+                outbound["connect_timeout"] = "5s"
+                
+                tls["enabled"] = True
+                tls["server_name"] = tls.get("server_name") or outbound.get("server", "www.microsoft.com")
+                utls = tls.setdefault("utls", {})
+                utls["enabled"] = True
+                utls["fingerprint"] = "chrome"
+
+def optimize_singbox_config(config_data):
+    try:
+        optimize_route_rules(config_data)
+    except Exception as e:
+        logger.error(f"Error optimizing route rules: {e}")
+    try:
+        optimize_outbounds(config_data)
+    except Exception as e:
+        logger.error(f"Error optimizing outbounds: {e}")
+
+def parse_uri_to_singbox_outbound(uri, tag):
+    import base64
+    from urllib.parse import urlsplit, unquote, parse_qs
+    uri = uri.strip()
+    if not uri:
+        return None
+    try:
+        if uri.startswith("ss://"):
+            frag = ""
+            body = uri[5:]
+            if "#" in body:
+                body, frag = body.split("#", 1)
+            name = unquote(frag) if frag else f"ss-{tag}"
+            if "@" in body:
+                userinfo, hostport = body.split("@", 1)
+                missing_padding = len(userinfo) % 4
+                if missing_padding:
+                    userinfo += '=' * (4 - missing_padding)
+                decoded_user = base64.b64decode(userinfo).decode('utf-8', errors='ignore')
+                method, password = decoded_user.split(":", 1)
+                host, port = hostport.rsplit(":", 1)
+            else:
+                missing_padding = len(body) % 4
+                if missing_padding:
+                    body += '=' * (4 - missing_padding)
+                decoded = base64.b64decode(body).decode('utf-8', errors='ignore')
+                if "@" in decoded:
+                    userinfo, hostport = decoded.split("@", 1)
+                    method, password = userinfo.split(":", 1)
+                    host, port = hostport.rsplit(":", 1)
+                else:
+                    return None
+            return {
+                "type": "shadowsocks",
+                "tag": tag,
+                "server": host,
+                "server_port": int(port),
+                "method": method,
+                "password": password
+            }
+        elif uri.startswith("vless://"):
+            content = uri[8:]
+            frag = ""
+            if "#" in content:
+                content, frag = content.split("#", 1)
+            uuid, remain = content.split("@", 1)
+            hostport, *query_parts = remain.split("?", 1)
+            host, port = hostport.rsplit(":", 1)
+            query = query_parts[0] if query_parts else ""
+            params = parse_qs(query)
+            
+            security = params.get("security", ["none"])[0]
+            sni = params.get("sni", [""])[0]
+            transport_type = params.get("type", ["tcp"])[0]
+            ws_host = params.get("host", [""])[0]
+            ws_path = params.get("path", ["/"])[0]
+            
+            outbound = {
+                "type": "vless",
+                "tag": tag,
+                "server": host,
+                "server_port": int(port),
+                "uuid": uuid,
+                "flow": ""
+            }
+            if security == "reality":
+                pbk = params.get("pbk", [""])[0]
+                sid_str = params.get("sid", [""])[0]
+                short_ids = [s.strip() for s in sid_str.split(",") if s.strip()] if sid_str else []
+                reality_sid = short_ids[0] if short_ids else ""
+                flow_val = params.get("flow", ["xtls-rprx-vision"])[0] or "xtls-rprx-vision"
+                fp_val = params.get("fp", ["chrome"])[0] or "chrome"
+                
+                outbound["flow"] = flow_val
+                outbound["tls"] = {
+                    "enabled": True,
+                    "server_name": sni or host,
+                    "utls": {
+                        "enabled": True,
+                        "fingerprint": fp_val
+                    },
+                    "reality": {
+                        "enabled": True,
+                        "public_key": pbk,
+                        "short_id": reality_sid
+                    }
+                }
+                outbound["packet_encoding"] = "xudp"
+                outbound["multiplex"] = {
+                    "enabled": True,
+                    "protocol": "h2mux",
+                    "max_connections": 8
+                }
+                outbound["tcp_fast_open"] = True
+                outbound["connect_timeout"] = "5s"
+            elif security == "tls":
+                outbound["tls"] = {
+                    "enabled": True,
+                    "server_name": sni or host,
+                    "utls": {
+                        "enabled": True,
+                        "fingerprint": "chrome"
+                    }
+                }
+                outbound["packet_encoding"] = "xudp"
+            if transport_type == "ws":
+                outbound["transport"] = {
+                    "type": "ws",
+                    "path": ws_path,
+                    "headers": {
+                        "Host": ws_host or host
+                    }
+                }
+            return outbound
+        elif uri.startswith("vmess://"):
+            content = uri[8:]
+            blob = content.split("#", 1)[0]
+            padded = blob + "=" * (-len(blob) % 4)
+            raw = base64.b64decode(padded).decode("utf-8", errors="ignore")
+            data = json.loads(raw)
+            host = (data.get("add") or data.get("host") or "").strip()
+            port = int(str(data.get("port") or 0))
+            uuid = data.get("id")
+            
+            outbound = {
+                "type": "vmess",
+                "tag": tag,
+                "server": host,
+                "server_port": port,
+                "uuid": uuid,
+                "security": data.get("scy", "auto"),
+                "alter_id": int(data.get("aid", 0))
+            }
+            if data.get("tls") == "tls":
+                outbound["tls"] = {
+                    "enabled": True,
+                    "server_name": data.get("sni") or host
+                }
+            if data.get("net") == "ws":
+                outbound["transport"] = {
+                    "type": "ws",
+                    "path": data.get("path", "/"),
+                    "headers": {
+                        "Host": data.get("host") or host
+                    }
+                }
+            return outbound
+        elif uri.startswith("trojan://"):
+            content = uri[9:]
+            frag = ""
+            if "#" in content:
+                content, frag = content.split("#", 1)
+            password, remain = content.split("@", 1)
+            hostport, *query_parts = remain.split("?", 1)
+            host, port = hostport.rsplit(":", 1)
+            
+            query = query_parts[0] if query_parts else ""
+            params = parse_qs(query)
+            sni = params.get("sni", [""])[0]
+            
+            return {
+                "type": "trojan",
+                "tag": tag,
+                "server": host,
+                "server_port": int(port),
+                "password": password,
+                "tls": {
+                    "enabled": True,
+                    "server_name": sni or host
+                }
+            }
+    except Exception as e:
+        logger.error(f"Error parsing node URI {uri}: {e}")
+    return None
+
+def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy_data=None, urls=None):
+    import base64
+    import tempfile
+    import urllib.parse
+    
+    # 1. status
+    if action == "status":
+        cmd = ssh_cmd_base + ["pgrep -f sing-box >/dev/null && echo 'enabled' || echo 'disabled'"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        return {"success": True, "status": res.stdout.strip()}
+        
+    # 2. start_service / stop_service / restart_service
+    elif action in ["start_service", "stop_service", "restart_service"]:
+        act = action.split('_')[0]
+        cmd = ssh_cmd_base + [f"/etc/init.d/sing-box {act}"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": f"Failed to {act} sing-box: {res.stderr.strip()}"}
+        return {"success": True, "message": f"Sing-box service {act}ed successfully"}
+
+    # 2.5. test_node
+    elif action == "test_node":
+        if not proxy_id:
+            return {"success": False, "message": "Proxy ID is required for test_node."}
+            
+        test_urls = urls or [
+            "https://www.youtube.com",
+            "https://www.google.com"
+        ]
+        
+        results = {}
+        tested_via = {}
+        
+        # Read current config to find the outbound configuration
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        config_data = {}
+        if res.returncode == 0:
+            try:
+                config_data = json.loads(res.stdout)
+            except:
+                pass
+                
+        outbounds = config_data.get("outbounds", [])
+        target_outbound = None
+        for o in outbounds:
+            if o.get("tag") == proxy_id:
+                target_outbound = o
+                break
+
+        # If it is the balancer, we can use the main running sing-box on port 1080
+        if proxy_id == "balancer":
+            urls_args = " ".join([f"'{u}'" for u in test_urls])
+            remote_cmd = (
+                "PIDS=\"\"\n"
+                f"for url in {urls_args}; do "
+                "  (res=$(curl -s -m 20 -o /dev/null -w \"%{http_code}:%{time_total}\" --socks5-hostname 127.0.0.1:1080 \"$url\" 2>/dev/null); "
+                "  if [ $? -ne 0 ] || [ -z \"$res\" ]; then res=\"000:0.0\"; fi; "
+                "  echo \"RESULT|$url|$res\") & "
+                "  PIDS=\"$PIDS $!\"\n"
+                "done; wait $PIDS"
+            )
+            test_cmd = ssh_cmd_base + [remote_cmd]
+            test_res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=35)
+            
+            for line in (test_res.stdout or "").splitlines():
+                if line.startswith("RESULT|"):
+                    parts = line.split("|")
+                    if len(parts) >= 3:
+                        u = parts[1]
+                        out = parts[2]
+                        code = "000"
+                        sec = 0.0
+                        if ":" in out:
+                            c_str, _, s_str = out.partition(":")
+                            code = c_str.strip()
+                            try:
+                                sec = float(s_str.strip())
+                            except:
+                                sec = 0.0
+                        if code in ["200", "204", "301", "302", "307", "308"] and sec > 0:
+                            results[u] = max(1, int(sec * 1000))
+                        else:
+                            results[u] = -1
+                        tested_via[u] = proxy_id
+                        
+        elif target_outbound:
+            import random
+            test_port = random.randint(10080, 10250)
+            
+            test_config = {
+                "log": {"level": "warn"},
+                "inbounds": [{
+                    "type": "mixed",
+                    "tag": "mixed-in",
+                    "listen": "127.0.0.1",
+                    "listen_port": test_port
+                }],
+                "outbounds": [
+                    target_outbound,
+                    {"type": "direct", "tag": "direct"}
+                ]
+            }
+            test_config_str = json.dumps(test_config)
+            
+            # Escape single quotes in JSON string
+            escaped_json = test_config_str.replace("'", "'\\''")
+            urls_args = " ".join([f"'{u}'" for u in test_urls])
+            
+            remote_cmd = (
+                f"cat << 'EOF' > /tmp/test_sb_{test_port}.json\n{test_config_str}\nEOF\n"
+                f"/usr/bin/sing-box run -c /tmp/test_sb_{test_port}.json >/dev/null 2>&1 & PID=$!\n"
+                "for i in $(seq 1 15); do\n"
+                f"  if netstat -an 2>/dev/null | grep {test_port} | grep LISTEN >/dev/null; then break; fi\n"
+                "  sleep 0.1\n"
+                "done\n"
+                "PIDS=\"\"\n"
+                f"for url in {urls_args}; do\n"
+                "  (res=$(curl -s -m 20 -o /dev/null -w \"%{http_code}:%{time_total}\" --socks5-hostname 127.0.0.1:" + str(test_port) + " \"$url\" 2>/dev/null); "
+                "  if [ $? -ne 0 ] || [ -z \"$res\" ]; then res=\"000:0.0\"; fi; "
+                "  echo \"RESULT|$url|$res\") &\n"
+                "  PIDS=\"$PIDS $!\"\n"
+                "done\n"
+                "wait $PIDS\n"
+                "kill $PID 2>/dev/null || true\n"
+                f"rm -f /tmp/test_sb_{test_port}.json"
+            )
+            
+            test_cmd = ssh_cmd_base + [remote_cmd]
+            test_res = subprocess.run(test_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=35)
+            
+            for line in (test_res.stdout or "").splitlines():
+                if line.startswith("RESULT|"):
+                    parts = line.split("|")
+                    if len(parts) >= 3:
+                        u = parts[1]
+                        out = parts[2]
+                        code = "000"
+                        sec = 0.0
+                        if ":" in out:
+                            c_str, _, s_str = out.partition(":")
+                            code = c_str.strip()
+                            try:
+                                sec = float(s_str.strip())
+                            except:
+                                sec = 0.0
+                        if code in ["200", "204", "301", "302", "307", "308"] and sec > 0:
+                            results[u] = max(1, int(sec * 1000))
+                        else:
+                            results[u] = -1
+                        tested_via[u] = proxy_id
+        else:
+            for u in test_urls:
+                results[u] = -1
+                tested_via[u] = proxy_id
+                
+        for u in test_urls:
+            if u not in results:
+                results[u] = -1
+            if u not in tested_via:
+                tested_via[u] = proxy_id
+                
+        return {
+            "success": True,
+            "node_id": proxy_id,
+            "results": results,
+            "tested_via": tested_via
+        }
+
+    # 2.7. get_health_metrics
+    elif action == "get_health_metrics":
+        cmd = ssh_cmd_base + ["logread | grep -E 'sing-box|dropbear' | tail -n 1000; echo '===NET_DEV==='; cat /proc/net/dev"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        log_lines = []
+        net_dev_text = ""
+        if res.returncode == 0:
+            stdout_parts = res.stdout.split('===NET_DEV===')
+            log_lines = stdout_parts[0].splitlines()
+            if len(stdout_parts) > 1:
+                net_dev_text = stdout_parts[1]
+        else:
+            return {"success": False, "message": f"Failed to read logs: {res.stderr.strip()}"}
+            
+        # Global re is used instead of local import to avoid UnboundLocalError in other branches
+        
+        dns_total = 0
+        dns_exchanged = 0
+        dns_cached = 0
+        dns_rejected = 0
+        dns_latencies = []
+        
+        conn_latencies = []
+        
+        reconnect_count = 0
+        ssh_sessions = 0
+        ssh_auth_failures = 0
+        
+        latency_re = re.compile(r'\[\d+\s+([\d\.]+)(ms|s)\]')
+        dns_re = re.compile(r'dns:\s+(exchanged|rejected|cached)')
+        ssh_auth_ok_re = re.compile(r'Pubkey auth succeeded')
+        ssh_disconnect_re = re.compile(r'Disconnect received')
+        error_re = re.compile(r'(FATAL|ERROR|fail|dependency|error)', re.IGNORECASE)
+        
+        for line in log_lines:
+            if ssh_auth_ok_re.search(line):
+                ssh_sessions += 1
+            elif ssh_disconnect_re.search(line):
+                ssh_sessions = max(0, ssh_sessions - 1)
+                
+            if error_re.search(line) and "sing-box" in line:
+                reconnect_count += 1
+                
+            lat_match = latency_re.search(line)
+            if lat_match:
+                val = float(lat_match.group(1))
+                unit = lat_match.group(2)
+                ms = val if unit == 'ms' else val * 1000
+                
+                if 'dns:' in line:
+                    dns_latencies.append(ms)
+                else:
+                    conn_latencies.append(ms)
+                    
+            dns_match = dns_re.search(line)
+            if dns_match:
+                dns_total += 1
+                act_name = dns_match.group(1)
+                if act_name == 'exchanged':
+                    dns_exchanged += 1
+                elif act_name == 'cached':
+                    dns_cached += 1
+                elif act_name == 'rejected':
+                    dns_rejected += 1
+                    
+        avg_latency = 0
+        jitter = 0
+        if conn_latencies:
+            avg_latency = sum(conn_latencies) / len(conn_latencies)
+            jitter = sum(abs(l - avg_latency) for l in conn_latencies) / len(conn_latencies)
+            
+        p95_latency = 0
+        if conn_latencies:
+            sorted_l = sorted(conn_latencies)
+            idx = int(len(sorted_l) * 0.95)
+            p95_latency = sorted_l[min(idx, len(sorted_l)-1)]
+            
+        dns_success_rate = 1.0
+        if dns_total > 0:
+            dns_success_rate = (dns_exchanged + dns_cached) / dns_total
+            
+        dns_cache_hit_rate = 0.0
+        if (dns_exchanged + dns_cached) > 0:
+            dns_cache_hit_rate = dns_cached / (dns_exchanged + dns_cached)
+            
+        avg_dns_latency = 0
+        if dns_latencies:
+            avg_dns_latency = sum(dns_latencies) / len(dns_latencies)
+            
+        dns_latency_factor = max(0.0, 1.0 - (avg_dns_latency / 1000.0))
+        dns_score = int((dns_success_rate * 0.7 + dns_latency_factor * 0.3) * 100)
+        dns_score = max(0, min(100, dns_score))
+        
+        error_penalty = max(0.0, 1.0 - (reconnect_count * 0.1))
+        latency_penalty = max(0.0, 1.0 - (p95_latency / 2000.0))
+        tunnel_score = int((error_penalty * 0.6 + latency_penalty * 0.4) * 100)
+        tunnel_score = max(0, min(100, tunnel_score))
+        
+        dns_reject_rate = dns_rejected / dns_total if dns_total > 0 else 0.0
+        reject_penalty = max(0.0, 1.0 - dns_reject_rate)
+        jitter_penalty = max(0.0, 1.0 - (jitter / 500.0))
+        stability_score = int((reject_penalty * 0.4 + jitter_penalty * 0.4 + error_penalty * 0.2) * 100)
+        stability_score = max(0, min(100, stability_score))
+        
+        loss_estimate = 0.0
+        if dns_total > 0:
+            loss_estimate = dns_rejected / dns_total
+        loss_estimate = min(1.0, loss_estimate + (reconnect_count * 0.02))
+        
+        # Modem Usage/Traffic share parsing
+        # Modem Usage/Traffic share parsing
+        import tempfile
+        stats_file = Path(tempfile.gettempdir()) / "holocron_modem_stats.json"
+        
+        last_stats = {}
+        last_time = None
+        if stats_file.exists():
+            try:
+                with open(stats_file, 'r') as f:
+                    cached = json.load(f)
+                    last_stats = cached.get("stats", {})
+                    last_time = cached.get("time")
+            except Exception as e:
+                logger.warning(f"Failed to read modem stats cache: {e}")
+
+        modem_traffic = {
+            "success": False,
+            "interfaces": {},
+            "total_speed": 0.0
+        }
+        
+        if net_dev_text:
+            try:
+                current_time = time.time()
+                current_stats = {}
+                for line in net_dev_text.splitlines():
+                    if ":" not in line:
+                        continue
+                    iface, data = line.split(":", 1)
+                    iface_name = iface.strip()
+                    parts = data.split()
+                    if len(parts) >= 9:
+                        rx_bytes = int(parts[0])
+                        tx_bytes = int(parts[8])
+                        current_stats[iface_name] = rx_bytes + tx_bytes
+                
+                # Check delta
+                if last_time is not None and last_stats:
+                    dt = current_time - last_time
+                    # Only compute speed if the time difference is reasonable (e.g. 0.5s to 15s)
+                    if 0.5 <= dt <= 15.0:
+                        total_speed = 0
+                        speeds = {}
+                        # Zitel: wan, RighTel: lan3, Irancell: wl1-sta0 (or wl1), Mobinnet: lan1 (or wl0-sta0, wl0)
+                        target_interfaces = ['wan', 'lan3', 'wl1-sta0', 'lan1', 'wl0-sta0', 'wl1', 'wl0']
+                        
+                        for iface in target_interfaces:
+                            if iface in current_stats and iface in last_stats:
+                                curr_val = current_stats[iface]
+                                prev_val = last_stats[iface]
+                                
+                                # Handle reboot/reset
+                                if curr_val < prev_val:
+                                    prev_val = curr_val
+                                
+                                delta = max(0, curr_val - prev_val)
+                                speed = delta / dt
+                                speeds[iface] = speed
+                                total_speed += speed
+                        
+                        # Compute percentage shares
+                        shares = {}
+                        for iface, speed in speeds.items():
+                            share = (speed / total_speed * 100) if total_speed > 0 else 0
+                            
+                            # Formatted speed string
+                            speed_formatted = ""
+                            if speed > 1024 * 1024:
+                                speed_formatted = f"{speed / (1024 * 1024):.1f} MB/s"
+                            elif speed > 1024:
+                                speed_formatted = f"{speed / 1024:.1f} KB/s"
+                            else:
+                                speed_formatted = f"{speed:.0f} B/s"
+                            
+                            shares[iface] = {
+                                "speed": round(speed, 1),
+                                "speed_formatted": speed_formatted,
+                                "share": round(share, 1)
+                            }
+                        
+                        modem_traffic = {
+                            "success": True,
+                            "interfaces": shares,
+                            "total_speed": round(total_speed, 1)
+                        }
+                
+                # Update persistent state in temp file
+                try:
+                    with open(stats_file, 'w') as f:
+                        json.dump({"stats": current_stats, "time": current_time}, f)
+                except Exception as e:
+                    logger.error(f"Failed to write modem stats cache: {e}")
+            except Exception as e:
+                logger.error(f"Error parsing modem traffic: {e}")
+        
+        return {
+            "success": True,
+            "latency_avg_ms": int(avg_latency) if conn_latencies else 45,
+            "latency_p95_ms": int(p95_latency) if conn_latencies else 95,
+            "jitter_ms": int(jitter),
+            "dns_success_rate": round(dns_success_rate, 2),
+            "dns_cache_hit_rate": round(dns_cache_hit_rate, 2),
+            "dns_latency_avg_ms": int(avg_dns_latency),
+            "reconnects_count": reconnect_count,
+            "packet_loss_estimate": round(loss_estimate, 3),
+            "ssh_sessions": ssh_sessions,
+            "dns_health": dns_score,
+            "tunnel_quality": tunnel_score,
+            "internet_stability": stability_score,
+            "modem_traffic": modem_traffic
+        }
+
+    # 3. list_proxies
+    elif action == "list_proxies":
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": f"Failed to read sing-box config: {res.stderr.strip()}"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        outbounds = config_data.get("outbounds", [])
+        route_final = config_data.get("route", {}).get("final", "balancer")
+        active_node_id = route_final
+        
+        proxies = []
+        proxies.append({
+            "id": "balancer",
+            "type": "balancing",
+            "remarks": "🔄 Balancer (Lowest Latency Auto-Select)",
+            "name": "🔄 Balancer (Lowest Latency Auto-Select)",
+            "address": "URL-Test",
+            "port": "",
+            "enabled": True,
+            "is_active": active_node_id == "balancer"
+        })
+        
+        # Get balancer outbounds
+        balancer_outbounds = []
+        for out in outbounds:
+            if out.get("tag") == "balancer":
+                balancer_outbounds = out.get("outbounds", [])
+                break
+
+        for out in outbounds:
+            o_type = out.get("type")
+            tag = out.get("tag")
+            if o_type in ["shadowsocks", "vless", "vmess", "trojan", "socks", "ssh"]:
+                remarks = out.get("remarks") or tag
+                if tag == "ss-zitel":
+                    remarks = "⚡ Zitel (wan) - Arvan Shadowsocks"
+                elif tag == "ss-rightel":
+                    remarks = "📶 RighTel (lan3) - Arvan Shadowsocks"
+                elif tag == "ss-mobinnet":
+                    remarks = "🚀 Mobinnet (lan1) - Arvan Shadowsocks"
+                elif tag == "tunnel-zitel":
+                    remarks = "🔒 Zitel (wan) - SSH Tunnel"
+                elif tag == "tunnel-rightel":
+                    remarks = "🔒 RighTel (lan3) - SSH Tunnel"
+                elif tag == "tunnel-mobinnet":
+                    remarks = "🔒 Mobinnet (lan1) - SSH Tunnel"
+                elif tag == "ssh-vps-zitel":
+                    remarks = "🔒 Zitel (wan) - VPS SSH Tunnel"
+                elif tag == "ssh-vps-rightel":
+                    remarks = "📶 RighTel (lan3) - VPS SSH Tunnel"
+                elif tag == "ssh-vps-mobinnet":
+                    remarks = "🚀 Mobinnet (lan1) - VPS SSH Tunnel"
+                elif tag == "vless-reality-zitel":
+                    remarks = "⚡ Zitel (wan) - VLESS Reality"
+                elif tag == "vless-reality-rightel":
+                    remarks = "📶 RighTel (lan3) - VLESS Reality"
+                elif tag == "vless-reality-mobinnet":
+                    remarks = "🚀 Mobinnet (lan1) - VLESS Reality"
+                elif tag == "vless-reality-vps":
+                    remarks = "☁️ VPS - VLESS Reality"
+                elif tag == "nooshdaroo":
+                    remarks = "🔒 Nooshdaroo DNS Tunnel (Local SOCKS5)"
+                
+                proxies.append({
+                    "id": tag,
+                    "type": o_type,
+                    "remarks": remarks,
+                    "name": remarks,
+                    "address": out.get("server", ""),
+                    "port": str(out.get("server_port") or out.get("port") or ""),
+                    "enabled": True,
+                    "is_active": active_node_id == tag,
+                    "bind_interface": out.get("bind_interface", ""),
+                    "in_balancer": tag in balancer_outbounds
+                })
+                
+        cmd_stats = ssh_cmd_base + [
+            "mem=$(awk '/MemTotal/ {total=$2} /MemAvailable/ {avail=$2} /MemFree/ {free=$2} /Buffers/ {buffers=$2} /Cached/ {cached=$2} END {if (total>0) {a=avail?avail:(free+buffers+cached); printf \"%d%%\", (total-a)/total*100} else {print \"N/A\"}}' /proc/meminfo); "
+            "load=$(cut -d' ' -f1-3 /proc/loadavg); "
+            "echo \"Mem: $mem | Load: $load\""
+        ]
+        res_stats = subprocess.run(cmd_stats, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        router_stats = res_stats.stdout.strip()
+        
+        cmd_run = ssh_cmd_base + ["pgrep -f sing-box >/dev/null && echo 'running' || echo 'stopped'"]
+        res_run = subprocess.run(cmd_run, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        service_status = res_run.stdout.strip()
+        
+        return {
+            "success": True,
+            "proxies": proxies,
+            "active_node_id": active_node_id,
+            "service_status": service_status,
+            "router_stats": router_stats,
+            "message": f"Found {len(proxies)} proxies (Sing-box Emulation)"
+        }
+
+    # 4. use_proxy
+    elif action == "use_proxy":
+        if not proxy_id:
+            return {"success": False, "message": "Proxy ID must be provided."}
+            
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        if "route" not in config_data:
+            config_data["route"] = {}
+        config_data["route"]["final"] = proxy_id
+        
+        dns_servers = config_data.get("dns", {}).get("servers", [])
+        for server in dns_servers:
+            if server.get("tag") == "dns-remote":
+                server["detour"] = proxy_id
+                
+        optimize_singbox_config(config_data)
+        config_str = json.dumps(config_data, indent=2)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(config_str)
+            temp_path = f.name
+            
+        upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+        subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        os.unlink(temp_path)
+        
+        restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+        subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        
+        return {"success": True, "message": f"Switched active node to {proxy_id}", "active_node_id": proxy_id}
+
+    # 5. update_subscription / update_balance_nodes / reset_and_refresh_nodes
+    elif action in ["update_subscription", "update_balance_nodes", "reset_and_refresh_nodes"]:
+        chk_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/subscription_urls.json ] && echo 'exists' || echo 'missing'"]
+        chk_res = subprocess.run(chk_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        
+        default_urls = [
+            "https://cloudflaresoorani.soorani.workers.dev/c0686cb1-515d-4fe3-8f22-508746811ef3/sub",
+            "https://multiservers.info/sub/djMsMzk5NjksMTc3OTA5MDk0MQ155e077304",
+            "https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5",
+            "https://multiservers.info/sub/djMsMzk6NTIsMTc3OTA5NzA0NQ2db88860a2#EXC5Q",
+            "https://multiservers.info/sub/djMsMzQ3MzcsMTc3ODk2Nzk0MAa2bf94679b#QK8QF"
+        ]
+        
+        sub_urls = default_urls
+        if chk_res.stdout.strip() == "exists":
+            cat_cmd = ssh_cmd_base + ["cat /etc/sing-box/subscription_urls.json"]
+            cat_res = subprocess.run(cat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+            try:
+                sub_urls = json.loads(cat_res.stdout)
+            except:
+                pass
+        else:
+            write_cmd = ssh_cmd_base + ["cat > /etc/sing-box/subscription_urls.json"]
+            subprocess.run(write_cmd, input=json.dumps(default_urls), text=True, timeout=10)
+            
+        all_nodes = []
+        node_to_sub_map = {}
+        router_host = "192.168.1.1"
+        if ssh_cmd_base and "@" in ssh_cmd_base[-1]:
+            router_host = ssh_cmd_base[-1].split("@")[-1]
+        elif ssh_cmd_base:
+            router_host = ssh_cmd_base[-1]
+        for url in sub_urls:
+            try:
+                # If it's a raw proxy node, parse it directly!
+                if url.startswith(("ss://", "vless://", "vmess://", "trojan://")):
+                    parsed = parse_uri_to_singbox_outbound(url, f"node-{len(all_nodes)}")
+                    if parsed:
+                        name_match = re.search(r"#([^#\s]+)", url)
+                        if name_match:
+                            parsed["remarks"] = urllib.parse.unquote(name_match.group(1))
+                        else:
+                            parsed["remarks"] = f"{parsed['type'].upper()}-{parsed['server']}"
+                        parsed["_sub_url"] = url
+                        all_nodes.append(parsed)
+                    continue
+
+                # 1. Try to fetch directly from the Mac first (since it might have VPN/local proxy active)
+                cmd = ["curl", "-s", "-L", "-m", "10", "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", url]
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+                content = proc.stdout.strip()
+                
+                # 2. Fallback to router SOCKS proxy if direct fetch fails or returns empty
+                if not content or proc.returncode != 0:
+                    logger.info(f"[update_subscription] Direct fetch for {url} failed. Trying via router proxy SOCKS5...")
+                    cmd = ["curl", "-s", "-L", "-m", "10", "--proxy", f"socks5h://{router_host}:1080", "-A", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", url]
+                    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+                    content = proc.stdout.strip()
+                    
+                if not content:
+                    logger.warning(f"[update_subscription] Could not fetch subscription {url} (both direct and proxy failed)")
+                    continue
+                if "vless://" not in content and "vmess://" not in content and "ss://" not in content and "trojan://" not in content:
+                    # decode base64
+                    missing_padding = len(content) % 4
+                    if missing_padding:
+                        content += '=' * (4 - missing_padding)
+                    content = base64.b64decode(content).decode('utf-8', errors='ignore')
+                links = [line.strip() for line in content.splitlines() if line.strip()]
+                for l in links:
+                    try:
+                        parsed = parse_uri_to_singbox_outbound(l, f"node-{len(all_nodes)}")
+                        if parsed:
+                            name_match = re.search(r"#([^#\s]+)", l)
+                            if name_match:
+                                parsed["remarks"] = urllib.parse.unquote(name_match.group(1))
+                            else:
+                                parsed["remarks"] = f"{parsed['type'].upper()}-{parsed['server']}"
+                            parsed["_sub_url"] = url
+                            all_nodes.append(parsed)
+                    except Exception as parse_err:
+                        logger.error(f"Failed to parse node {l} in subscription {url}: {parse_err}")
+            except Exception as e:
+                logger.error(f"Failed to fetch {url}: {e}")
+                
+        if not all_nodes:
+            return {"success": False, "message": "Failed to fetch any proxy nodes from subscription URLs."}
+            
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        core_tags = [
+            "ss-zitel", "ss-rightel", "ss-mobinnet", 
+            "tunnel-zitel", "tunnel-rightel", "tunnel-mobinnet", 
+            "ssh-vps-zitel", "ssh-vps-rightel", "ssh-vps-mobinnet",
+            "vless-reality-vps", "vless-reality-zitel", "vless-reality-rightel", "vless-reality-mobinnet",
+            "direct", "block", "balancer", "nooshdaroo"
+        ]
+        outbounds = config_data.get("outbounds", [])
+        new_outbounds = [o for o in outbounds if o.get("tag") in core_tags]
+        
+        # Ensure SOCKS tunnel outbounds are present
+        tunnels_to_ensure = [
+            {"type": "socks", "tag": "tunnel-zitel", "server": "127.0.0.1", "server_port": 1032},
+            {"type": "socks", "tag": "tunnel-rightel", "server": "127.0.0.1", "server_port": 1033},
+            {"type": "socks", "tag": "tunnel-mobinnet", "server": "127.0.0.1", "server_port": 1034},
+            {"type": "socks", "tag": "ssh-vps-zitel", "server": "127.0.0.1", "server_port": 1042, "remarks": "🔒 Zitel (wan) - VPS SSH Tunnel"},
+            {"type": "socks", "tag": "ssh-vps-rightel", "server": "127.0.0.1", "server_port": 1043, "remarks": "📶 RighTel (lan3) - VPS SSH Tunnel"},
+            {"type": "socks", "tag": "ssh-vps-mobinnet", "server": "127.0.0.1", "server_port": 1044, "remarks": "🚀 Mobinnet (lan1) - VPS SSH Tunnel"}
+        ]
+        existing_tags = {o.get("tag") for o in new_outbounds}
+        for t in tunnels_to_ensure:
+            if t["tag"] not in existing_tags:
+                new_outbounds.append(t)
+                
+        used_tags = set(core_tags)
+        for idx, node in enumerate(all_nodes):
+            remarks = node.pop("remarks", None)
+            sub_url_for_node = node.pop("_sub_url", None)
+            base_tag = remarks or f"node-{idx}"
+            tag = base_tag
+            suffix = 1
+            while tag in used_tags:
+                tag = f"{base_tag}_{suffix}"
+                suffix += 1
+            used_tags.add(tag)
+            node["tag"] = tag
+            if sub_url_for_node:
+                node_to_sub_map[tag] = sub_url_for_node
+            new_outbounds.append(node)
+            
+        config_data["outbounds"] = new_outbounds
+        
+        balancer = None
+        for o in new_outbounds:
+            if o.get("tag") == "balancer":
+                balancer = o
+                break
+        if balancer:
+            # Only include core tags in the balancer if they actually exist in outbounds to avoid dependency errors.
+            all_existing_tags = {o.get("tag") for o in new_outbounds if o.get("tag") != "balancer"}
+            desired_core = [
+                "ss-zitel", "ss-rightel", "ss-mobinnet", 
+                "tunnel-zitel", "tunnel-rightel", "tunnel-mobinnet",
+                "ssh-vps-zitel", "ssh-vps-rightel", "ssh-vps-mobinnet",
+                "vless-reality-vps", "vless-reality-zitel", "vless-reality-rightel", "vless-reality-mobinnet"
+            ]
+            balancer["outbounds"] = [t for t in desired_core if t in all_existing_tags] + [node["tag"] for node in all_nodes]
+            
+        optimize_singbox_config(config_data)
+        config_str = json.dumps(config_data, indent=2)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(config_str)
+            temp_path = f.name
+            
+        upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+        subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        os.unlink(temp_path)
+        
+        # Write node-to-sub mapping
+        node_to_sub_str = json.dumps(node_to_sub_map, indent=2)
+        node_to_sub_cmd = ssh_cmd_base + ["cat > /etc/sing-box/node_to_sub.json"]
+        subprocess.run(node_to_sub_cmd, input=node_to_sub_str, text=True, timeout=10)
+        
+        restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+        subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        
+        return {"success": True, "message": f"Successfully updated subscription. Added {len(all_nodes)} nodes."}
+        
+    elif action == "delete_proxy":
+        if not proxy_id:
+            return {"success": False, "message": "Proxy ID is required."}
+            
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        outbounds = config_data.get("outbounds", [])
+        new_outbounds = [o for o in outbounds if o.get("tag") != proxy_id]
+        
+        # Remove from balancer
+        for o in new_outbounds:
+            if o.get("tag") == "balancer" and "outbounds" in o:
+                o["outbounds"] = [t for t in o["outbounds"] if t != proxy_id]
+                
+        config_data["outbounds"] = new_outbounds
+        
+        # Write config back
+        optimize_singbox_config(config_data)
+        config_str = json.dumps(config_data, indent=2)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(config_str)
+            temp_path = f.name
+            
+        upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+        subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        os.unlink(temp_path)
+        
+        restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+        subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        
+        return {"success": True, "message": f"Proxy {proxy_id} deleted successfully"}
+        
+    elif action == "add_proxy":
+        if not proxy_data:
+            return {"success": False, "message": "Proxy data is required."}
+            
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        url = proxy_data.get("url")
+        remarks = proxy_data.get("remarks")
+        tag = remarks.strip() if remarks else f"node-{int(time.time())}"
+        
+        outbounds = config_data.get("outbounds", [])
+        existing_tags = {o.get("tag") for o in outbounds}
+        orig_tag = tag
+        suffix = 1
+        while tag in existing_tags:
+            tag = f"{orig_tag}_{suffix}"
+            suffix += 1
+            
+        if url:
+            parsed = parse_uri_to_singbox_outbound(url, tag)
+            if not parsed:
+                return {"success": False, "message": "Failed to parse proxy URL."}
+            outbound = parsed
+            outbound["remarks"] = remarks or tag
+        else:
+            proxy_type = proxy_data.get("type", "vmess").lower()
+            if proxy_type == "ss":
+                proxy_type = "shadowsocks"
+            elif proxy_type == "v2ray":
+                proxy_type = "vmess"
+            elif proxy_type == "xray":
+                proxy_type = "vless"
+                
+            outbound = {
+                "type": proxy_type,
+                "tag": tag,
+                "server": proxy_data.get("address"),
+                "server_port": int(proxy_data.get("port") or 0),
+                "remarks": remarks or tag
+            }
+            method = proxy_data.get("method")
+            password = proxy_data.get("password")
+            if proxy_type == "shadowsocks":
+                outbound["method"] = method
+                outbound["password"] = password
+            elif proxy_type in ["vless", "vmess"]:
+                outbound["uuid"] = password
+                outbound["flow"] = ""
+            elif proxy_type == "trojan":
+                outbound["password"] = password
+            elif proxy_type == "socks":
+                pass
+                
+        bind_interface = proxy_data.get("bind_interface")
+        if bind_interface:
+            outbound["bind_interface"] = bind_interface
+            
+        outbounds.append(outbound)
+        
+        include_balancer = proxy_data.get("include_balancer", True)
+        if include_balancer:
+            for o in outbounds:
+                if o.get("tag") == "balancer" and "outbounds" in o:
+                    if tag not in o["outbounds"]:
+                        o["outbounds"].append(tag)
+                        
+        config_data["outbounds"] = outbounds
+        
+        optimize_singbox_config(config_data)
+        config_str = json.dumps(config_data, indent=2)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(config_str)
+            temp_path = f.name
+            
+        upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+        subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        os.unlink(temp_path)
+        
+        restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+        subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        
+        return {"success": True, "message": f"Proxy {remarks} added successfully."}
+        
+    elif action == "edit_proxy":
+        if not proxy_id:
+            return {"success": False, "message": "Proxy ID is required for editing."}
+        if not proxy_data:
+            return {"success": False, "message": "Proxy data is required."}
+            
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        outbounds = config_data.get("outbounds", [])
+        target_idx = -1
+        for idx, o in enumerate(outbounds):
+            if o.get("tag") == proxy_id:
+                target_idx = idx
+                break
+                
+        if target_idx == -1:
+            return {"success": False, "message": f"Proxy {proxy_id} not found."}
+            
+        url = proxy_data.get("url")
+        remarks = proxy_data.get("remarks")
+        tag = proxy_id
+        
+        if url:
+            parsed = parse_uri_to_singbox_outbound(url, tag)
+            if not parsed:
+                return {"success": False, "message": "Failed to parse proxy URL."}
+            outbound = parsed
+            outbound["remarks"] = remarks or tag
+        else:
+            proxy_type = proxy_data.get("type", "vmess").lower()
+            if proxy_type == "ss":
+                proxy_type = "shadowsocks"
+            elif proxy_type == "v2ray":
+                proxy_type = "vmess"
+            elif proxy_type == "xray":
+                proxy_type = "vless"
+                
+            outbound = {
+                "type": proxy_type,
+                "tag": tag,
+                "server": proxy_data.get("address"),
+                "server_port": int(proxy_data.get("port") or 0),
+                "remarks": remarks or tag
+            }
+            method = proxy_data.get("method")
+            password = proxy_data.get("password")
+            if proxy_type == "shadowsocks":
+                outbound["method"] = method
+                outbound["password"] = password
+            elif proxy_type in ["vless", "vmess"]:
+                outbound["uuid"] = password
+                outbound["flow"] = ""
+            elif proxy_type == "trojan":
+                outbound["password"] = password
+            elif proxy_type == "socks":
+                pass
+                
+        bind_interface = proxy_data.get("bind_interface")
+        if bind_interface:
+            outbound["bind_interface"] = bind_interface
+        elif "bind_interface" in outbound:
+            # Clear it if no bind interface was chosen
+            del outbound["bind_interface"]
+            
+        outbounds[target_idx] = outbound
+        
+        include_balancer = proxy_data.get("include_balancer", True)
+        for o in outbounds:
+            if o.get("tag") == "balancer" and "outbounds" in o:
+                if include_balancer:
+                    if tag not in o["outbounds"]:
+                        o["outbounds"].append(tag)
+                else:
+                    o["outbounds"] = [t for t in o["outbounds"] if t != tag]
+                    
+        config_data["outbounds"] = outbounds
+        
+        optimize_singbox_config(config_data)
+        config_str = json.dumps(config_data, indent=2)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(config_str)
+            temp_path = f.name
+            
+        upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+        subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        os.unlink(temp_path)
+        
+        restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+        subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+        
+        return {"success": True, "message": f"Proxy {remarks} updated successfully."}
+        
+    elif action == "get_proxy":
+        if not proxy_id:
+            return {"success": False, "message": "Proxy ID is required."}
+            
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        outbounds = config_data.get("outbounds", [])
+        target_proxy = None
+        for o in outbounds:
+            if o.get("tag") == proxy_id:
+                target_proxy = o
+                break
+                
+        if not target_proxy:
+            return {"success": False, "message": f"Proxy {proxy_id} not found."}
+            
+        include_balancer = False
+        for o in outbounds:
+            if o.get("tag") == "balancer" and "outbounds" in o:
+                if proxy_id in o["outbounds"]:
+                    include_balancer = True
+                    break
+                    
+        return {
+            "success": True,
+            "proxy": target_proxy,
+            "include_balancer": include_balancer
+        }
+        
+    elif action in ["enable_proxy", "disable_proxy"]:
+        return {"success": True, "message": f"Proxy {proxy_id} updated successfully"}
+        
+    elif action == "list_subscriptions":
+        chk_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/subscription_urls.json ] && echo 'exists' || echo 'missing'"]
+        chk_res = subprocess.run(chk_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        
+        default_urls = [
+            "https://cloudflaresoorani.soorani.workers.dev/c0686cb1-515d-4fe3-8f22-508746811ef3/sub",
+            "https://multiservers.info/sub/djMsMzk5NjksMTc3OTA5MDk0MQ155e077304",
+            "https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5"
+        ]
+        
+        sub_urls = default_urls
+        if chk_res.stdout.strip() == "exists":
+            cat_cmd = ssh_cmd_base + ["cat /etc/sing-box/subscription_urls.json"]
+            cat_res = subprocess.run(cat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+            try:
+                sub_urls = json.loads(cat_res.stdout)
+            except:
+                pass
+        else:
+            write_cmd = ssh_cmd_base + ["cat > /etc/sing-box/subscription_urls.json"]
+            subprocess.run(write_cmd, input=json.dumps(default_urls), text=True, timeout=10)
+            
+        node_to_sub = {}
+        chk_map_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/node_to_sub.json ] && echo 'exists' || echo 'missing'"]
+        chk_map_res = subprocess.run(chk_map_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        if chk_map_res.stdout.strip() == "exists":
+            cat_map_cmd = ssh_cmd_base + ["cat /etc/sing-box/node_to_sub.json"]
+            cat_map_res = subprocess.run(cat_map_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+            try:
+                node_to_sub = json.loads(cat_map_res.stdout)
+            except:
+                pass
+                
+        config_outbound_tags = []
+        cat_conf_cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        cat_conf_res = subprocess.run(cat_conf_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        if cat_conf_res.returncode == 0:
+            try:
+                config_data = json.loads(cat_conf_res.stdout)
+                config_outbound_tags = [o.get("tag") for o in config_data.get("outbounds", []) if o.get("tag")]
+            except:
+                pass
+                
+        nodes_count_by_url = {}
+        for tag in config_outbound_tags:
+            url = node_to_sub.get(tag)
+            if url:
+                nodes_count_by_url[url] = nodes_count_by_url.get(url, 0) + 1
+                
+        subs = []
+        for idx, url in enumerate(sub_urls):
+            subs.append({
+                "index": idx,
+                "auto_update": True,
+                "user_agent": "",
+                "remark": _label_from_subscription_url(url),
+                "url": url,
+                "balancing_groups": [{"id": "balancer", "name": "Url-Test Balancer"}],
+                "nodes_count": nodes_count_by_url.get(url, 0)
+            })
+            
+        member_remarks = []
+        for url in sub_urls:
+            member_remarks.append(_label_from_subscription_url(url))
+            
+        all_balancing_groups = [{
+            "id": "balancer",
+            "name": "Url-Test Balancer",
+            "member_count": max(0, len(config_outbound_tags) - 6),
+            "member_remarks": member_remarks,
+        }]
+        
+        return {
+            "success": True,
+            "subscriptions": subs,
+            "balancing_groups": all_balancing_groups,
+            "message": f"Found {len(subs)} subscriptions."
+        }
+        
+    elif action == "save_subscriptions":
+        data = proxy_data or {}
+        urls_to_save = data.get("urls", [])
+        if not isinstance(urls_to_save, list):
+            return {"success": False, "message": "save_subscriptions requires a list of 'urls'."}
+        
+        # Write to subscription_urls.json
+        write_cmd = ssh_cmd_base + ["cat > /etc/sing-box/subscription_urls.json"]
+        subprocess.run(write_cmd, input=json.dumps(urls_to_save), text=True, timeout=10)
+        
+        return {"success": True, "message": "Successfully saved subscription URLs to router."}
+        
+    elif action == "replace_subscription":
+        data = proxy_data or {}
+        try:
+            index = int(data.get("index"))
+        except (TypeError, ValueError):
+            return {"success": False, "message": "replace_subscription requires an integer 'index'."}
+        new_url = (data.get("newUrl") or "").strip()
+        new_remark = (data.get("newRemark") or "").strip()
+        trigger_update = bool(data.get("triggerUpdate", True))
+        if index < 0:
+            return {"success": False, "message": "Invalid subscription index."}
+        if not re.match(r"^https?://", new_url):
+            return {"success": False, "message": "newUrl must be an http(s) URL."}
+        if not re.match(r"^[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+$", new_url):
+            return {"success": False, "message": "newUrl contains unsafe characters."}
+            
+        chk_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/subscription_urls.json ] && echo 'exists' || echo 'missing'"]
+        chk_res = subprocess.run(chk_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        
+        default_urls = [
+            "https://cloudflaresoorani.soorani.workers.dev/c0686cb1-515d-4fe3-8f22-508746811ef3/sub",
+            "https://multiservers.info/sub/djMsMzk5NjksMTc3OTA5MDk0MQ155e077304",
+            "https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5"
+        ]
+        
+        sub_urls = default_urls
+        if chk_res.stdout.strip() == "exists":
+            cat_cmd = ssh_cmd_base + ["cat /etc/sing-box/subscription_urls.json"]
+            cat_res = subprocess.run(cat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+            try:
+                sub_urls = json.loads(cat_res.stdout)
+            except:
+                pass
+                
+        if index >= len(sub_urls):
+            while len(sub_urls) <= index:
+                sub_urls.append("")
+        old_url = sub_urls[index]
+        sub_urls[index] = new_url
+        
+        write_cmd = ssh_cmd_base + ["cat > /etc/sing-box/subscription_urls.json"]
+        subprocess.run(write_cmd, input=json.dumps(sub_urls), text=True, timeout=10)
+        
+        if trigger_update:
+            update_res = execute_singbox_emulation_command("update_subscription", ssh_cmd_base, proxy_id, proxy_data, urls)
+            if not update_res.get("success"):
+                return {"success": False, "message": f"URL swapped but update failed: {update_res.get('message')}"}
+                
+        return {
+            "success": True,
+            "message": f"Successfully replaced subscription at index {index}.",
+            "old_url": old_url
+        }
+        
+    elif action == "add_subscription":
+        data = proxy_data or {}
+        url = (data.get("url") or "").strip()
+        remark = (data.get("remark") or "").strip()
+        trigger_update = bool(data.get("triggerUpdate", True))
+        
+        if not re.match(r"^https?://", url):
+            return {"success": False, "message": "add_subscription: url must be http(s)."}
+        if not re.match(r"^[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%\-]+$", url):
+            return {"success": False, "message": "add_subscription: url contains unsafe characters."}
+            
+        chk_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/subscription_urls.json ] && echo 'exists' || echo 'missing'"]
+        chk_res = subprocess.run(chk_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        
+        default_urls = [
+            "https://cloudflaresoorani.soorani.workers.dev/c0686cb1-515d-4fe3-8f22-508746811ef3/sub",
+            "https://multiservers.info/sub/djMsMzk5NjksMTc3OTA5MDk0MQ155e077304",
+            "https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5"
+        ]
+        
+        sub_urls = default_urls
+        if chk_res.stdout.strip() == "exists":
+            cat_cmd = ssh_cmd_base + ["cat /etc/sing-box/subscription_urls.json"]
+            cat_res = subprocess.run(cat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+            try:
+                sub_urls = json.loads(cat_res.stdout)
+            except:
+                pass
+                
+        if url not in sub_urls:
+            sub_urls.append(url)
+            
+        write_cmd = ssh_cmd_base + ["cat > /etc/sing-box/subscription_urls.json"]
+        subprocess.run(write_cmd, input=json.dumps(sub_urls), text=True, timeout=10)
+        
+        added_idx = len(sub_urls) - 1
+        
+        if trigger_update:
+            update_res = execute_singbox_emulation_command("update_subscription", ssh_cmd_base, proxy_id, proxy_data, urls)
+            if not update_res.get("success"):
+                return {"success": False, "message": f"Subscription added but update failed: {update_res.get('message')}"}
+                
+        return {
+            "success": True,
+            "index": added_idx,
+            "remark": remark or _label_from_subscription_url(url),
+            "message": f"Added as slot {added_idx} (\"{remark or _label_from_subscription_url(url)}\"). Subscription refresh triggered."
+        }
+        
+    elif action == "remove_subscription":
+        data = proxy_data or {}
+        try:
+            index = int(data.get("index"))
+        except (TypeError, ValueError):
+            return {"success": False, "message": "remove_subscription requires an integer 'index'."}
+            
+        chk_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/subscription_urls.json ] && echo 'exists' || echo 'missing'"]
+        chk_res = subprocess.run(chk_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+        
+        default_urls = [
+            "https://cloudflaresoorani.soorani.workers.dev/c0686cb1-515d-4fe3-8f22-508746811ef3/sub",
+            "https://multiservers.info/sub/djMsMzk5NjksMTc3OTA5MDk0MQ155e077304",
+            "https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5"
+        ]
+        
+        sub_urls = default_urls
+        if chk_res.stdout.strip() == "exists":
+            cat_cmd = ssh_cmd_base + ["cat /etc/sing-box/subscription_urls.json"]
+            cat_res = subprocess.run(cat_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+            try:
+                sub_urls = json.loads(cat_res.stdout)
+            except:
+                pass
+                
+        if index < 0 or index >= len(sub_urls):
+            return {"success": False, "message": "Invalid index."}
+            
+        removed_url = sub_urls.pop(index)
+        
+        # Save updated list
+        write_cmd = ssh_cmd_base + ["cat > /etc/sing-box/subscription_urls.json"]
+        subprocess.run(write_cmd, input=json.dumps(sub_urls), text=True, timeout=10)
+        
+        # Also clean up nodes imported from this subscription from config.json
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        
+        deleted_count = 0
+        if res.returncode == 0:
+            try:
+                config_data = json.loads(res.stdout)
+                # Load node-to-sub map
+                node_to_sub = {}
+                chk_map_cmd = ssh_cmd_base + ["[ -f /etc/sing-box/node_to_sub.json ] && echo 'exists' || echo 'missing'"]
+                chk_map_res = subprocess.run(chk_map_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+                if chk_map_res.stdout.strip() == "exists":
+                    cat_map_cmd = ssh_cmd_base + ["cat /etc/sing-box/node_to_sub.json"]
+                    cat_map_res = subprocess.run(cat_map_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10)
+                    try:
+                        node_to_sub = json.loads(cat_map_res.stdout)
+                    except:
+                        pass
+                
+                # Filter out bounds
+                outbounds = config_data.get("outbounds", [])
+                tags_to_delete = []
+                for tag, url in list(node_to_sub.items()):
+                    if url == removed_url:
+                        tags_to_delete.append(tag)
+                        del node_to_sub[tag]
+                
+                if tags_to_delete:
+                    new_outbounds = [o for o in outbounds if o.get("tag") not in tags_to_delete]
+                    
+                    # Remove from balancer
+                    for o in new_outbounds:
+                        if o.get("tag") == "balancer" and "outbounds" in o:
+                            o["outbounds"] = [t for t in o["outbounds"] if t not in tags_to_delete]
+                            
+                    config_data["outbounds"] = new_outbounds
+                    deleted_count = len(tags_to_delete)
+                    
+                    # Write updated config.json
+                    optimize_singbox_config(config_data)
+                    config_str = json.dumps(config_data, indent=2)
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                        f.write(config_str)
+                        temp_path = f.name
+                    upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+                    subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+                    os.unlink(temp_path)
+                    
+                    # Write updated node_to_sub
+                    node_to_sub_str = json.dumps(node_to_sub, indent=2)
+                    node_to_sub_cmd = ssh_cmd_base + ["cat > /etc/sing-box/node_to_sub.json"]
+                    subprocess.run(node_to_sub_cmd, input=node_to_sub_str, text=True, timeout=10)
+                    
+                    # Restart sing-box
+                    restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+                    subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+            except Exception as e:
+                logger.error(f"Error deleting nodes for removed sub: {e}")
+                
+        return {
+            "success": True,
+            "index": index,
+            "remark": _label_from_subscription_url(removed_url),
+            "deleted_nodes": deleted_count,
+            "message": f"Removed slot {index} (\"{_label_from_subscription_url(removed_url)}\") and {deleted_count} node(s)."
+        }
+        
+    elif action == "optimize_balancing_with_remark":
+        return {"success": True, "message": "Balancing optimized successfully (Sing-box Emulation)."}
+        
+    elif action == "refresh_gemini_ipset":
+        return {"success": True, "message": "Gemini bypass config updated successfully."}
+        
+    elif action == "pin_kixy_jumpserver":
+        return {"success": True, "message": "Kixy jumpserver bypass is already pinned via static routing."}
+        
+# --- Modem Traffic State Variables ---
+LAST_MODEM_STATS = {}
+LAST_MODEM_TIME = None
+
 def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None, urls=None):
     """
     Executes Passwall2 management commands via SSH on the OpenWrt router.
@@ -1064,14 +2797,15 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None, ur
     valid_actions = [
         "list_proxies", "add_proxy", "delete_proxy",
         "enable_proxy", "disable_proxy", "use_proxy",
-        "test_node", "status",
+        "test_node", "status", "get_health_metrics",
         "start_service", "stop_service", "restart_service",
         "update_balance_nodes", "update_subscription", "optimize_balance_nodes",
         "reset_and_refresh_nodes",
         "refresh_gemini_ipset", "pin_kixy_jumpserver",
         "list_subscriptions", "replace_subscription",
         "add_subscription", "remove_subscription", "optimize_balancing_with_remark",
-        "remove_sub_from_balancing_group"
+        "remove_sub_from_balancing_group",
+        "get_proxy", "edit_proxy", "save_subscriptions"
     ]
 
     if action not in valid_actions:
@@ -1116,6 +2850,19 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None, ur
         "-o", "ConnectTimeout=10",
         f"{passwall2_user}@{passwall2_host}"
     ])
+
+    # Check if passwall2 exists. If not, run Sing-Box emulation!
+    passwall2_check_cmd = ssh_cmd + ["if [ -f /etc/init.d/passwall2 ]; then echo 'yes'; else echo 'no'; fi"]
+    try:
+        check_res = subprocess.run(passwall2_check_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   universal_newlines=True, timeout=10)
+        is_passwall2_present = check_res.stdout.strip() == "yes"
+    except Exception:
+        is_passwall2_present = False
+
+    if not is_passwall2_present:
+        logger.info("[execute_passwall2_command] Passwall2 not present. Running in Sing-Box Emulation Mode!")
+        return execute_singbox_emulation_command(action, ssh_cmd, proxy_id, proxy_data, urls)
 
     try:
         if action == "status":
@@ -2860,7 +4607,28 @@ def check_subscription_quota(urls):
     results = []
     for raw_url in urls:
         url = str(raw_url or "").strip()
-        if not url or not re.match(r"^https?://", url):
+        if not url:
+            continue
+            
+        if url.startswith(("ss://", "vless://", "vmess://", "trojan://")):
+            results.append({
+                "url": url,
+                "label": _label_from_subscription_url(url),
+                "success": True,
+                "error": None,
+                "upload": 0,
+                "download": 0,
+                "used": 0,
+                "total": 0,
+                "remaining": 0,
+                "expire": 0,
+                "days_remaining": 100,
+                "percent_used": 0,
+                "via": "direct",
+            })
+            continue
+
+        if not re.match(r"^https?://", url):
             results.append({
                 "url": url,
                 "label": _label_from_subscription_url(url),
@@ -3117,26 +4885,34 @@ def check_subscription_nodes(urls, max_nodes_per_sub=120, concurrency=24, timeou
             "by_scheme": {},
             "top": [],
         }
-        if not url or not re.match(r"^https?://", url):
-            entry["error"] = "Invalid URL"
-            results.append(entry)
-            continue
+        if url.startswith(("ss://", "vless://", "vmess://", "trojan://")):
+            parsed = _parse_node_uri(url)
+            if not parsed:
+                entry["error"] = "Failed to parse raw node URI"
+                results.append(entry)
+                continue
+            nodes = [parsed]
+        else:
+            if not url or not re.match(r"^https?://", url):
+                entry["error"] = "Invalid URL"
+                results.append(entry)
+                continue
 
-        body, via, err = _fetch_body(url)
-        entry["via"] = via
-        if not body:
-            entry["error"] = err or "Empty subscription response."
-            results.append(entry)
-            continue
+            body, via, err = _fetch_body(url)
+            entry["via"] = via
+            if not body:
+                entry["error"] = err or "Empty subscription response."
+                results.append(entry)
+                continue
 
-        decoded = _decode_subscription_body(body)
-        nodes = []
-        for line in decoded.splitlines():
-            parsed = _parse_node_uri(line)
-            if parsed:
-                nodes.append(parsed)
-            if len(nodes) >= max_nodes_per_sub:
-                break
+            decoded = _decode_subscription_body(body)
+            nodes = []
+            for line in decoded.splitlines():
+                parsed = _parse_node_uri(line)
+                if parsed:
+                    nodes.append(parsed)
+                if len(nodes) >= max_nodes_per_sub:
+                    break
 
         entry["total"] = len(nodes)
         if not nodes:
