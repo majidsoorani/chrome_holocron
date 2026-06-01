@@ -2075,7 +2075,7 @@ function FindProxyForURL(url, host) {
           display: true,
           position: 'left',
           beginAtZero: true,
-          suggestedMax: 1500,
+          suggestedMax: 300,
           title: {
             display: true,
             text: 'Web Latency (HTTP/S) [ms]',
@@ -2093,7 +2093,7 @@ function FindProxyForURL(url, host) {
           display: true,
           position: 'right',
           beginAtZero: true,
-          suggestedMax: 150,
+          suggestedMax: 30,
           title: {
             display: true,
             text: 'TCP Ping (Raw Socket) [ms]',
