@@ -1696,6 +1696,7 @@ YFqzPcAaAH9qkYB3
   function updateFavicon(status) {
     try {
       let faviconUrl = 'images/icon16-bad.png'; // Red H when disconnected
+      let isDynamic = false;
       if (status) {
         if (status.connecting) {
           faviconUrl = 'images/icon16-warn.png';
@@ -1705,12 +1706,14 @@ YFqzPcAaAH9qkYB3
           } else if (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1) {
             faviconUrl = 'images/icon16-warn.png';
           } else {
-            faviconUrl = 'images/icon16.png'; // Green H when connected
+            // Generate the dynamic circle representing latency quality (percentages)
+            faviconUrl = generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 16);
+            isDynamic = true;
           }
         }
       }
       
-      const absoluteUrl = chrome.runtime.getURL(faviconUrl) + '?v=' + Date.now();
+      const absoluteUrl = isDynamic ? faviconUrl : (chrome.runtime.getURL(faviconUrl) + '?v=' + Date.now());
       
       let link = document.querySelector("link[rel~='icon']");
       if (!link) {
