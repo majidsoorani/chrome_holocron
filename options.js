@@ -2070,7 +2070,7 @@ function FindProxyForURL(url, host) {
 
     const chartOptions = {
       scales: {
-        y: {
+        yWeb: {
           type: 'linear',
           display: true,
           position: 'left',
@@ -2088,7 +2088,7 @@ function FindProxyForURL(url, host) {
             color: textColorSecondary
           }
         },
-        y1: {
+        yTcp: {
           type: 'linear',
           display: true,
           position: 'right',
@@ -2157,7 +2157,7 @@ function FindProxyForURL(url, host) {
           {
             label: 'Web Latency (HTTP/S)',
             data: chartData.webData,
-            yAxisID: 'y',
+            yAxisID: 'yWeb',
             borderColor: computedStyle.getPropertyValue('--chart-web-color').trim() || 'rgb(75, 192, 192)',
             backgroundColor: computedStyle.getPropertyValue('--chart-web-bg').trim() || 'rgba(75, 192, 192, 0.1)',
             fill: true,
@@ -2166,7 +2166,7 @@ function FindProxyForURL(url, host) {
           {
             label: 'TCP Ping (Raw Socket)',
             data: chartData.tcpData,
-            yAxisID: 'y1',
+            yAxisID: 'yTcp',
             borderColor: computedStyle.getPropertyValue('--chart-tcp-color').trim() || 'rgb(54, 162, 235)',
             backgroundColor: computedStyle.getPropertyValue('--chart-tcp-bg').trim() || 'rgba(54, 162, 235, 0.1)',
             fill: true,
