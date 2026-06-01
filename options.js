@@ -2055,39 +2055,37 @@ function FindProxyForURL(url, host) {
 
   // --- Chart Management ---
 
-  function calculatePingPercentage(ping) {
-    if (ping === -1 || typeof ping === 'undefined' || ping === null) {
-      return 0;
-    }
-    const MIN_PING = 100;
-    const MAX_PING = 1000;
-    let progress = 0;
-    if (ping > MIN_PING) {
-      progress = (Math.min(ping, MAX_PING) - MIN_PING) / (MAX_PING - MIN_PING);
-    }
-    return Math.round((1.0 - (progress * 0.9)) * 100);
-  }
+  function initializeCharts(history = []) {
+    // Slice the history to only show the most recent points, matching the real-time behavior.
+    const recentHistory = history.slice(-MAX_CHART_POINTS);
 
-  function getSharedChartOptions(titleText, computedStyle) {
-    return {
+    const chartData = {
+      labels: recentHistory.map(p => new Date(p.timestamp).toLocaleTimeString()),
+      webData: recentHistory.map(p => p.web),
+      tcpData: recentHistory.map(p => p.tcp),
+    };
+
+    const computedStyle = getComputedStyle(document.documentElement);
+    const textColorSecondary = computedStyle.getPropertyValue('--text-color-secondary').trim() || '#ccc';
+
+    const chartOptions = {
       scales: {
         y: {
           type: 'linear',
           display: true,
           position: 'left',
           beginAtZero: true,
-          min: 0,
-          max: 100,
+          suggestedMax: 1500,
           title: {
             display: true,
-            text: titleText,
-            color: computedStyle.getPropertyValue('--text-color-secondary').trim() || '#ccc'
+            text: 'Web Latency (HTTP/S) [ms]',
+            color: textColorSecondary
           },
           ticks: {
             callback: function(value) {
-              return value + '%';
+              return value + 'ms';
             },
-            color: computedStyle.getPropertyValue('--text-color-secondary').trim()
+            color: textColorSecondary
           }
         },
         y1: {
@@ -2095,18 +2093,17 @@ function FindProxyForURL(url, host) {
           display: true,
           position: 'right',
           beginAtZero: true,
-          min: 0,
-          max: 100,
+          suggestedMax: 150,
           title: {
             display: true,
-            text: titleText,
-            color: computedStyle.getPropertyValue('--text-color-secondary').trim() || '#ccc'
+            text: 'TCP Ping (Raw Socket) [ms]',
+            color: textColorSecondary
           },
           ticks: {
             callback: function(value) {
-              return value + '%';
+              return value + 'ms';
             },
-            color: computedStyle.getPropertyValue('--text-color-secondary').trim()
+            color: textColorSecondary
           },
           grid: {
             drawOnChartArea: false // prevent grid lines overlay clutter
@@ -2119,12 +2116,15 @@ function FindProxyForURL(url, host) {
             autoSkip: true,
             maxTicksLimit: 10
           },
-          color: computedStyle.getPropertyValue('--text-color-secondary').trim()
+          color: textColorSecondary
         }
       },
       plugins: {
         legend: {
-          display: false
+          display: true,
+          labels: {
+            color: textColorSecondary
+          }
         },
         tooltip: {
           mode: 'index',
@@ -2136,7 +2136,7 @@ function FindProxyForURL(url, host) {
                 label += ': ';
               }
               if (context.parsed.y !== null) {
-                label += context.parsed.y + '%';
+                label += context.parsed.y + 'ms';
               }
               return label;
             }
@@ -2147,19 +2147,6 @@ function FindProxyForURL(url, host) {
       maintainAspectRatio: false,
       elements: { line: { tension: 0.3 } }
     };
-  }
-
-  function initializeCharts(history = []) {
-    // Slice the history to only show the most recent points, matching the real-time behavior.
-    const recentHistory = history.slice(-MAX_CHART_POINTS);
-
-    const chartData = {
-      labels: recentHistory.map(p => new Date(p.timestamp).toLocaleTimeString()),
-      webData: recentHistory.map(p => calculatePingPercentage(p.web)),
-      tcpData: recentHistory.map(p => calculatePingPercentage(p.tcp)),
-    };
-
-    const computedStyle = getComputedStyle(document.documentElement);
 
     if (webLatencyChart) webLatencyChart.destroy();
     webLatencyChart = new Chart(webLatencyChartCanvas.getContext('2d'), {
@@ -2168,27 +2155,18 @@ function FindProxyForURL(url, host) {
         labels: chartData.labels,
         datasets: [
           {
-            label: 'Web Latency Quality',
+            label: 'Web Latency (HTTP/S)',
             data: chartData.webData,
+            yAxisID: 'y',
             borderColor: computedStyle.getPropertyValue('--chart-web-color').trim() || 'rgb(75, 192, 192)',
             backgroundColor: computedStyle.getPropertyValue('--chart-web-bg').trim() || 'rgba(75, 192, 192, 0.1)',
             fill: true,
             spanGaps: true,
-          }
-        ]
-      },
-      options: getSharedChartOptions('Web Latency Quality (%)', computedStyle)
-    });
-
-    if (tcpPingChart) tcpPingChart.destroy();
-    tcpPingChart = new Chart(tcpPingChartCanvas.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: chartData.labels,
-        datasets: [
+          },
           {
-            label: 'TCP Ping Quality',
+            label: 'TCP Ping (Raw Socket)',
             data: chartData.tcpData,
+            yAxisID: 'y1',
             borderColor: computedStyle.getPropertyValue('--chart-tcp-color').trim() || 'rgb(54, 162, 235)',
             backgroundColor: computedStyle.getPropertyValue('--chart-tcp-bg').trim() || 'rgba(54, 162, 235, 0.1)',
             fill: true,
@@ -2196,43 +2174,32 @@ function FindProxyForURL(url, host) {
           }
         ]
       },
-      options: getSharedChartOptions('TCP Ping Quality (%)', computedStyle)
+      options: chartOptions
     });
+
+    tcpPingChart = null; // Set to null as it is merged into webLatencyChart
   }
 
   function updateCharts(status) {
-    if (!webLatencyChart || !tcpPingChart) return;
-    const webVal = (typeof status.web_check_latency_ms === 'number' && status.web_check_latency_ms > -1)
+    if (!webLatencyChart) return;
+    const web = (typeof status.web_check_latency_ms === 'number' && status.web_check_latency_ms > -1)
       ? status.web_check_latency_ms : null;
-    const tcpVal = (typeof status.tcp_ping_ms === 'number' && status.tcp_ping_ms > -1)
+    const tcp = (typeof status.tcp_ping_ms === 'number' && status.tcp_ping_ms > -1)
       ? status.tcp_ping_ms : null;
-    if (webVal === null && tcpVal === null) return;
-
-    const webPct = webVal !== null ? calculatePingPercentage(webVal) : null;
-    const tcpPct = tcpVal !== null ? calculatePingPercentage(tcpVal) : null;
-
+    if (web === null && tcp === null) return;
     const label = new Date().toLocaleTimeString();
 
-    // Update Web Latency Chart
     webLatencyChart.data.labels.push(label);
-    webLatencyChart.data.datasets[0].data.push(webPct);
+    webLatencyChart.data.datasets[0].data.push(web);
+    webLatencyChart.data.datasets[1].data.push(tcp);
+
     if (webLatencyChart.data.labels.length > MAX_CHART_POINTS) {
       webLatencyChart.data.labels.shift();
       webLatencyChart.data.datasets[0].data.shift();
+      webLatencyChart.data.datasets[1].data.shift();
     }
     webLatencyChart.update();
-
-    // Update TCP Ping Chart
-    tcpPingChart.data.labels.push(label);
-    tcpPingChart.data.datasets[0].data.push(tcpPct);
-    if (tcpPingChart.data.labels.length > MAX_CHART_POINTS) {
-      tcpPingChart.data.labels.shift();
-      tcpPingChart.data.datasets[0].data.shift();
-    }
-    tcpPingChart.update();
-  }
-
-  // --- Live Log Polling for AI Assistant ---
+  }  // --- Live Log Polling for AI Assistant ---
   function pollLogs() {
     // Stop polling if the container has been hidden
     if (aiLiveLogContainer.style.display === 'none') {
