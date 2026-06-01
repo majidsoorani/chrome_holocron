@@ -4828,6 +4828,67 @@ def _label_from_subscription_url(url):
         return url
 
 
+def _fetch_with_curl(url, proxy_url=None):
+    import tempfile
+    import subprocess
+    import os
+    
+    # Create a temporary file to store headers
+    with tempfile.NamedTemporaryFile(delete=False) as header_file:
+        header_path = header_file.name
+        
+    try:
+        # Build the curl command
+        # -s: Silent mode
+        # -S: Show error on failure
+        # -L: Follow redirects
+        # -D: Write headers to file
+        cmd = ["curl", "-s", "-S", "-L", "-D", header_path]
+        cmd += ["--max-time", "25"]
+        cmd += ["-H", "User-Agent: v2rayN/6.40"]
+        cmd += ["-H", "Accept: */*"]
+        
+        if proxy_url:
+            cmd += ["-x", proxy_url]
+            
+        cmd.append(url)
+        
+        # Run curl
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        
+        # Read the headers from the file
+        headers_dict = {}
+        status_code = 0
+        if os.path.exists(header_path):
+            with open(header_path, "r", encoding="utf-8", errors="ignore") as hf:
+                lines = hf.readlines()
+                for line in lines:
+                    line = line.strip()
+                    if line.upper().startswith("HTTP/"):
+                        parts = line.split()
+                        if len(parts) > 1:
+                            try:
+                                status_code = int(parts[1])
+                            except ValueError:
+                                pass
+                    elif ":" in line:
+                        k, v = line.split(":", 1)
+                        headers_dict[k.strip().lower()] = v.strip()
+                        
+        body = res.stdout.decode("utf-8", errors="ignore")
+        stderr_msg = res.stderr.decode("utf-8", errors="ignore")
+        
+        if res.returncode != 0:
+            raise Exception(f"curl error (code {res.returncode}): {stderr_msg.strip()}")
+            
+        return status_code, headers_dict, body
+    finally:
+        try:
+            os.remove(header_path)
+        except OSError:
+            pass
+
+
 def check_subscription_quota(urls):
     """Fetch each subscription URL and parse its remaining-volume header.
 
@@ -4843,12 +4904,6 @@ def check_subscription_quota(urls):
     if not isinstance(urls, list) or not urls:
         return {"success": False, "message": "No subscription URLs provided.", "results": []}
 
-    # Many VPN providers gate the userinfo header on a recognised client UA.
-    headers = {
-        "User-Agent": "v2rayN/6.40",
-        "Accept": "*/*",
-    }
-
     # Try direct first; on network/SSL failure, automatically retry through any
     # local SOCKS proxy that's already listening (Holocron tunnels expose 1081
     # / 1090 / 1080 by default).
@@ -4861,21 +4916,8 @@ def check_subscription_quota(urls):
             pass
 
     def _fetch(url, proxy_url):
-        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
-        # HEAD first (cheap); fall back to GET if HEAD missing the header.
-        resp = requests.head(url, headers=headers, timeout=15,
-                             allow_redirects=True, proxies=proxies)
-        userinfo = resp.headers.get("Subscription-Userinfo") or resp.headers.get("subscription-userinfo")
-        status_code = resp.status_code
-        if not userinfo:
-            resp2 = requests.get(url, headers=headers, timeout=20,
-                                 allow_redirects=True, stream=True, proxies=proxies)
-            userinfo = resp2.headers.get("Subscription-Userinfo") or resp2.headers.get("subscription-userinfo")
-            status_code = resp2.status_code
-            try:
-                resp2.close()
-            except Exception:
-                pass
+        status_code, resp_headers, body = _fetch_with_curl(url, proxy_url)
+        userinfo = resp_headers.get("subscription-userinfo")
         return userinfo, status_code
 
     results = []
@@ -4941,19 +4983,16 @@ def check_subscription_quota(urls):
                     break
                 # No header on this attempt; try the next route if any.
                 last_error = f"Server did not return a Subscription-Userinfo header (HTTP {last_status})."
-            except requests.exceptions.Timeout:
-                last_error = "Timed out fetching subscription."
-            except requests.exceptions.SSLError as e:
-                last_error = f"SSL error: {e}"
-            except requests.exceptions.ProxyError as e:
-                last_error = f"Proxy error: {e}"
-            except requests.exceptions.ConnectionError as e:
-                last_error = f"Connection error: {e}"
-            except requests.exceptions.RequestException as e:
-                last_error = f"Network error: {e}"
             except Exception as e:
-                logging.warning(f"[check_subscription_quota] Unexpected error for {url} via {via_label}: {e}")
-                last_error = f"Unexpected error: {e}"
+                err_str = str(e)
+                if "timed out" in err_str.lower() or "timeout" in err_str.lower() or "code 28" in err_str.lower():
+                    last_error = "Timed out fetching subscription."
+                elif "ssl" in err_str.lower():
+                    last_error = f"SSL error: {err_str}"
+                elif "proxy" in err_str.lower():
+                    last_error = f"Proxy error: {err_str}"
+                else:
+                    last_error = f"Connection error: {err_str}"
 
         entry["via"] = used_via
         if not userinfo:
@@ -5131,15 +5170,13 @@ def check_subscription_nodes(urls, max_nodes_per_sub=120, concurrency=24, timeou
     def _fetch_body(url):
         last_err = None
         for proxy_url, via in [(None, "direct")] + [(p, p) for p in candidate_proxies]:
-            proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
             try:
-                resp = requests.get(url, headers=headers, timeout=20,
-                                    allow_redirects=True, proxies=proxies)
-                if resp.status_code == 200 and resp.text:
-                    return resp.text, via, None
-                last_err = f"HTTP {resp.status_code}"
+                status_code, resp_headers, body = _fetch_with_curl(url, proxy_url)
+                if status_code == 200 and body:
+                    return body, via, None
+                last_err = f"HTTP {status_code}"
             except Exception as e:
-                last_err = f"{type(e).__name__}: {e}"
+                last_err = str(e)
         return None, "direct", last_err
 
     results = []
