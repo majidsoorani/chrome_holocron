@@ -281,23 +281,36 @@ refresh_balancer_pools() {
     f.close();
     
     let top_arr = split('$top_nodes', ',');
-    let core_tunnels = ['tunnel-zitel', 'tunnel-rightel', 'tunnel-mobinnet', 'ssh-vps-zitel', 'ssh-vps-rightel', 'ssh-vps-mobinnet'];
+    let core_tunnels = [
+        'ss-zitel', 'ss-rightel', 'ss-mobinnet',
+        'tunnel-zitel', 'tunnel-rightel', 'tunnel-mobinnet',
+        'ssh-vps-zitel', 'ssh-vps-rightel', 'ssh-vps-mobinnet',
+        'vless-reality-vps', 'vless-reality-zitel', 'vless-reality-rightel', 'vless-reality-mobinnet',
+        'nooshdaroo'
+    ];
     let existing_tags = [];
     for (let o in cfg.outbounds) {
         push(existing_tags, o.tag);
     }
-    let valid_core = [];
-    for (let t in core_tunnels) {
-        if (index(existing_tags, t) >= 0) {
-            push(valid_core, t);
-        }
-    }
-    let final_detours = [...valid_core, ...top_arr];
     
     let updated = false;
     for (let o in cfg.outbounds) {
         if (o.tag == 'balancer' || o.tag == 'balancer-streaming' || o.tag == 'balancer-gemini') {
             let current = o.outbounds || [];
+            let preserved_core = [];
+            for (let t in current) {
+                if (index(core_tunnels, t) >= 0 && index(existing_tags, t) >= 0) {
+                    push(preserved_core, t);
+                }
+            }
+            if (length(preserved_core) == 0) {
+                for (let t in core_tunnels) {
+                    if (index(existing_tags, t) >= 0) {
+                        push(preserved_core, t);
+                    }
+                }
+            }
+            let final_detours = [...preserved_core, ...top_arr];
             if (join(',', current) != join(',', final_detours)) {
                 o.outbounds = final_detours;
                 updated = true;

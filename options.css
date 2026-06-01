@@ -117,6 +117,7 @@ body {
   overflow: hidden;
   width: 100vw;
   height: 100%;
+  font-size: 18px;
 }
 
 /* App Shell Layout */
@@ -538,7 +539,7 @@ h2 {
 
 .main-layout-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr; /* Main column is twice as wide */
+    grid-template-columns: 1fr; /* Full screen layout */
     gap: 2em;
 }
 
@@ -1983,4 +1984,68 @@ input:checked + .slider {
 .tooltip-pct {
     font-weight: 700;
     color: var(--text-primary);
+}
+
+/* Use Button Split Dropdown & Balancer Badges Styles */
+.use-btn-wrapper {
+    position: relative;
+    display: inline-flex;
+}
+
+.use-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--bg-1) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    z-index: 1000;
+    min-width: 170px;
+    padding: 6px 0;
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+}
+
+.use-dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    color: var(--text-primary) !important;
+    text-decoration: none !important;
+    font-size: 12px;
+    transition: background-color 0.2s, color 0.2s;
+    cursor: pointer;
+    text-align: left;
+}
+
+.dropdown-item:hover {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+.badge-balancer-member {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+}
+
+.badge-balancer.default-pool {
+    background-color: hsla(217, 91%, 60%, 0.15);
+    color: var(--primary-color);
+}
+
+.badge-balancer.streaming-pool {
+    background-color: hsla(340, 95%, 60%, 0.15);
+    color: #ff4d6d;
+}
+
+.badge-balancer.gemini-pool {
+    background-color: hsla(270, 95%, 60%, 0.15);
+    color: #a855f7;
 }

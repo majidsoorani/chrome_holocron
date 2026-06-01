@@ -112,22 +112,36 @@ function setActionIcon(status) {
   const badIcon = { "16": "images/icon16-bad.png", "32": "images/icon32-bad.png", "48": "images/icon48-bad.png" };
   const warnIcon = { "16": "images/icon16-warn.png", "32": "images/icon32-warn.png", "48": "images/icon48-warn.png" };
 
-  // If no status object or no valid latency data at all, show bad icon.
-  // This covers cases where the native host might have failed completely.
-  if (!status || (status.web_check_latency_ms === -1 && status.tcp_ping_ms === -1)) {
+  if (!status) {
     chrome.action.setIcon({ path: badIcon });
     return;
   }
 
-  // If connected but one of the latency checks failed (unreliable connection), show warn icon.
-  // This applies only when status.connected is true.
-  if (status.connected && (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1)) {
+  if (status.connecting) {
     chrome.action.setIcon({ path: warnIcon });
     return;
   }
 
-  // In all other cases (connected with valid latencies, or disconnected with valid direct latencies),
-  // generate the dynamic icon.
+  if (!status.connected) {
+    chrome.action.setIcon({ path: badIcon });
+    return;
+  }
+
+  // From here on, the status is connected (true).
+  if (status.web_check_latency_ms === -1 && status.tcp_ping_ms === -1) {
+    // Connected, but both latency checks failed or are pending.
+    // Show the warn icon (yellow) rather than bad icon (red) to avoid false disconnected feedback.
+    chrome.action.setIcon({ path: warnIcon });
+    return;
+  }
+
+  if (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1) {
+    // Connected, but partial latency check failure. Show warn icon (yellow).
+    chrome.action.setIcon({ path: warnIcon });
+    return;
+  }
+
+  // Connected with valid active proxy latencies. Generate and show the dynamic latency icon.
   const imageData = {
     16: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 16),
     32: generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 32),

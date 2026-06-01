@@ -65,26 +65,43 @@ SSH_BASE=(
     "$ROUTER_USER@$ROUTER_HOST"
 )
 
-# Many OpenWrt passwall2 init scripts do not implement "status".
-# We treat passwall2 as healthy when at least one core process is running.
-core_check_cmd="pgrep -f '/tmp/etc/passwall2/bin/xray|/tmp/etc/passwall2/bin/sing-box' >/dev/null 2>&1"
-if ! "${SSH_BASE[@]}" "$core_check_cmd"; then
-    log "WARN: passwall2 core process not found. Trying to start."
-    notify_mac "Passwall2 Watchdog" "Passwall2 stopped! Restarting immediately..."
+# Check if passwall2 exists. If not, run Sing-Box emulation!
+is_passwall2_present=0
+if "${SSH_BASE[@]}" "[ -f /etc/init.d/passwall2 ]" >/dev/null 2>&1; then
+    is_passwall2_present=1
+fi
 
-    restart_out="$(${SSH_BASE[@]} sh -c '/etc/init.d/passwall2 start >/dev/null 2>&1 || /etc/init.d/passwall2 restart >/dev/null 2>&1' 2>&1)"
+if [ "$is_passwall2_present" = "1" ]; then
+    core_check_cmd="pgrep -f '/tmp/etc/passwall2/bin/xray|/tmp/etc/passwall2/bin/sing-box' >/dev/null 2>&1"
+    restart_cmd="/etc/init.d/passwall2 start >/dev/null 2>&1 || /etc/init.d/passwall2 restart >/dev/null 2>&1"
+    lock_restart_cmd="/etc/init.d/passwall2 restart >/dev/null 2>&1"
+    PROXY_PORT=1090
+    service_name="Passwall2"
+else
+    core_check_cmd="pgrep -f 'sing-box run -c /etc/sing-box/config.json' >/dev/null 2>&1"
+    restart_cmd="/etc/init.d/sing-box start >/dev/null 2>&1 || /etc/init.d/sing-box restart >/dev/null 2>&1"
+    lock_restart_cmd="/etc/init.d/sing-box restart >/dev/null 2>&1"
+    PROXY_PORT=1080
+    service_name="Sing-Box"
+fi
+
+if ! "${SSH_BASE[@]}" "$core_check_cmd"; then
+    log "WARN: $service_name core process not found. Trying to start."
+    notify_mac "Watchdog" "$service_name stopped! Restarting immediately..."
+
+    restart_out="$(${SSH_BASE[@]} sh -c "$restart_cmd" 2>&1)"
 
     if "${SSH_BASE[@]}" "$core_check_cmd"; then
-        log "INFO: passwall2 started successfully. output=[$restart_out]"
-        notify_mac "Passwall2 Watchdog" "Passwall2 restarted successfully."
+        log "INFO: $service_name started successfully. output=[$restart_out]"
+        notify_mac "Watchdog" "$service_name restarted successfully."
     else
-        log "ERROR: passwall2 start/restart failed. output=[$restart_out]"
-        notify_mac "Passwall2 Watchdog" "Error: Failed to restart Passwall2!"
+        log "ERROR: $service_name start/restart failed. output=[$restart_out]"
+        notify_mac "Watchdog" "Error: Failed to restart $service_name!"
     fi
 fi
 
 # Check proxy connection (urltest)
-PROXY_ADDR="socks5h://${ROUTER_HOST}:1090"
+PROXY_ADDR="socks5h://${ROUTER_HOST}:${PROXY_PORT}"
 proxy_ok=0
 if curl -fsS --max-time 10 -x "$PROXY_ADDR" "$INTERNET_TEST_URL" >/dev/null 2>&1; then
     proxy_ok=1
@@ -94,11 +111,11 @@ if [ "$proxy_ok" = "1" ]; then
     if [ -f "$STATE_FILE" ]; then
         rm -f "$STATE_FILE"
         log "INFO: Proxy internet restored."
-        notify_mac "Passwall2 Watchdog" "Proxy connection restored."
+        notify_mac "Watchdog" "Proxy connection restored."
     fi
 else
     # Proxy is down/locked.
-    log "WARN: Proxy URL test failed for $INTERNET_TEST_URL (SOCKS5 port 1090)"
+    log "WARN: Proxy URL test failed for $INTERNET_TEST_URL (SOCKS5 port ${PROXY_PORT})"
     
     # Check if direct internet is working to see if the issue is just the proxy/lock
     direct_ok=0
@@ -107,11 +124,11 @@ else
     fi
     
     if [ "$direct_ok" = "1" ]; then
-        log "WARN: Direct internet is UP but proxy is DOWN. Service is locked! Restarting Passwall2..."
-        notify_mac "Passwall2 Watchdog" "Proxy service is locked/blocked! Restarting Passwall2..."
+        log "WARN: Direct internet is UP but proxy is DOWN. Service is locked! Restarting $service_name..."
+        notify_mac "Watchdog" "Proxy service is locked/blocked! Restarting $service_name..."
         
-        restart_out="$(${SSH_BASE[@]} sh -c '/etc/init.d/passwall2 restart >/dev/null 2>&1' 2>&1)"
-        log "INFO: Passwall2 restart initiated due to lock. output=[$restart_out]"
+        restart_out="$(${SSH_BASE[@]} sh -c "$lock_restart_cmd" 2>&1)"
+        log "INFO: $service_name restart initiated due to lock. output=[$restart_out]"
     else
         log "WARN: Both proxy and direct internet are down. Network or interface issue."
     fi

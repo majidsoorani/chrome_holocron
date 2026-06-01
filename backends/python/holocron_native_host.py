@@ -1344,10 +1344,16 @@ def optimize_outbounds(config_data):
     
     # 1. Balancer interval
     for o in outbounds:
-        if o.get("tag") == "balancer":
-            o["url"] = "https://www.google.com/generate_204"
+        tag = o.get("tag")
+        if tag in ("balancer", "balancer-streaming", "balancer-gemini"):
             o["interval"] = "30s"
             o["tolerance"] = 50
+            if tag == "balancer-streaming":
+                o["url"] = "https://www.youtube.com/generate_204"
+            elif tag == "balancer-gemini":
+                o["url"] = "https://www.google.com/generate_204"
+            else:
+                o["url"] = "https://www.google.com/generate_204"
             
     # 2. VLESS Reality outbounds
     for outbound in outbounds:
@@ -1687,6 +1693,7 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
             
             remote_cmd = (
                 f"cat << 'EOF' > /tmp/test_sb_{test_port}.json\n{test_config_str}\nEOF\n"
+                f"trap 'kill $PID 2>/dev/null || true; rm -f /tmp/test_sb_{test_port}.json' EXIT INT TERM HUP\n"
                 f"/usr/bin/sing-box run -c /tmp/test_sb_{test_port}.json >/dev/null 2>&1 & PID=$!\n"
                 "for i in $(seq 1 15); do\n"
                 f"  if netstat -an 2>/dev/null | grep {test_port} | grep LISTEN >/dev/null; then break; fi\n"
@@ -1983,6 +1990,19 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
         route_final = config_data.get("route", {}).get("final", "balancer")
         active_node_id = route_final
         
+        # Get balancer outbounds
+        balancer_outbounds = []
+        balancer_streaming_outbounds = []
+        balancer_gemini_outbounds = []
+        for out in outbounds:
+            tag = out.get("tag")
+            if tag == "balancer":
+                balancer_outbounds = out.get("outbounds", [])
+            elif tag == "balancer-streaming":
+                balancer_streaming_outbounds = out.get("outbounds", [])
+            elif tag == "balancer-gemini":
+                balancer_gemini_outbounds = out.get("outbounds", [])
+
         proxies = []
         proxies.append({
             "id": "balancer",
@@ -1992,15 +2012,31 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
             "address": "URL-Test",
             "port": "",
             "enabled": True,
-            "is_active": active_node_id == "balancer"
+            "is_active": active_node_id == "balancer",
+            "balancer_nodes": balancer_outbounds
         })
-        
-        # Get balancer outbounds
-        balancer_outbounds = []
-        for out in outbounds:
-            if out.get("tag") == "balancer":
-                balancer_outbounds = out.get("outbounds", [])
-                break
+        proxies.append({
+            "id": "balancer-streaming",
+            "type": "balancing",
+            "remarks": "🎬 Balancer Streaming (YouTube & Media)",
+            "name": "🎬 Balancer Streaming (YouTube & Media)",
+            "address": "URL-Test",
+            "port": "",
+            "enabled": True,
+            "is_active": active_node_id == "balancer-streaming",
+            "balancer_nodes": balancer_streaming_outbounds
+        })
+        proxies.append({
+            "id": "balancer-gemini",
+            "type": "balancing",
+            "remarks": "🧠 Balancer Gemini (Google & AI)",
+            "name": "🧠 Balancer Gemini (Google & AI)",
+            "address": "URL-Test",
+            "port": "",
+            "enabled": True,
+            "is_active": active_node_id == "balancer-gemini",
+            "balancer_nodes": balancer_gemini_outbounds
+        })
 
         for out in outbounds:
             o_type = out.get("type")
@@ -2046,7 +2082,9 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
                     "enabled": True,
                     "is_active": active_node_id == tag,
                     "bind_interface": out.get("bind_interface", ""),
-                    "in_balancer": tag in balancer_outbounds
+                    "in_balancer": tag in balancer_outbounds,
+                    "in_balancer_streaming": tag in balancer_streaming_outbounds,
+                    "in_balancer_gemini": tag in balancer_gemini_outbounds
                 })
                 
         cmd_stats = ssh_cmd_base + [
@@ -2215,6 +2253,18 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
             "direct", "block", "balancer", "balancer-streaming", "balancer-gemini", "nooshdaroo"
         ]
         outbounds = config_data.get("outbounds", [])
+        
+        # Preserve balancer-specific core tunnels before we filter them out
+        preserved_cores = {
+            "balancer": [],
+            "balancer-streaming": [],
+            "balancer-gemini": []
+        }
+        for o in outbounds:
+            tag = o.get("tag")
+            if tag in preserved_cores:
+                preserved_cores[tag] = [t for t in o.get("outbounds", []) if t in core_tags and t not in ("balancer", "balancer-streaming", "balancer-gemini", "direct", "block", "nooshdaroo")]
+
         new_outbounds = [o for o in outbounds if o.get("tag") in core_tags]
         
         # Ensure SOCKS tunnel outbounds are present
@@ -2267,37 +2317,45 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
             "ssh-vps-zitel", "ssh-vps-rightel", "ssh-vps-mobinnet",
             "vless-reality-vps", "vless-reality-zitel", "vless-reality-rightel", "vless-reality-mobinnet"
         ]
-        balancer_detours = [t for t in desired_core if t in all_existing_tags] + [node["tag"] for node in all_nodes]
+        subscription_tags = [node["tag"] for node in all_nodes]
+        
+        def get_balancer_outbounds(balancer_tag):
+            cores = preserved_cores.get(balancer_tag, [])
+            if not cores:
+                cores = [t for t in desired_core if t in all_existing_tags]
+            # Ensure they are valid (still exist in the new_outbounds tags)
+            cores = [t for t in cores if t in all_existing_tags]
+            return cores + subscription_tags
 
         if balancer:
-            balancer["outbounds"] = balancer_detours
+            balancer["outbounds"] = get_balancer_outbounds("balancer")
 
         if not balancer_streaming:
             balancer_streaming = {
                 "type": "urltest",
                 "tag": "balancer-streaming",
-                "outbounds": balancer_detours,
+                "outbounds": get_balancer_outbounds("balancer-streaming"),
                 "url": "https://www.youtube.com/generate_204",
                 "interval": "30s",
                 "tolerance": 50
             }
             new_outbounds.append(balancer_streaming)
         else:
-            balancer_streaming["outbounds"] = balancer_detours
+            balancer_streaming["outbounds"] = get_balancer_outbounds("balancer-streaming")
             balancer_streaming["url"] = "https://www.youtube.com/generate_204"
 
         if not balancer_gemini:
             balancer_gemini = {
                 "type": "urltest",
                 "tag": "balancer-gemini",
-                "outbounds": balancer_detours,
+                "outbounds": get_balancer_outbounds("balancer-gemini"),
                 "url": "https://www.google.com/generate_204",
                 "interval": "30s",
                 "tolerance": 50
             }
             new_outbounds.append(balancer_gemini)
         else:
-            balancer_gemini["outbounds"] = balancer_detours
+            balancer_gemini["outbounds"] = get_balancer_outbounds("balancer-gemini")
             balancer_gemini["url"] = "https://www.google.com/generate_204"
             
         optimize_singbox_config(config_data)
@@ -2428,9 +2486,20 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
         outbounds.append(outbound)
         
         include_balancer = proxy_data.get("include_balancer", True)
-        if include_balancer:
-            for o in outbounds:
-                if o.get("tag") == "balancer" and "outbounds" in o:
+        include_balancer_streaming = proxy_data.get("include_balancer_streaming", True)
+        include_balancer_gemini = proxy_data.get("include_balancer_gemini", True)
+        
+        for o in outbounds:
+            if o.get("tag") == "balancer" and "outbounds" in o:
+                if include_balancer:
+                    if tag not in o["outbounds"]:
+                        o["outbounds"].append(tag)
+            elif o.get("tag") == "balancer-streaming" and "outbounds" in o:
+                if include_balancer_streaming:
+                    if tag not in o["outbounds"]:
+                        o["outbounds"].append(tag)
+            elif o.get("tag") == "balancer-gemini" and "outbounds" in o:
+                if include_balancer_gemini:
                     if tag not in o["outbounds"]:
                         o["outbounds"].append(tag)
                         
@@ -2526,9 +2595,24 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
         outbounds[target_idx] = outbound
         
         include_balancer = proxy_data.get("include_balancer", True)
+        include_balancer_streaming = proxy_data.get("include_balancer_streaming", True)
+        include_balancer_gemini = proxy_data.get("include_balancer_gemini", True)
+        
         for o in outbounds:
             if o.get("tag") == "balancer" and "outbounds" in o:
                 if include_balancer:
+                    if tag not in o["outbounds"]:
+                        o["outbounds"].append(tag)
+                else:
+                    o["outbounds"] = [t for t in o["outbounds"] if t != tag]
+            elif o.get("tag") == "balancer-streaming" and "outbounds" in o:
+                if include_balancer_streaming:
+                    if tag not in o["outbounds"]:
+                        o["outbounds"].append(tag)
+                else:
+                    o["outbounds"] = [t for t in o["outbounds"] if t != tag]
+            elif o.get("tag") == "balancer-gemini" and "outbounds" in o:
+                if include_balancer_gemini:
                     if tag not in o["outbounds"]:
                         o["outbounds"].append(tag)
                 else:
@@ -2576,18 +2660,82 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
             return {"success": False, "message": f"Proxy {proxy_id} not found."}
             
         include_balancer = False
+        include_balancer_streaming = False
+        include_balancer_gemini = False
         for o in outbounds:
             if o.get("tag") == "balancer" and "outbounds" in o:
                 if proxy_id in o["outbounds"]:
                     include_balancer = True
-                    break
+            elif o.get("tag") == "balancer-streaming" and "outbounds" in o:
+                if proxy_id in o["outbounds"]:
+                    include_balancer_streaming = True
+            elif o.get("tag") == "balancer-gemini" and "outbounds" in o:
+                if proxy_id in o["outbounds"]:
+                    include_balancer_gemini = True
                     
         return {
             "success": True,
             "proxy": target_proxy,
-            "include_balancer": include_balancer
+            "include_balancer": include_balancer,
+            "include_balancer_streaming": include_balancer_streaming,
+            "include_balancer_gemini": include_balancer_gemini
         }
         
+    elif action == "toggle_balancer_pool_node":
+        if not proxy_id:
+            return {"success": False, "message": "Proxy ID must be provided."}
+        if not proxy_data:
+            return {"success": False, "message": "Proxy data containing pool and include must be provided."}
+        pool = proxy_data.get("pool")  # 'balancer', 'balancer-streaming', or 'balancer-gemini'
+        if not pool or pool not in ("balancer", "balancer-streaming", "balancer-gemini"):
+            return {"success": False, "message": "Valid balancer pool tag must be provided."}
+        include = proxy_data.get("include", True)
+        
+        cmd = ssh_cmd_base + ["cat /etc/sing-box/config.json"]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=15)
+        if res.returncode != 0:
+            return {"success": False, "message": "Failed to read sing-box config"}
+            
+        try:
+            config_data = json.loads(res.stdout)
+        except Exception as e:
+            return {"success": False, "message": f"Failed to parse sing-box JSON: {e}"}
+            
+        outbounds = config_data.get("outbounds", [])
+        
+        updated = False
+        for o in outbounds:
+            if o.get("tag") == pool and "outbounds" in o:
+                current_pool = o.get("outbounds", [])
+                if include:
+                    if proxy_id not in current_pool:
+                        current_pool.append(proxy_id)
+                        updated = True
+                else:
+                    if proxy_id in current_pool:
+                        current_pool = [t for t in current_pool if t != proxy_id]
+                        o["outbounds"] = current_pool
+                        updated = True
+                        
+        if updated:
+            config_data["outbounds"] = outbounds
+            optimize_singbox_config(config_data)
+            config_str = json.dumps(config_data, indent=2)
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+                f.write(config_str)
+                temp_path = f.name
+                
+            upload_cmd = ssh_cmd_base + ["cat > /etc/sing-box/config.json"]
+            subprocess.run(upload_cmd, stdin=open(temp_path, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+            os.unlink(temp_path)
+            
+            restart_cmd = ssh_cmd_base + ["/etc/init.d/sing-box restart"]
+            subprocess.run(restart_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+            
+            return {"success": True, "message": f"Successfully {'added' if include else 'removed'} {proxy_id} {'to' if include else 'from'} pool {pool}."}
+        else:
+            return {"success": True, "message": "No change in pool membership."}
+            
     elif action in ["enable_proxy", "disable_proxy"]:
         return {"success": True, "message": f"Proxy {proxy_id} updated successfully"}
         
@@ -2930,7 +3078,8 @@ def execute_passwall2_command(action, config, proxy_id=None, proxy_data=None, ur
         "list_subscriptions", "replace_subscription",
         "add_subscription", "remove_subscription", "optimize_balancing_with_remark",
         "remove_sub_from_balancing_group",
-        "get_proxy", "edit_proxy", "save_subscriptions"
+        "get_proxy", "edit_proxy", "save_subscriptions",
+        "toggle_balancer_pool_node"
     ]
 
     if action not in valid_actions:

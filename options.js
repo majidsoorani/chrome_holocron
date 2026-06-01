@@ -756,7 +756,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 password: passwall2AddModal.querySelector('.passwall2-proxy-password').value,
                 url: passwall2AddModal.querySelector('.passwall2-proxy-url').value,
                 bind_interface: passwall2AddModal.querySelector('.passwall2-proxy-bind-interface').value,
-                include_balancer: passwall2AddModal.querySelector('.passwall2-proxy-include-balancer').checked
+                include_balancer: passwall2AddModal.querySelector('.passwall2-proxy-include-balancer').checked,
+                include_balancer_streaming: passwall2AddModal.querySelector('.passwall2-proxy-include-balancer-streaming').checked,
+                include_balancer_gemini: passwall2AddModal.querySelector('.passwall2-proxy-include-balancer-gemini').checked
             };
             
             if (!proxyData.remarks && !proxyData.url) {
@@ -1692,34 +1694,35 @@ YFqzPcAaAH9qkYB3
   }
 
   function updateFavicon(status) {
-    let faviconUrl = 'images/icon16-bad.png'; // Red H when disconnected
-    if (status) {
-      if (status.connecting) {
-        faviconUrl = 'images/icon16-warn.png';
-      } else if (status.connected) {
-        if (status.web_check_latency_ms === -1 && status.tcp_ping_ms === -1) {
-          faviconUrl = 'images/icon16-bad.png';
-        } else if (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1) {
+    try {
+      let faviconUrl = 'images/icon16-bad.png'; // Red H when disconnected
+      if (status) {
+        if (status.connecting) {
           faviconUrl = 'images/icon16-warn.png';
-        } else {
-          // Dynamic green/yellow circle from canvas!
-          faviconUrl = generatePingIcon(status.web_check_latency_ms, status.tcp_ping_ms, 16);
+        } else if (status.connected) {
+          if (status.web_check_latency_ms === -1 && status.tcp_ping_ms === -1) {
+            faviconUrl = 'images/icon16-warn.png'; // Show warning icon instead of bad icon
+          } else if (status.web_check_latency_ms === -1 || status.tcp_ping_ms === -1) {
+            faviconUrl = 'images/icon16-warn.png';
+          } else {
+            faviconUrl = 'images/icon16.png'; // Green H when connected
+          }
         }
       }
+      
+      const absoluteUrl = chrome.runtime.getURL(faviconUrl) + '?v=' + Date.now();
+      
+      let link = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        link.type = 'image/png';
+        document.head.appendChild(link);
+      }
+      link.href = absoluteUrl;
+    } catch (e) {
+      console.error("Error updating favicon:", e);
     }
-    
-    // Remove all existing icon links to force Chrome to refresh the favicon
-    const existing = document.querySelectorAll("link[rel~='icon']");
-    for (let i = 0; i < existing.length; i++) {
-        existing[i].parentNode.removeChild(existing[i]);
-    }
-    
-    // Create and append a new icon link
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.type = 'image/png';
-    link.href = faviconUrl;
-    document.head.appendChild(link);
   }
 
   async function updateConnectionUI(status) {
@@ -2083,7 +2086,12 @@ function FindProxyForURL(url, host) {
         }
       },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          labels: {
+            color: computedStyle.getPropertyValue('--text-color-secondary').trim() || '#ccc'
+          }
+        },
         tooltip: {
           mode: 'index',
           intersect: false,
@@ -2099,56 +2107,50 @@ function FindProxyForURL(url, host) {
       type: 'line',
       data: {
         labels: chartData.labels,
-        datasets: [{
-          label: 'Web Latency',
-          data: chartData.webData,
-          borderColor: computedStyle.getPropertyValue('--chart-web-color').trim() || 'rgb(75, 192, 192)',
-          backgroundColor: computedStyle.getPropertyValue('--chart-web-bg').trim() || 'rgba(75, 192, 192, 0.2)',
-          fill: true,
-          spanGaps: true,
-        }]
+        datasets: [
+          {
+            label: 'Web Latency (HTTP/S)',
+            data: chartData.webData,
+            borderColor: computedStyle.getPropertyValue('--chart-web-color').trim() || 'rgb(75, 192, 192)',
+            backgroundColor: computedStyle.getPropertyValue('--chart-web-bg').trim() || 'rgba(75, 192, 192, 0.1)',
+            fill: true,
+            spanGaps: true,
+          },
+          {
+            label: 'TCP Ping (Raw Socket)',
+            data: chartData.tcpData,
+            borderColor: computedStyle.getPropertyValue('--chart-tcp-color').trim() || 'rgb(54, 162, 235)',
+            backgroundColor: computedStyle.getPropertyValue('--chart-tcp-bg').trim() || 'rgba(54, 162, 235, 0.1)',
+            fill: true,
+            spanGaps: true,
+          }
+        ]
       },
       options: chartOptions
     });
 
-    if (tcpPingChart) tcpPingChart.destroy();
-    tcpPingChart = new Chart(tcpPingChartCanvas.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: chartData.labels,
-        datasets: [{
-          label: 'TCP Ping',
-          data: chartData.tcpData,
-          borderColor: computedStyle.getPropertyValue('--chart-tcp-color').trim() || 'rgb(54, 162, 235)',
-          backgroundColor: computedStyle.getPropertyValue('--chart-tcp-bg').trim() || 'rgba(54, 162, 235, 0.2)',
-          fill: true,
-          spanGaps: true,
-        }]
-      },
-      options: chartOptions
-    });
+    tcpPingChart = null; // Set to null as it is merged into webLatencyChart
   }
 
   function updateCharts(status) {
-    if (!webLatencyChart || !tcpPingChart) return;
+    if (!webLatencyChart) return;
     const web = (typeof status.web_check_latency_ms === 'number' && status.web_check_latency_ms > -1)
       ? status.web_check_latency_ms : null;
     const tcp = (typeof status.tcp_ping_ms === 'number' && status.tcp_ping_ms > -1)
       ? status.tcp_ping_ms : null;
     if (web === null && tcp === null) return;
     const label = new Date().toLocaleTimeString();
-    [
-      { chart: webLatencyChart, value: web },
-      { chart: tcpPingChart, value: tcp },
-    ].forEach(({ chart, value }) => {
-      chart.data.labels.push(label);
-      chart.data.datasets[0].data.push(value);
-      if (chart.data.labels.length > MAX_CHART_POINTS) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
-      }
-      chart.update();
-    });
+
+    webLatencyChart.data.labels.push(label);
+    webLatencyChart.data.datasets[0].data.push(web);
+    webLatencyChart.data.datasets[1].data.push(tcp);
+
+    if (webLatencyChart.data.labels.length > MAX_CHART_POINTS) {
+      webLatencyChart.data.labels.shift();
+      webLatencyChart.data.datasets[0].data.shift();
+      webLatencyChart.data.datasets[1].data.shift();
+    }
+    webLatencyChart.update();
   }
 
   // --- Live Log Polling for AI Assistant ---
@@ -3664,6 +3666,8 @@ function FindProxyForURL(url, host) {
               modal.querySelector('.passwall2-proxy-url').value = ''; 
               modal.querySelector('.passwall2-proxy-bind-interface').value = proxy.bind_interface || '';
               modal.querySelector('.passwall2-proxy-include-balancer').checked = response.include_balancer;
+              modal.querySelector('.passwall2-proxy-include-balancer-streaming').checked = response.include_balancer_streaming;
+              modal.querySelector('.passwall2-proxy-include-balancer-gemini').checked = response.include_balancer_gemini;
               
               modal.style.display = 'flex';
           } else {
@@ -3707,25 +3711,72 @@ function FindProxyForURL(url, host) {
       const cells = PASSWALL2_TEST_URLS.map(
         c => `<div class="passwall2-test-cell" data-node-id="${id}" data-url="${escapeHtmlOpt(c.url)}" style="width:${colWidth}px;">—</div>`
       ).join('');
-      let useBtn = isActive
-        ? `<button type="button" class="button btn-use-active" disabled>In Use</button>`
-        : `<button type="button" class="passwall2-use-btn button btn-use-action" data-node-id="${id}">Use</button>`;
-      
-      if (id === 'balancer') {
-        useBtn += ` <button type="button" class="passwall2-balancer-renew-btn button btn-renew" title="Fetch subscription links and renew balancer nodes">Renew</button>`;
+
+      const isBalancerNode = (id === 'balancer' || id === 'balancer-streaming' || id === 'balancer-gemini');
+
+      let useBtn = '';
+      if (isBalancerNode) {
+        useBtn = isActive
+          ? `<button type="button" class="button btn-use-active" disabled>In Use</button>`
+          : `<button type="button" class="passwall2-use-btn button btn-use-action" data-node-id="${id}">Use</button>`;
+        if (id === 'balancer') {
+          useBtn += ` <button type="button" class="passwall2-balancer-renew-btn button btn-renew" title="Fetch subscription links and renew balancer nodes">Renew</button>`;
+        }
+      } else {
+        useBtn = isActive
+          ? `<div class="use-btn-wrapper">
+              <button type="button" class="button btn-use-active" disabled style="border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0;">In Use</button>
+              <button type="button" class="passwall2-use-dropdown-btn button btn-use-active" data-node-id="${id}" style="width: 24px; min-width: 24px; padding: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid rgba(255,255,255,0.15) !important; margin-left: 0;">▼</button>
+              <div class="use-dropdown-menu">
+                <a class="dropdown-item toggle-pool-btn" data-node-id="${id}" data-pool="balancer">${proxy.in_balancer ? '❌ Remove Default' : '⚖️ Add Default'}</a>
+                <a class="dropdown-item toggle-pool-btn" data-node-id="${id}" data-pool="balancer-streaming">${proxy.in_balancer_streaming ? '❌ Remove Streaming' : '🎬 Add Streaming'}</a>
+                <a class="dropdown-item toggle-pool-btn" data-node-id="${id}" data-pool="balancer-gemini">${proxy.in_balancer_gemini ? '❌ Remove Gemini' : '🧠 Add Gemini'}</a>
+              </div>
+             </div>`
+          : `<div class="use-btn-wrapper">
+              <button type="button" class="passwall2-use-btn button btn-use-action" data-node-id="${id}" style="border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0;">Use</button>
+              <button type="button" class="passwall2-use-dropdown-btn button btn-use-action" data-node-id="${id}" style="width: 24px; min-width: 24px; padding: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid rgba(255,255,255,0.15) !important; margin-left: 0;">▼</button>
+              <div class="use-dropdown-menu">
+                <a class="dropdown-item toggle-pool-btn" data-node-id="${id}" data-pool="balancer">${proxy.in_balancer ? '❌ Remove Default' : '⚖️ Add Default'}</a>
+                <a class="dropdown-item toggle-pool-btn" data-node-id="${id}" data-pool="balancer-streaming">${proxy.in_balancer_streaming ? '❌ Remove Streaming' : '🎬 Add Streaming'}</a>
+                <a class="dropdown-item toggle-pool-btn" data-node-id="${id}" data-pool="balancer-gemini">${proxy.in_balancer_gemini ? '❌ Remove Gemini' : '🧠 Add Gemini'}</a>
+              </div>
+             </div>`;
       }
 
-      const actionButtons = id === 'balancer'
+      const actionButtons = isBalancerNode
         ? ''
         : `<button type="button" class="passwall2-edit-node-btn button btn-edit" data-node-id="${id}">Edit</button>
            <button type="button" class="passwall2-delete-node-btn button btn-delete" data-node-id="${id}">Delete</button>`;
 
       const bindLabel = proxy.bind_interface ? `<span class="badge-bind">🔗 Bind: ${proxy.bind_interface}</span>` : '';
-      const balancerLabel = proxy.in_balancer ? `<span class="badge-balancer" title="This node is part of the auto-latency balancer pool">⚖️ Balancer Pool</span>` : '';
+      
+      let balancerLabel = '';
+      if (proxy.in_balancer) {
+        balancerLabel += `<span class="badge-balancer default-pool" title="This node is part of the default auto-latency balancer pool">⚖️ Default</span> `;
+      }
+      if (proxy.in_balancer_streaming) {
+        balancerLabel += `<span class="badge-balancer streaming-pool" style="background-color: hsla(340, 95%, 60%, 0.15); color: #ff4d6d; margin-left: 4px;" title="This node is part of the streaming balancer pool">🎬 Streaming</span> `;
+      }
+      if (proxy.in_balancer_gemini) {
+        balancerLabel += `<span class="badge-balancer gemini-pool" style="background-color: hsla(270, 95%, 60%, 0.15); color: #a855f7; margin-left: 4px;" title="This node is part of the Gemini balancer pool">🧠 Gemini</span> `;
+      }
 
-      const checkbox = id === 'balancer'
+      const checkbox = isBalancerNode
         ? '<div class="chk-placeholder"></div>'
         : `<input type="checkbox" class="passwall2-node-select-chk" data-node-id="${id}" />`;
+
+      let balancerNodesEl = '';
+      if (proxy.type === 'balancing' && proxy.balancer_nodes) {
+        const names = proxy.balancer_nodes.map(tag => {
+          const matched = proxies.find(p => p.id === tag);
+          return matched ? (matched.remarks || matched.name || matched.id) : tag;
+        });
+        balancerNodesEl = `<div class="balancer-member-nodes" style="font-size: 11px; color: var(--text-muted); margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+          <span style="font-weight: 600; color: var(--text-secondary);">👥 Pool (${proxy.balancer_nodes.length}):</span>
+          ${names.length ? names.map(n => `<span class="badge-balancer-member" style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); padding: 1px 6px; border-radius: 4px; font-size: 10px; display: inline-block;">${escapeHtmlOpt(n)}</span>`).join('') : '<span style="color:var(--text-muted); font-style:italic;">empty</span>'}
+        </div>`;
+      }
 
       return `<div class="passwall2-node-row ${isActive ? 'active' : ''}" data-node-id="${id}">
         ${checkbox}
@@ -3736,6 +3787,7 @@ function FindProxyForURL(url, host) {
             ${balancerLabel}
           </div>
           <div class="passwall2-node-type">${type}</div>
+          ${balancerNodesEl}
         </div>
         ${cells}
         <div class="passwall2-test-actions-col">
@@ -3766,6 +3818,66 @@ function FindProxyForURL(url, host) {
     listEl.querySelectorAll('.passwall2-use-btn').forEach(btn => {
       btn.addEventListener('click', () => switchPasswall2Node(btn));
     });
+
+    // Toggle dropdown menus
+    listEl.querySelectorAll('.passwall2-use-dropdown-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.querySelectorAll('.use-dropdown-menu').forEach(menu => {
+          if (menu !== btn.nextElementSibling) {
+            menu.classList.remove('show');
+          }
+        });
+        btn.nextElementSibling.classList.toggle('show');
+      });
+    });
+
+    // Close dropdowns on document click
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.use-dropdown-menu').forEach(menu => {
+        menu.classList.remove('show');
+      });
+    });
+
+    // Toggle balancer pools
+    listEl.querySelectorAll('.toggle-pool-btn').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const nodeId = link.dataset.nodeId;
+        const pool = link.dataset.pool;
+        const isRemove = link.textContent.includes('Remove');
+        
+        link.style.opacity = '0.5';
+        link.style.pointerEvents = 'none';
+        
+        try {
+          const response = await chrome.runtime.sendMessage({
+            command: COMMANDS.PASSWALL2,
+            action: 'toggle_balancer_pool_node',
+            config: getGlobalRouterConfig(),
+            proxyId: nodeId,
+            proxyData: {
+              pool: pool,
+              include: !isRemove
+            }
+          });
+          
+          if (response && response.success) {
+            document.getElementById('passwall2-refresh-btn')?.click();
+          } else {
+            alert(`Failed to update pool: ${(response && response.message) || 'Unknown error'}`);
+            link.style.opacity = '1';
+            link.style.pointerEvents = 'auto';
+          }
+        } catch (err) {
+          alert(`Error: ${err.message}`);
+          link.style.opacity = '1';
+          link.style.pointerEvents = 'auto';
+        }
+      });
+    });
+
     listEl.querySelectorAll('.passwall2-test-btn').forEach(btn => {
       btn.addEventListener('click', () => testPasswall2Node(listEl, btn.dataset.nodeId, btn));
     });

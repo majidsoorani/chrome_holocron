@@ -128,10 +128,10 @@
         
         <!-- Main Content -->
         <main class="content">
-            <header class="topbar">
+            <header class="topbar" style="border-bottom: none; padding-bottom: 0; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 16px;">
                     <button type="button" id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Toggle Sidebar">☰</button>
-                    <div>
+                    <div style="display: none;">
                         <h1 style="margin: 0;">Holocron Dashboard</h1>
                         <p style="margin: 4px 0 0 0;">Configure routing rules, proxy lists, and active tunnels.</p>
                     </div>
@@ -238,22 +238,19 @@
                             </section>
                             <section class="card" id="health-history-card">
                                 <h2>📈 Connection Health History</h2>
-                                <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
+                                <p class="chart-title"><strong>Latency History</strong></p>
                                 <div class="chart-wrapper">
-                                    <canvas id="web-latency-chart"></canvas>
-                                </div>
-                                <p class="chart-title"><strong>TCP Ping Latency (Raw Socket)</strong></p>
-                                <div class="chart-wrapper">
-                                    <canvas id="tcp-ping-chart"></canvas>
-                                </div>
+                                     <canvas id="web-latency-chart"></canvas>
+                                 </div>
+                                 <!-- Hidden legacy chart structure to keep JS DOM references functional -->
+                                 <p class="chart-title" style="display: none;"><strong>TCP Ping Latency (Raw Socket)</strong></p>
+                                 <div class="chart-wrapper" style="display: none;">
+                                     <canvas id="tcp-ping-chart"></canvas>
+                                 </div>
                             </section>
                             <section class="card" id="connections-passwall2-nodes-card" style="display: none;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <h2 style="margin: 0;">🏠 Holocron Proxy Nodes</h2>
-                                    <div style="display: flex; gap: 6px;">
-                                        <button type="button" id="connections-passwall2-update-sub-btn" class="button passwall2-update-sub-btn" title="Fetch fresh nodes from subscription URL">📡 Update Sub</button>
-                                        <button type="button" id="connections-passwall2-refresh-btn" class="button passwall2-refresh-btn">🔄 Refresh</button>
-                                    </div>
                                 </div>
                                 <p><small>The router's currently active proxy node. Click <strong>Use</strong> to switch.</small></p>
                                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
@@ -265,6 +262,7 @@
                                     <button type="button" id="connections-pw-select-all" class="button">☑️ Select All</button>
                                     <button type="button" id="connections-pw-select-timeouts" class="button">⚠️ Select Timeouts</button>
                                     <button type="button" id="connections-pw-delete-selected" class="button">🗑️ Delete Selected</button>
+                                    <button type="button" id="connections-passwall2-refresh-btn" class="button passwall2-refresh-btn" style="margin-left: auto;">🔄 Refresh</button>
                                 </div>
                                 <div class="passwall2-proxies-list" id="connections-passwall2-proxies-list">
                                     <div style="text-align: center; padding: 30px; color: var(--text-muted);">
@@ -277,6 +275,7 @@
                                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                                     <h2 style="margin: 0;">📊 Subscription Quota</h2>
                                     <div style="display: flex; gap: 6px;">
+                                        <button type="button" id="connections-passwall2-update-sub-btn" class="button passwall2-update-sub-btn" title="Fetch fresh nodes from subscription URL">📡 Update Sub</button>
                                         <button type="button" id="subscription-quota-check-btn" class="button" title="Fetch remaining volume for each subscription URL">📥 Show Remaining</button>
                                         <button type="button" id="subscription-nodes-check-btn" class="button" title="Decode each subscription, TCP-ping all nodes, and report alive/best/median latency">🧪 Test Nodes</button>
                                         <button type="button" id="subscription-quota-save-btn" class="button" title="Save the subscription URL list">💾 Save URLs</button>
@@ -297,7 +296,7 @@
                                 </div>
                             </section>
                         </div>
-                        <div class="sidebar-content">
+                        <div class="sidebar-content" style="display: none;">
                             <section class="card">
                                 <h2>Automatic Connection</h2>
                                 <div class="form-group">
@@ -887,9 +886,22 @@
                                     </select>
                                 </div>
                                 
-                                <div class="form-group" style="margin-top: 15px; display: flex; align-items: center; gap: 8px;">
-                                    <input type="checkbox" class="passwall2-proxy-include-balancer" id="p2p-include-balancer" style="width: 18px; height: 18px; cursor: pointer;" checked>
-                                    <label for="p2p-include-balancer" style="font-weight: bold; cursor: pointer; user-select: none;">Include in Balancer (Lowest Latency Auto-Select)</label>
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label style="font-weight: bold; display: block; margin-bottom: 8px;">Balancer Pools Inclusion</label>
+                                    <div style="display: flex; flex-direction: column; gap: 8px; background: var(--glass-2); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border);">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <input type="checkbox" class="passwall2-proxy-include-balancer" id="p2p-include-balancer" style="width: 18px; height: 18px; cursor: pointer;" checked>
+                                            <label for="p2p-include-balancer" style="font-weight: 500; cursor: pointer; user-select: none;">⚖️ Default Balancer (Lowest Latency Auto-Select)</label>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <input type="checkbox" class="passwall2-proxy-include-balancer-streaming" id="p2p-include-balancer-streaming" style="width: 18px; height: 18px; cursor: pointer;" checked>
+                                            <label for="p2p-include-balancer-streaming" style="font-weight: 500; cursor: pointer; user-select: none;">🎬 Streaming Balancer (YouTube & Media)</label>
+                                        </div>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <input type="checkbox" class="passwall2-proxy-include-balancer-gemini" id="p2p-include-balancer-gemini" style="width: 18px; height: 18px; cursor: pointer;" checked>
+                                            <label for="p2p-include-balancer-gemini" style="font-weight: 500; cursor: pointer; user-select: none;">🧠 Gemini Balancer (Google & AI)</label>
+                                        </div>
+                                    </div>
                                 </div>
                                 
                                 <div style="display: flex; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--glass-border);">
