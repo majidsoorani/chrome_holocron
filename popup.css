@@ -1,20 +1,23 @@
 :root {
-  --bg-color: #282c34;
-  --text-color: #abb2bf;
-  --header-color: #ffffff;
-  --border-color: #3e4451;
-  --good-color: #98c379;
-  --bad-color: #e06c75;
-  --warn-color: #e5c07b;
-  --neutral-color: #61afef;
-  --button-bg: #4b5263;
-  --button-hover-bg: #5c6370;
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --bg-color: hsl(225 24% 7%);
+  --text-color: hsl(210 20% 96%);
+  --header-color: hsl(210 20% 96%);
+  --border-color: hsl(225 15% 20%);
+  --good-color: hsl(145 70% 50%);
+  --bad-color: hsl(0 90% 65%);
+  --warn-color: hsl(40 95% 58%);
+  --neutral-color: hsl(258 90% 66%);
+  --button-bg: hsl(225 18% 13%);
+  --button-hover-bg: hsl(225 18% 15%);
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
   font-family: var(--font-family);
   background-color: var(--bg-color);
+  background-image:
+      radial-gradient(circle at top left, hsl(260 90% 25% / .25), transparent 40%),
+      radial-gradient(circle at top right, hsl(210 90% 20% / .25), transparent 40%);
   color: var(--text-color);
   margin: 0;
   width: 280px;
@@ -298,3 +301,40 @@ button:active {
   color: #1f2329;
   cursor: default;
 }
+
+/* --- Slim Custom Scrollbar --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(215 12% 58%);
+}
+
+/* --- Pulsing Connection Dot --- */
+.status-dot[data-status="connected"] {
+  position: relative;
+}
+.status-dot[data-status="connected"]::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: var(--good-color);
+  animation: popup-pulse-animation 2s infinite;
+}
+
+@keyframes popup-pulse-animation {
+  0% { transform: scale(1); opacity: 0.8; }
+  70% { transform: scale(2.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+

@@ -2,6 +2,9 @@
 <html>
   <head>
     <title>Holocron Tunnel Status</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
@@ -49,13 +52,18 @@
         </div>
       </div>
 
+      <div id="direct-bypass-container" class="proxy-info" style="display: none; border-left-color: var(--good-color); margin-top: 10px;">
+        <p id="direct-bypass-message" style="margin-bottom: 8px; font-size: 13px;">Checking current site...</p>
+        <div class="buttons">
+            <button id="direct-bypass-toggle-btn" class="button-primary" style="background-color: var(--button-bg); color: var(--text-color);">Add Bypass</button>
+        </div>
+      </div>
+
       <div id="passwall2-nodes-container" class="passwall2-nodes" style="display: none;">
         <div class="nodes-header">
-          <span class="nodes-title">Passwall2 Nodes</span>
-          <button id="optimize-balance-nodes" class="link-button" title="Optimize balance nodes: keep up to 5 working YouTube/WhatsApp nodes">🎯</button>
+          <span class="nodes-title">Holocron Proxy Nodes</span>
           <button id="update-subscription" class="link-button" title="Fetch fresh proxy nodes from subscription URL">📡</button>
-          <button id="update-balance-nodes" class="link-button" title="Update balance node groups with fresh nodes">⬆</button>
-          <button id="refresh-passwall2-nodes" class="link-button" title="Refresh Passwall2 node list from router">⟳</button>
+          <button id="refresh-passwall2-nodes" class="link-button" title="Refresh node list from router">⟳</button>
         </div>
         <div id="passwall2-nodes-list" class="nodes-list">
           <div class="nodes-empty">Loading…</div>

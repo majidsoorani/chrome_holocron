@@ -1,22 +1,20 @@
 #!/bin/sh
 TARGET="34.244.201.246"
 
-echo "======================================================================"
+echo "======================================================================================"
 echo " Modem Performance Monitor (TCP/22)"
 echo " Target: $TARGET"
 echo " Press Ctrl+C to Stop"
-echo "======================================================================"
-printf "%-10s | %-15s | %-15s | %-15s | %-10s\n" "Time" "Zitel (wan)" "Irancell (wl1)" "RighTel (lan3)" "Best"
-echo "----------------------------------------------------------------------"
+echo "======================================================================================"
+printf "%-10s | %-15s | %-15s | %-15s | %-15s | %-10s\n" "Time" "Zitel (wan)" "Irancell (wl1)" "RighTel (lan3)" "Mobinnet (lan1)" "Best"
+echo "--------------------------------------------------------------------------------------"
 
 while true; do
     TIME=$(date +%H:%M:%S)
     
     # --- Zitel (wan) ---
-    # TCP Check using curl (HTTP/0.9 to port 22)
     CURL_Z=$(curl -o /dev/null -s -w "%{time_starttransfer}" --http0.9 --connect-timeout 2 --interface wan http://$TARGET:22 2>/dev/null)
     if [ $? -eq 0 ] && [ -n "$CURL_Z" ] && [ "$CURL_Z" != "0.000000" ]; then
-        # Convert seconds to ms (float to int)
         VAL_Z=$(awk -v t="$CURL_Z" 'BEGIN {printf "%.0f", t * 1000}')
         STAT_Z="${VAL_Z}ms"
     else
@@ -49,6 +47,21 @@ while true; do
         VAL_R=9999
     fi
 
+    # --- Mobinnet (lan1) ---
+    if ip link show lan1 2>/dev/null | grep -q "UP"; then
+        CURL_M=$(curl -o /dev/null -s -w "%{time_starttransfer}" --http0.9 --connect-timeout 2 --interface lan1 http://$TARGET:22 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$CURL_M" ] && [ "$CURL_M" != "0.000000" ]; then
+             VAL_M=$(awk -v t="$CURL_M" 'BEGIN {printf "%.0f", t * 1000}')
+             STAT_M="${VAL_M}ms"
+        else
+             STAT_M="LOSS"
+             VAL_M=9999
+        fi
+    else
+        STAT_M="DOWN"
+        VAL_M=9999
+    fi
+
     # Determine Best
     BEST="NONE"
     MIN_VAL=9998
@@ -65,7 +78,11 @@ while true; do
         MIN_VAL=$VAL_R
         BEST="RighTel"
     fi
+    if [ "$VAL_M" -lt "$MIN_VAL" ]; then
+        MIN_VAL=$VAL_M
+        BEST="Mobinnet"
+    fi
 
-    printf "%-10s | %-15s | %-15s | %-15s | %-10s\n" "$TIME" "$STAT_Z" "$STAT_I" "$STAT_R" "$BEST"
+    printf "%-10s | %-15s | %-15s | %-15s | %-15s | %-10s\n" "$TIME" "$STAT_Z" "$STAT_I" "$STAT_R" "$STAT_M" "$BEST"
     sleep 1
 done

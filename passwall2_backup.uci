@@ -1,0 +1,232 @@
+package passwall2
+
+config shunt_rules 'iran_direct'
+	option remarks 'Iranian Direct Route'
+	option network 'tcp,udp'
+	option domain_list 'geosite:category-ir
+domain:somedayy.com
+domain:qmb.ir
+domain:digiato.com
+domain:multiproxy.info
+domain:bazargerd.top
+domain:sermoviedown.pw
+domain:cotmovi6.site
+domain:arvancloud.ir
+domain:arvancloud.com
+domain:ar-dns.com
+domain:arvansaas.ir
+domain:cloudflare.com'
+	option ip_list 'geoip:ir
+geoip:private
+34.244.201.246
+52.209.91.248
+185.147.162.204
+94.183.241.159
+217.218.54.11
+37.32.20.68
+185.206.94.134
+37.32.0.0/15
+37.152.0.0/15
+79.175.128.0/18
+185.143.232.0/22
+185.206.92.0/22
+188.229.0.0/17
+94.182.0.0/15
+164.138.16.0/21
+2.146.0.0/15
+5.160.0.0/16'
+	option node_type '_direct'
+	option enabled '1'
+
+config global
+	option enabled '1'
+	option node_socks_port '1080'
+	option localhost_proxy '1'
+	option client_proxy '1'
+	option socks_enabled '0'
+	option direct_dns_protocol 'udp'
+	option direct_dns_query_strategy 'UseIP'
+	option remote_dns_protocol 'doh'
+	option remote_dns_query_strategy 'UseIP'
+	option log_node '1'
+	option loglevel 'info'
+	option write_ipset_direct '0'
+	option remote_dns_detour 'remote'
+	option remote_fakedns '0'
+	option dns_redirect '1'
+	option acl_enable '1'
+	option timestamp '1779907797'
+	option tcp_node '0lRbRESv'
+	option udp_node '0lRbRESv'
+	option tcp_proxy_mode 'returnhome'
+	option udp_proxy_mode 'returnhome'
+	option geoip_path '/usr/share/v2ray/geoip.db'
+	option geosite_path '/usr/share/v2ray/geosite.db'
+	option socks_address '0.0.0.0'
+	option dns_mode 'nonuse'
+	option socks_listen_address '0.0.0.0'
+	option use_tcp_node_resolve_dns '1'
+	option direct_dns '192.168.100.1'
+	option remote_dns_doh 'https://1.1.1.1/dns-query'
+	option node '0lRbRESv'
+
+config global_haproxy
+	option balancing_enable '0'
+
+config global_delay
+	option start_daemon '1'
+	option start_delay '60'
+
+config global_forwarding
+	option tcp_no_redir_ports 'disable'
+	option udp_no_redir_ports 'disable'
+	option tcp_redir_ports '1:65535'
+	option udp_redir_ports '1:65535'
+	option accept_icmp '0'
+	option use_nft '1'
+	option tcp_proxy_way 'redirect'
+	option ipv6_tproxy '0'
+
+config global_xray
+	option sniffing_override_dest '0'
+	option fragment '0'
+	option noise '0'
+
+config global_other
+	option auto_detection_time 'tcping'
+	option show_node_info '1'
+
+config global_rules
+	option auto_update '1'
+	option geosite_update '1'
+	option geoip_update '1'
+	option v2ray_location_asset '/usr/share/v2ray/'
+	option enable_geoview '1'
+	option geoip_url 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@release/geoip.db'
+	option geosite_url 'https://cdn.jsdelivr.net/gh/chocolate4u/Iran-sing-box-rules@release/geosite.db'
+	option week_update '6'
+	option time_update '0'
+
+config global_app
+	option xray_file '/usr/bin/xray'
+	option hysteria_file '/usr/bin/hysteria'
+	option singbox_file '/usr/bin/sing-box'
+
+config global_subscribe
+	option filter_keyword_mode '1'
+	option ss_type 'xray'
+	option trojan_type 'sing-box'
+	option vmess_type 'xray'
+	option vless_type 'xray'
+	option hysteria2_type 'hysteria2'
+
+config global_singbox
+	option sniff_override_destination '0'
+	option geoip_path '/usr/share/singbox/geoip.db'
+	option geoip_url 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.db'
+	option geosite_path '/usr/share/singbox/geosite.db'
+	option geosite_url 'https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.db'
+
+config xray_noise_packets 'sF7ED0f9'
+	option enabled '1'
+	option type 'rand'
+	option packet '10'
+	option delay '0'
+
+config nodes '0lRbRESv'
+	option remarks 'shunt iran bypass'
+	option type 'sing-box'
+	option protocol '_shunt'
+	option domainStrategy 'IPOnDemand'
+	option domainMatcher 'hybrid'
+	option iran_direct '_direct'
+	option default_node 'tPMOPBAr'
+	option preproxy_enabled '0'
+
+config nodes 'Y8KO9owg'
+	option type 'sing-box'
+	option protocol 'shadowsocks'
+	option password 'mysecurepass'
+	option port '8388'
+	option method 'chacha20-ietf-poly1305'
+	option address '37.152.187.50'
+	option remarks 'Arvan-Nobitex'
+	option timeout '60'
+	option transport 'tcp'
+	option add_mode '1'
+	option tls '0'
+	option tcp_guise 'none'
+	option mux '0'
+	option shadowtls '0'
+	option plugin_enabled '0'
+
+config subscribe_list
+	option remark 'cloudflaresoorani'
+	option url 'https://cloudflaresoorani.soorani.workers.dev/c0686cb1-515d-4fe3-8f22-508746811ef3/sub'
+	option allowInsecure '1'
+	option filter_keyword_mode '5'
+	option ss_type 'global'
+	option trojan_type 'global'
+	option vmess_type 'global'
+	option vless_type 'global'
+	option hysteria2_type 'global'
+	option domain_strategy 'global'
+	option auto_update '1'
+	option week_update '8'
+	option interval_update '1'
+	option user_agent 'curl'
+	option access_mode 'proxy'
+
+config subscribe_list
+	option url 'https://multiservers.info/sub/djMsMzk5NjksMTc3OTA5MDk0MQ155e077304#D5PJ6'
+	option auto_update '1'
+	option remark 'D5PJ6'
+	option user_agent 'v2rayN/6.40'
+
+config subscribe_list
+	option url 'https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5'
+	option auto_update '1'
+	option remark 'cmr.zarink.ir/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5'
+	option user_agent 'v2rayN/6.40'
+
+config subscribe_list
+	option url 'https://cmr.zarink.ir/sub/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5'
+	option auto_update '1'
+	option remark 'cmr.zarink.ir/djMsNjY1OCwxNzc5Nzk2ODgx49d5b285c5'
+	option user_agent 'v2rayN/6.40'
+
+config nodes 'autossh_34_244_201_246'
+	option type 'sing-box'
+	option protocol 'socks'
+	option address '127.0.0.1'
+	option port '1032'
+	option remarks 'ubuntu@34.244.201.246 (autossh)'
+	option add_mode '1'
+	option timeout '60'
+	option transport 'tcp'
+	option tcp_guise 'none'
+
+config nodes 'tPMOPBAr'
+	option remarks 'Sing Box URL Test '
+	option type 'sing-box'
+	option protocol '_urltest'
+	option urltest_url 'https://www.youtube.com/generate_204'
+	option urltest_interval '3m'
+	option urltest_tolerance '50'
+	option urltest_idle_timeout '30m'
+	option urltest_interrupt_exist_connections '1'
+	list urltest_node 'Y8KO9owg'
+	list urltest_node 'autossh_34_244_201_246'
+	list urltest_node 'autossh_52_209_91_248'
+
+config nodes 'autossh_52_209_91_248'
+	option type 'sing-box'
+	option protocol 'socks'
+	option address '127.0.0.1'
+	option port '1033'
+	option remarks 'ubuntu@52.209.91.248 (autossh)'
+	option add_mode '1'
+	option timeout '60'
+	option transport 'tcp'
+	option tcp_guise 'none'
+

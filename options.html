@@ -3,142 +3,239 @@
 <head>
     <meta charset="UTF-8">
     <title>Holocron Options</title>
+    <link rel="icon" type="image/png" href="images/icon16-bad.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="options.css">
     <style>
-        @keyframes pulse-animation {
-            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        /* Force dark-mode overrides for dynamic quota cards and list containers to bypass caching issues */
+        .passwall2-proxies-list {
+            background: var(--bg-1) !important;
+            border-color: var(--glass-border) !important;
         }
-        .button-bar button.pulse {
-            animation: pulse-animation 2s infinite;
+        .passwall2-batch-actions {
+            background: var(--glass-2) !important;
+            border-color: var(--glass-border) !important;
         }
-        .button-bar button:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
+        [data-quota-url] {
+            background: var(--glass-2) !important;
+            border: 1px solid var(--glass-border) !important;
+            color: var(--text-primary) !important;
         }
-        .warning-message {
-            background-color: var(--warning-bg-color, #fff3cd);
-            color: var(--warning-text-color, #856404);
-            padding: 10px;
-            border-radius: 4px;
-            border: 1px solid var(--warning-border-color, #ffeeba);
-            font-size: 0.9em;
+        [data-quota-url][data-card-success="0"] {
+            background: hsla(350, 80%, 20%, 0.15) !important;
+            border-color: var(--danger) !important;
+            color: var(--danger) !important;
         }
-        .warning-message a {
-            color: var(--warning-text-color, #856404);
+        [data-quota-url] .sqc-meta-line,
+        [data-quota-url] .sqc-remaining-line span,
+        [data-quota-url] .sqc-rate-line {
+            color: var(--text-muted) !important;
+        }
+        [data-quota-url] div[style*="height: 8px"] {
+            background: var(--bg-0) !important;
+        }
+        #subscription-quota-results > div {
+            background: var(--glass-2) !important;
+            border: 1px solid var(--glass-border) !important;
+            color: var(--text-primary) !important;
+        }
+        #subscription-quota-results > div[style*="border: 1px solid #f44336"] {
+            background: hsla(350, 80%, 20%, 0.15) !important;
+            border-color: var(--danger) !important;
+            color: var(--danger) !important;
+        }
+        #subscription-quota-results > div div[style*="color: #555"],
+        #subscription-quota-results > div span[style*="color:#888"] {
+            color: var(--text-muted) !important;
+        }
+        #subscription-quota-results > div div[style*="height: 8px"] {
+            background: var(--bg-0) !important;
+        }
+        #subscription-quota-results details summary {
+            color: var(--accent-2) !important;
+        }
+        #subscription-quota-results details table td {
+            color: var(--text-secondary) !important;
+            border-bottom: 1px solid var(--glass-border) !important;
+        }
+        #subscription-quota-results details table td[style*="color:#2e7d32"] {
+            color: var(--success) !important;
             font-weight: bold;
-        }
-        #status-message {
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 4px;
-            text-align: center;
-            font-weight: 500;
-            transition: opacity 0.3s ease-in-out, max-height 0.3s ease-in-out;
-            opacity: 0;
-            max-height: 0;
-            overflow: hidden;
-        }
-        #status-message.info, #status-message.success, #status-message.error {
-            opacity: 1;
-            max-height: 50px; /* Or enough to fit text */
-        }
-        #status-message.info {
-            background-color: #e7f3fe; color: #0c5460;
-        }
-        #status-message.success {
-            background-color: #d4edda; color: #155724;
-        }
-        #status-message.error {
-            background-color: #f8d7da; color: #721c24;
-        }
-        .form-group.checkbox-group.disabled {
-            opacity: 0.6;
-            pointer-events: none;
-            user-select: none;
-        }
-        
-        /* Proxy Mode Selector Styles */
-        .proxy-mode-selector {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 8px 16px;
-            background: #f5f5f5;
-            border-radius: 6px;
-            border: 2px solid #ddd;
-        }
-        
-        .proxy-mode-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            padding: 6px 12px;
-            background: white;
-            border-radius: 4px;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-        
-        .proxy-mode-label:hover {
-            background: #f9f9f9;
-            border-color: #bbb;
-        }
-        
-        .proxy-mode-label input[type="radio"]:checked + span {
-            font-weight: 700;
-            color: #2196F3;
-        }
-        
-        .proxy-mode-label:has(input[type="radio"]:checked) {
-            background: #e3f2fd;
-            border-color: #2196F3;
-            box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <span id="connection-status-dot" class="status-dot"></span>
-                    <span id="connection-status-text">Loading...</span>
-                    <button id="connection-action-button" class="icon-button" title="Refresh Status">⏻</button>
+    <div class="app sidebar-collapsed">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-inner" style="width: calc(var(--sidebar-width) - 48px); display: flex; flex-direction: column; height: 100%; justify-content: flex-start; gap: 30px; flex-shrink: 0;">
+                <div class="logo">
+                    <div class="logo-icon">H</div>
+                    <div>
+                        <h2>Holocron</h2>
+                        <span>Proxy Manager</span>
+                    </div>
                 </div>
                 
-                <!-- Proxy Mode Selector -->
-                <div class="proxy-mode-selector">
-                    <span style="font-weight: bold; color: #555;">🔧 Proxy Mode:</span>
-                    <label class="proxy-mode-label">
-                        <input type="radio" name="proxy-mode" value="local" id="proxy-mode-local" checked>
-                        <span>💻 Local (Laptop)</span>
-                    </label>
-                    <label class="proxy-mode-label" id="proxy-mode-passwall2-label" style="display: none;">
-                        <input type="radio" name="proxy-mode" value="passwall2" id="proxy-mode-passwall2">
-                        <span>🏠 Passwall2 (Router)</span>
-                    </label>
+                <nav class="tabs-nav">
+                    <button class="tab-button active" data-tab="connections">
+                        <span class="nav-indicator"></span>
+                        <span class="nav-icon">📡</span>
+                        <span>Connections & Health</span>
+                    </button>
+                    <button class="tab-button" data-tab="proxy">
+                        <span class="nav-indicator"></span>
+                        <span class="nav-icon">⚡</span>
+                        <span>Proxy & Routing</span>
+                    </button>
+                    <button class="tab-button" data-tab="settings">
+                        <span class="nav-indicator"></span>
+                        <span class="nav-icon">⚙️</span>
+                        <span>Settings & Logs</span>
+                    </button>
+                </nav>
+                
+                <div class="sidebar-status-container" style="margin-top: auto;">
+                    <div class="connection-status-area">
+                        <div class="status-left">
+                            <span id="connection-status-dot" class="status-dot"></span>
+                            <div>
+                                <span id="connection-status-text" class="status-label">Loading...</span>
+                                <small class="status-subtext">Proxy tunnel status</small>
+                            </div>
+                        </div>
+                        <button id="connection-action-button" class="power-btn" title="Toggle Connection">⏻</button>
+                    </div>
+                    <!-- Proxy Mode Selector -->
+                    <div class="proxy-mode-selector">
+                        <span class="mode-selector-title">Proxy Mode</span>
+                        <div class="mode-options">
+                            <label class="proxy-mode-label" id="proxy-mode-local-label">
+                                <input type="radio" name="proxy-mode" value="local" id="proxy-mode-local" checked>
+                                <span>Laptop (Local)</span>
+                            </label>
+                            <label class="proxy-mode-label" id="proxy-mode-passwall2-label" style="display: none;">
+                                <input type="radio" name="proxy-mode" value="passwall2" id="proxy-mode-passwall2">
+                                <span>Router (Passwall2)</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="content">
+            <header class="topbar">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <button type="button" id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="Toggle Sidebar">☰</button>
+                    <div>
+                        <h1 style="margin: 0;">Holocron Dashboard</h1>
+                        <p style="margin: 4px 0 0 0;">Configure routing rules, proxy lists, and active tunnels.</p>
+                    </div>
+                </div>
+                <div id="status-message"></div>
+            </header>
             
-            <h1>Holocron Settings</h1>
-            <p>Configure the SSH tunnel and proxy behavior.</p>
-            <div id="status-message"></div>
-        </header>
-        <div class="tabs-container">
-            <nav class="tabs-nav">
-                <button class="tab-button active" data-tab="connections">Connections & Health</button>
-                <button class="tab-button" data-tab="proxy">Proxy & Routing</button>
-                <button class="tab-button" data-tab="settings">Settings & Logs</button>
-            </nav>
-
             <div class="tabs-content">
                 <!-- Connections & Health Panel -->
                 <div class="tab-panel active" id="panel-connections">
                     <div class="main-layout-grid">
                         <div class="main-content">
+                            <section class="card" id="internet-health-card" style="display: none; margin-bottom: 2em;">
+                                <h2>📡 Realtime Internet Health</h2>
+                                <div class="health-dashboard-grid">
+                                    <div class="health-circular-meters">
+                                        <div class="health-meter" id="meter-stability">
+                                            <div class="health-meter-circle">
+                                                <svg class="radial-progress" viewBox="0 0 100 100">
+                                                    <circle class="radial-bg" cx="50" cy="50" r="40"></circle>
+                                                    <circle class="radial-bar" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                                </svg>
+                                                <div class="health-meter-value">--%</div>
+                                            </div>
+                                            <div class="health-meter-label">Internet Stability</div>
+                                        </div>
+                                        
+                                        <div class="health-meter" id="meter-dns">
+                                            <div class="health-meter-circle">
+                                                <svg class="radial-progress" viewBox="0 0 100 100">
+                                                    <circle class="radial-bg" cx="50" cy="50" r="40"></circle>
+                                                    <circle class="radial-bar" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                                </svg>
+                                                <div class="health-meter-value">--%</div>
+                                            </div>
+                                            <div class="health-meter-label">DNS Health</div>
+                                        </div>
+                                        
+                                        <div class="health-meter" id="meter-tunnel">
+                                            <div class="health-meter-circle">
+                                                <svg class="radial-progress" viewBox="0 0 100 100">
+                                                    <circle class="radial-bg" cx="50" cy="50" r="40"></circle>
+                                                    <circle class="radial-bar" cx="50" cy="50" r="40" stroke-dasharray="251.2" stroke-dashoffset="251.2"></circle>
+                                                </svg>
+                                                <div class="health-meter-value">--%</div>
+                                            </div>
+                                            <div class="health-meter-label">Tunnel Quality</div>
+                                        </div>
+
+                                        <div class="health-meter" id="meter-modems">
+                                            <div class="health-meter-circle">
+                                                <svg class="radial-progress" viewBox="0 0 100 100" id="modem-progress-svg">
+                                                    <circle class="radial-bg" cx="50" cy="50" r="40"></circle>
+                                                    <!-- Dynamic segments will be inserted here in options.js -->
+                                                </svg>
+                                                <div class="health-meter-value" id="modem-dominant-val">0%</div>
+                                                
+                                                <!-- Glassmorphic Tooltip / Hovercard -->
+                                                <div class="modem-tooltip" id="modem-traffic-tooltip">
+                                                    <div class="tooltip-title">Traffic Share</div>
+                                                    <div class="tooltip-divider"></div>
+                                                    <div class="tooltip-row-list" id="modem-tooltip-rows">
+                                                        <!-- Generated dynamically in options.js -->
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="health-meter-label" id="modem-dominant-name">Idle</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="health-stats-grid">
+                                        <div class="stat-card">
+                                            <span class="stat-icon">⚡</span>
+                                            <span class="stat-label">Avg Ping</span>
+                                            <span class="stat-value" id="health-avg-ping">-- ms</span>
+                                        </div>
+                                        <div class="stat-card">
+                                            <span class="stat-icon">📈</span>
+                                            <span class="stat-label">Jitter</span>
+                                            <span class="stat-value" id="health-jitter">-- ms</span>
+                                        </div>
+                                        <div class="stat-card">
+                                            <span class="stat-icon">⚠️</span>
+                                            <span class="stat-label">Est. Packet Loss</span>
+                                            <span class="stat-value" id="health-loss">--%</span>
+                                        </div>
+                                        <div class="stat-card">
+                                            <span class="stat-icon">🔐</span>
+                                            <span class="stat-label">Active SSH</span>
+                                            <span class="stat-value" id="health-ssh">--</span>
+                                        </div>
+                                        <div class="stat-card">
+                                            <span class="stat-icon">💾</span>
+                                            <span class="stat-label">DNS Cache Hit</span>
+                                            <span class="stat-value" id="health-dns-cache">--%</span>
+                                        </div>
+                                        <div class="stat-card">
+                                            <span class="stat-icon">🔍</span>
+                                            <span class="stat-label">Avg DNS Lookup</span>
+                                            <span class="stat-value" id="health-dns-lookup">-- ms</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
                             <section class="card" id="health-history-card">
                                 <h2>📈 Connection Health History</h2>
                                 <p class="chart-title"><strong>Web Latency (Full HTTP/S Request)</strong></p>
@@ -152,41 +249,41 @@
                             </section>
                             <section class="card" id="connections-passwall2-nodes-card" style="display: none;">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <h2 style="margin: 0;">🏠 Passwall2 Nodes</h2>
+                                    <h2 style="margin: 0;">🏠 Holocron Proxy Nodes</h2>
                                     <div style="display: flex; gap: 6px;">
-                                        <button type="button" id="connections-passwall2-optimize-balance-btn" class="button passwall2-optimize-balance-btn" title="Test balance groups, keep up to 5 working nodes, and set 2m probes" style="background: #009688;">🎯 Optimize</button>
-                                        <button type="button" id="connections-passwall2-pin-kixy-btn" class="button passwall2-pin-kixy-btn" title="Pin *.kixy.com to the jumpserver SSH node (bastion)" style="background: #607D8B;">🛡 Pin Kixy</button>
-                                        <button type="button" id="connections-passwall2-fix-gemini-btn" class="button passwall2-fix-gemini-btn" title="Re-resolve Gemini/Google AI domains and reload ipset (run when Gemini stops working)" style="background: #795548;">✨ Fix Gemini</button>
-                                        <button type="button" id="connections-passwall2-update-sub-btn" class="button passwall2-update-sub-btn" title="Fetch fresh nodes from subscription URL" style="background: #9C27B0;">📡 Update Sub</button>
-                                        <button type="button" id="connections-passwall2-update-balance-btn" class="button passwall2-update-balance-btn" title="Fetch fresh nodes and rebuild balance groups" style="background: #FF9800;">⬆ Update Balance</button>
-                                        <button type="button" id="connections-passwall2-refresh-btn" class="button passwall2-refresh-btn" style="background: #2196F3;">🔄 Refresh</button>
-                                        <button type="button" id="connections-passwall2-restart-btn" class="button passwall2-restart-btn" title="Restart Passwall2 service on the router" style="background: #e91e63; color: white;">⚡ Restart Service</button>
-                                        <button type="button" id="connections-passwall2-reset-refresh-btn" class="button passwall2-reset-refresh-btn" title="Delete all nodes and fetch fresh nodes from subscription (dangerous!)" style="background: #f44336; color: white;">🗑️ Reset & Refresh</button>
+                                        <button type="button" id="connections-passwall2-update-sub-btn" class="button passwall2-update-sub-btn" title="Fetch fresh nodes from subscription URL">📡 Update Sub</button>
+                                        <button type="button" id="connections-passwall2-refresh-btn" class="button passwall2-refresh-btn">🔄 Refresh</button>
                                     </div>
                                 </div>
-                                <p><small>The router's currently active Passwall2 node. Click <strong>Use</strong> to switch.</small></p>
+                                <p><small>The router's currently active proxy node. Click <strong>Use</strong> to switch.</small></p>
                                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                                    <span><strong>Service:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: #666;">Not Connected</span></span>
-                                    <span class="passwall2-proxy-count" style="color: #666; font-size: 0.9em;">0 nodes</span>
+                                    <span><strong>Service:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: var(--text-muted);">Not Connected</span> <button type="button" class="passwall2-restart-btn" title="Restart proxy service on the router" style="background: none; border: none; padding: 0 4px; cursor: pointer; display: inline-block; font-size: 1.1em; color: var(--danger); vertical-align: middle;">⚡</button></span>
+                                    <span class="passwall2-proxy-count" style="color: var(--text-muted); font-size: 0.9em;">0 nodes</span>
                                 </div>
-                                <div class="passwall2-proxies-list" id="connections-passwall2-proxies-list" style="max-height: 420px; overflow-y: auto; border: 1px solid var(--border-color-light, #ddd); border-radius: 4px; padding: 10px; background: white;">
-                                    <div style="text-align: center; padding: 30px; color: #999;">
+                                <div class="passwall2-batch-actions">
+                                    <span>Bulk Actions:</span>
+                                    <button type="button" id="connections-pw-select-all" class="button">☑️ Select All</button>
+                                    <button type="button" id="connections-pw-select-timeouts" class="button">⚠️ Select Timeouts</button>
+                                    <button type="button" id="connections-pw-delete-selected" class="button">🗑️ Delete Selected</button>
+                                </div>
+                                <div class="passwall2-proxies-list" id="connections-passwall2-proxies-list">
+                                    <div style="text-align: center; padding: 30px; color: var(--text-muted);">
                                         <div style="font-size: 40px; margin-bottom: 10px;">🔌</div>
                                         <div>Click "Refresh" to load nodes from the router.</div>
                                     </div>
                                 </div>
                             </section>
                             <section class="card" id="subscription-quota-card">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                                     <h2 style="margin: 0;">📊 Subscription Quota</h2>
                                     <div style="display: flex; gap: 6px;">
-                                        <button type="button" id="subscription-quota-check-btn" class="button" title="Fetch remaining volume for each subscription URL" style="background: #009688;">📥 Show Remaining</button>
-                                        <button type="button" id="subscription-nodes-check-btn" class="button" title="Decode each subscription, TCP-ping all nodes, and report alive/best/median latency" style="background: #FF9800;">🧪 Test Nodes</button>
-                                        <button type="button" id="subscription-quota-save-btn" class="button" title="Save the subscription URL list" style="background: #2196F3;">💾 Save URLs</button>
+                                        <button type="button" id="subscription-quota-check-btn" class="button" title="Fetch remaining volume for each subscription URL">📥 Show Remaining</button>
+                                        <button type="button" id="subscription-nodes-check-btn" class="button" title="Decode each subscription, TCP-ping all nodes, and report alive/best/median latency">🧪 Test Nodes</button>
+                                        <button type="button" id="subscription-quota-save-btn" class="button" title="Save the subscription URL list">💾 Save URLs</button>
                                     </div>
                                 </div>
                                 <p><small>Paste your subscription URLs (one per line). The remaining volume and expiry days are read from the server's <code>Subscription-Userinfo</code> response header.</small></p>
-                                <textarea id="subscription-quota-urls" rows="5" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="https://multiservers.info/sub/...#QK8QF&#10;https://cmr.zarink.ir/sub/..." style="width: 100%; box-sizing: border-box; font-family: monospace; font-size: 12px; padding: 8px; border: 1px solid var(--border-color-light, #ddd); border-radius: 4px;"></textarea>
+                                <textarea id="subscription-quota-urls" rows="5" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="https://multiservers.info/sub/...#QK8QF&#10;https://cmr.zarink.ir/sub/..."></textarea>
                                 <div id="subscription-quota-results" style="margin-top: 12px;"></div>
                             </section>
                             <section class="card">
@@ -359,7 +456,7 @@
                         </section>
                         <section class="card">
                             <h2>🏠 Passwall2 Router Settings</h2>
-                            <p style="background: #e3f2fd; padding: 12px; border-radius: 6px; border-left: 4px solid #2196F3; margin-bottom: 15px;">
+                            <p class="tip-box">
                                 <strong>ℹ️ Configure your OpenWrt router connection:</strong> These settings are used when you switch to Passwall2 mode at the top of the page. 
                                 Make sure your router has Passwall2 installed and SSH access enabled.
                             </p>
@@ -396,14 +493,14 @@
                             </div>
                             
                             <div style="margin-top: 20px;">
-                                <button type="button" id="test-router-connection-btn" class="button" style="background: #2196F3; margin-right: 10px;">
+                                <button type="button" id="test-router-connection-btn" class="button button-info" style="margin-right: 10px;">
                                     🔌 Test Router Connection
                                 </button>
                                 <span id="router-test-status" style="font-weight: bold;"></span>
                             </div>
                             
-                            <div style="background: #fff3cd; padding: 12px; border-radius: 6px; border-left: 4px solid #FF9800; margin-top: 15px;">
-                                <p style="margin: 0; font-size: 0.9em; color: #856404;">
+                            <div class="warning-box" style="margin-top: 15px;">
+                                <p style="margin: 0; font-size: 0.9em;">
                                     <strong>💡 Tip:</strong> After configuring and testing these settings, the "Passwall2 (Router)" mode will become available 
                                     at the top of the page to manage your router's proxies directly from this extension.
                                 </p>
@@ -417,21 +514,20 @@
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <div>
-                                    <strong>Service Status:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: #666; margin-left: 8px;">Not Connected</span>
+                                    <strong>Service Status:</strong> <span class="passwall2-status-text" style="font-weight: bold; color: #666; margin-left: 8px;">Not Connected</span> <button type="button" class="passwall2-restart-btn" title="Restart Passwall2 service on the router" style="background: none; border: none; padding: 0 4px; cursor: pointer; display: inline-block; font-size: 1.1em; color: #e91e63; vertical-align: middle;">⚡</button>
                                 </div>
                                 <div style="display: flex; gap: 8px;">
                                     <button type="button" class="passwall2-refresh-btn button" style="background: #2196F3;">🔄 Refresh List</button>
-                                    <button type="button" class="passwall2-restart-btn button" style="background: #e91e63; color: white;" title="Restart Passwall2 service on the router">⚡ Restart Service</button>
                                 </div>
                             </div>
                             
                             <div class="passwall2-proxies-container">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                                     <h3 style="margin: 0; font-size: 1.1em;">Configured Proxies on Router:</h3>
-                                    <span class="passwall2-proxy-count" style="color: #666; font-size: 0.9em;">0 proxies</span>
+                                    <span class="passwall2-proxy-count" style="color: var(--text-muted); font-size: 0.9em;">0 proxies</span>
                                 </div>
-                                <div class="passwall2-proxies-list" style="max-height: 500px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: white;">
-                                    <div style="text-align: center; padding: 40px; color: #999;">
+                                <div class="passwall2-proxies-list">
+                                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
                                         <div style="font-size: 56px; margin-bottom: 15px;">🔌</div>
                                         <div style="font-size: 1.1em; margin-bottom: 8px;">Not Connected</div>
                                         <div style="font-size: 0.9em;">Click "Refresh List" to connect to your router and load Passwall2 proxies</div>
@@ -480,7 +576,8 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
+    </div>
 
     <!-- Templates for dynamic elements -->
     <template id="port-forward-rule-template">
@@ -629,7 +726,7 @@
                         <button class="protonvpn-discover-now" type="button">🔍 Discover Servers Now</button>
                         <button class="protonvpn-view-servers" type="button">📋 View Available Servers</button>
                     </div>
-                    <div class="protonvpn-status" style="margin-top: 1em; padding: 10px; background: #f0f0f0; border-radius: 4px; display: none;">
+                    <div class="protonvpn-status" style="margin-top: 1em; padding: 10px; border-radius: 4px; display: none;">
                         <strong>Discovery Status:</strong>
                         <div class="protonvpn-status-text"></div>
                         <div class="protonvpn-servers-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
@@ -638,7 +735,7 @@
 
                 <!-- Passwall2 (OpenWrt Router) Specific Fields -->
                 <div class="passwall2-settings" style="display: none;">
-                    <p style="background: #e7f3fe; padding: 12px; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #2196F3;">
+                    <p class="tip-box">
                         <strong>ℹ️ About Passwall2 Mode:</strong> This connects to your OpenWrt router and manages Passwall2 directly. 
                         All traffic will be routed through your router's Passwall2 service. You can manage proxies on the router from this interface.
                     </p>
@@ -708,8 +805,16 @@
                                 <h5 style="margin: 0;">Configured Proxies on Router:</h5>
                                 <span class="passwall2-proxy-count" style="color: #666; font-size: 0.9em;">0 proxies</span>
                             </div>
-                            <div class="passwall2-proxies-list" style="max-height: 450px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 10px; background: white;">
-                                <div style="text-align: center; padding: 30px; color: #999;">
+                            
+                            <div class="passwall2-batch-actions">
+                                <span>Bulk Actions:</span>
+                                <button type="button" id="pw-select-all" class="button">☑️ Select All</button>
+                                <button type="button" id="pw-select-timeouts" class="button">⚠️ Select Timeouts</button>
+                                <button type="button" id="pw-delete-selected" class="button">🗑️ Delete Selected</button>
+                            </div>
+                            
+                            <div class="passwall2-proxies-list">
+                                <div style="text-align: center; padding: 30px; color: var(--text-muted);">
                                     <div style="font-size: 48px; margin-bottom: 10px;">🔌</div>
                                     <div>Click "Refresh List" to connect to your router and load Passwall2 proxies</div>
                                 </div>
@@ -717,13 +822,13 @@
                         </div>
                         
                         <!-- Add Proxy Modal (will be shown when Add New Proxy is clicked) -->
-                        <div class="passwall2-add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center;">
-                            <div style="background: white; padding: 30px; border-radius: 8px; max-width: 650px; width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                                <h3 style="margin-top: 0; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">➕ Add New Proxy to Passwall2</h3>
+                        <div class="passwall2-add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.65); z-index: 10000; align-items: center; justify-content: center;">
+                            <div style="background: var(--bg-1); padding: 30px; border-radius: var(--radius-md); max-width: 650px; width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-card); border: 1px solid var(--glass-border); color: var(--text-primary);">
+                                <h3 style="margin-top: 0; border-bottom: 2px solid var(--accent); padding-bottom: 10px; color: var(--text-primary);">➕ Add New Proxy to Passwall2</h3>
                                 
                                 <div class="form-group">
                                     <label style="font-weight: bold;">Proxy Type</label>
-                                    <select class="passwall2-proxy-type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <select class="passwall2-proxy-type" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
                                         <option value="SS">Shadowsocks</option>
                                         <option value="SSR">ShadowsocksR</option>
                                         <option value="V2ray">V2Ray/VMess</option>
@@ -737,44 +842,59 @@
                                 
                                 <div class="form-group">
                                     <label style="font-weight: bold;">Configuration URL (Recommended)</label>
-                                    <input type="text" class="passwall2-proxy-url" placeholder="ss://... or vmess://... or trojan://..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                                    <small style="color: #666; display: block; margin-top: 4px;">📋 Paste your subscription URL here - fields below will auto-fill</small>
+                                    <input type="text" class="passwall2-proxy-url" placeholder="ss://... or vmess://... or trojan://..." style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
+                                    <small style="color: var(--text-muted); display: block; margin-top: 4px;">📋 Paste your subscription URL here - fields below will auto-fill</small>
                                 </div>
                                 
-                                <div style="text-align: center; margin: 15px 0; color: #999;">
+                                <div style="text-align: center; margin: 15px 0; color: var(--text-muted);">
                                     <strong>OR configure manually:</strong>
                                 </div>
                                 
                                 <div class="form-group">
                                     <label>Remarks/Name</label>
-                                    <input type="text" class="passwall2-proxy-remarks" placeholder="e.g., US Server 1" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                    <input type="text" class="passwall2-proxy-remarks" placeholder="e.g., US Server 1" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
                                 </div>
                                 
                                 <div class="form-group-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
                                     <div class="form-group">
                                         <label>Server Address</label>
-                                        <input type="text" class="passwall2-proxy-address" placeholder="e.g., 1.2.3.4 or server.example.com" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                        <input type="text" class="passwall2-proxy-address" placeholder="e.g., 1.2.3.4 or server.example.com" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
                                     </div>
                                     <div class="form-group">
                                         <label>Port</label>
-                                        <input type="number" class="passwall2-proxy-port" placeholder="443" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                        <input type="number" class="passwall2-proxy-port" placeholder="443" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
                                     </div>
                                 </div>
                                 
                                 <div class="form-group-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                                     <div class="form-group">
                                         <label>Encryption/Method</label>
-                                        <input type="text" class="passwall2-proxy-method" placeholder="e.g., aes-256-gcm" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                        <input type="text" class="passwall2-proxy-method" placeholder="e.g., aes-256-gcm" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
                                     </div>
                                     <div class="form-group">
                                         <label>Password/UUID</label>
-                                        <input type="text" class="passwall2-proxy-password" placeholder="Password or UUID" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                        <input type="text" class="passwall2-proxy-password" placeholder="Password or UUID" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
                                     </div>
                                 </div>
                                 
-                                <div style="display: flex; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee;">
-                                    <button type="button" class="passwall2-save-proxy-btn" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">💾 Save to Router</button>
-                                    <button type="button" class="passwall2-cancel-add-btn" style="flex: 1; padding: 12px; background: #999; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">❌ Cancel</button>
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label style="font-weight: bold; display: block; margin-bottom: 5px;">Bind Interface</label>
+                                    <select class="passwall2-proxy-bind-interface" style="width: 100%; padding: 8px; border: 1px solid var(--glass-border); border-radius: var(--radius-sm); background: var(--bg-2); color: var(--text-primary);">
+                                        <option value="">None (Default routing)</option>
+                                        <option value="wan">Zitel (wan)</option>
+                                        <option value="lan3">RighTel (lan3)</option>
+                                        <option value="lan1">Mobinnet (lan1)</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group" style="margin-top: 15px; display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" class="passwall2-proxy-include-balancer" id="p2p-include-balancer" style="width: 18px; height: 18px; cursor: pointer;" checked>
+                                    <label for="p2p-include-balancer" style="font-weight: bold; cursor: pointer; user-select: none;">Include in Balancer (Lowest Latency Auto-Select)</label>
+                                </div>
+                                
+                                <div style="display: flex; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--glass-border);">
+                                    <button type="button" class="passwall2-save-proxy-btn" style="flex: 1; padding: 12px; background: var(--success); color: white; border: none; border-radius: var(--radius-sm); font-weight: bold; cursor: pointer;">💾 Save to Router</button>
+                                    <button type="button" class="passwall2-cancel-add-btn" style="flex: 1; padding: 12px; background: var(--bg-3); color: var(--text-muted); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); font-weight: bold; cursor: pointer;">❌ Cancel</button>
                                 </div>
                             </div>
                         </div>

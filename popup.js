@@ -135,6 +135,87 @@ document.addEventListener('DOMContentLoaded', () => {
       passwall2Container.style.display = 'none';
       passwall2NodesContainer.style.display = 'none';
     }
+
+    // Current Site Bypass controls
+    updateCurrentSiteBypassUI();
+  }
+
+  async function updateCurrentSiteBypassUI() {
+    const bypassContainer = document.getElementById('direct-bypass-container');
+    const bypassMessage = document.getElementById('direct-bypass-message');
+    const bypassBtn = document.getElementById('direct-bypass-toggle-btn');
+    if (!bypassContainer || !bypassMessage || !bypassBtn) return;
+
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tabs || tabs.length === 0 || !tabs[0].url) {
+        bypassContainer.style.display = 'none';
+        return;
+      }
+
+      const urlStr = tabs[0].url;
+      if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+        bypassContainer.style.display = 'none';
+        return;
+      }
+
+      const parsedUrl = new URL(urlStr);
+      const host = parsedUrl.hostname;
+      
+      const { [STORAGE_KEYS.PROXY_BYPASS_RULES]: bypassRules = [] } = await chrome.storage.sync.get(STORAGE_KEYS.PROXY_BYPASS_RULES);
+      
+      // Match exactly or via wildcard pattern (e.g. *.google.com)
+      const existingRuleIndex = bypassRules.findIndex(r => {
+        if (r.domain === host) return true;
+        if (r.domain.startsWith('*.')) {
+          const rootDomain = r.domain.substring(2);
+          if (host === rootDomain || host.endsWith('.' + rootDomain)) return true;
+        }
+        return false;
+      });
+
+      bypassContainer.style.display = 'block';
+      if (existingRuleIndex >= 0) {
+        const matchedRule = bypassRules[existingRuleIndex];
+        if (matchedRule.target === 'DIRECT' && matchedRule.enabled !== false) {
+          bypassMessage.innerHTML = `Site <strong>${host}</strong> is connecting <strong>DIRECT</strong>.`;
+          bypassBtn.textContent = 'Remove Direct Bypass';
+          bypassBtn.style.backgroundColor = 'var(--bad-color)';
+          bypassBtn.style.color = 'white';
+          bypassBtn.onclick = async () => {
+            const updatedRules = bypassRules.filter((_, idx) => idx !== existingRuleIndex);
+            await chrome.storage.sync.set({ [STORAGE_KEYS.PROXY_BYPASS_RULES]: updatedRules });
+            // Re-apply proxy settings so PAC changes immediately
+            const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
+            if (currentStatus.socks_port) {
+              await chrome.runtime.sendMessage({ command: COMMANDS.SET_BROWSER_PROXY, socksPort: currentStatus.socks_port });
+            }
+            updateCurrentSiteBypassUI();
+          };
+          return;
+        }
+      }
+
+      bypassMessage.innerHTML = `Site <strong>${host}</strong> is routed via proxy.`;
+      bypassBtn.textContent = 'Add Direct Bypass';
+      bypassBtn.style.backgroundColor = 'var(--good-color)';
+      bypassBtn.style.color = '#1f2329';
+      bypassBtn.onclick = async () => {
+        const newRule = { domain: '*.' + host.replace(/^www\./, ''), target: 'DIRECT', enabled: true };
+        const updatedRules = [...bypassRules, newRule];
+        await chrome.storage.sync.set({ [STORAGE_KEYS.PROXY_BYPASS_RULES]: updatedRules });
+        // Re-apply proxy settings so PAC changes immediately
+        const { [STORAGE_KEYS.IS_PROXY_MANAGED]: isProxyManaged } = await chrome.storage.local.get(STORAGE_KEYS.IS_PROXY_MANAGED);
+        if (currentStatus.socks_port) {
+          await chrome.runtime.sendMessage({ command: COMMANDS.SET_BROWSER_PROXY, socksPort: currentStatus.socks_port });
+        }
+        updateCurrentSiteBypassUI();
+      };
+
+    } catch (e) {
+      console.error('Error loading current site details:', e);
+      bypassContainer.style.display = 'none';
+    }
   }
 
   function getPasswall2Status() {

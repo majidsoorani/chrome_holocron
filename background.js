@@ -752,15 +752,11 @@ async function applyProxySettings(socksPort) {
             STORAGE_KEYS.CURRENTLY_ACTIVE_CONFIG_ID
         ]);
 
-        if (!activeConfigId) {
-            return { success: false, message: "Cannot apply proxy, no active configuration is set." };
-        }
-
         // --- Create a PAC script for advanced routing ---
         let pacScript = `/**
  * Holocron PAC (Proxy Auto-Configuration) Script
  * Generated: ${new Date().toISOString()}
- * Active Configuration ID: ${activeConfigId}
+ * Active Configuration ID: ${activeConfigId || 'none'}
  */
 function FindProxyForURL(url, host) {
     // --- Proxy Definitions ---

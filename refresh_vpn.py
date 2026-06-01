@@ -38,13 +38,15 @@ VPN_UUID = CONFIG.get("VPN_UUID")
 IFACE_MAP = {
     'zitel': 'wan',
     'Irancell': 'wl1-sta0',
-    'RighTel': 'lan3'
+    'RighTel': 'lan3',
+    'Mobinnet': 'wwan_mobinnet'
 }
 
 IFACE_PREFIX_MAP = {
     'zitel': 'zitel',
     'Irancell': 'irancell',
-    'RighTel': 'rightel'
+    'RighTel': 'rightel',
+    'Mobinnet': 'mobinnet'
 }
 
 def ssh_exec(command: str) -> Tuple[bool, str, str]:

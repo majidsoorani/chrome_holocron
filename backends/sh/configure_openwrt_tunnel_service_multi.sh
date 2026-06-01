@@ -94,7 +94,7 @@ configure_tunnel() {
 # Use autossh for automatic reconnection
 export AUTOSSH_GATETIME=0
 export AUTOSSH_PORT=0
-exec /usr/sbin/autossh -M 0 -N -T -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes -i ${TUNNEL_KEY_PATH_ON_ROUTER} -D 0.0.0.0:${tunnel_port} ${TUNNEL_REMOTE_USER}@${tunnel_host}
+exec /usr/sbin/autossh -M 0 -N -T -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o ExitOnForwardFailure=yes -i ${TUNNEL_KEY_PATH_ON_ROUTER} -D 0.0.0.0:${tunnel_port} ${TUNNEL_REMOTE_USER}@${tunnel_host}
 EOM
 chmod +x /usr/bin/holocron_${tunnel_name}.sh"
 

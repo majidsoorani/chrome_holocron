@@ -1143,6 +1143,45 @@ def optimize_route_rules(config_data):
         
     rules = route.setdefault("rules", [])
     
+    # Ensure ADW database traffic routes through tunnel-zitel (SSH tunnel on 34.244.201.246)
+    db_domains = [
+        "warehouse.cluster-cpmkv4ljjrvu.eu-west-1.rds.amazonaws.com",
+        "warehouse-instance-1.cpmkv4ljjrvu.eu-west-1.rds.amazonaws.com",
+        "cpmkv4ljjrvu.eu-west-1.rds.amazonaws.com"
+    ]
+    db_ips = ["10.0.163.134/32", "10.0.223.57/32"]
+    has_db_rule = False
+    for r in rules:
+        if r.get("action") == "route" and r.get("outbound") == "tunnel-zitel":
+            suffixes = r.setdefault("domain_suffix", [])
+            for dom in db_domains:
+                if dom not in suffixes:
+                    suffixes.append(dom)
+            ips = r.setdefault("ip_cidr", [])
+            for ip in db_ips:
+                if ip not in ips:
+                    ips.append(ip)
+            has_db_rule = True
+            break
+            
+    if not has_db_rule:
+        rules.insert(0, {
+            "domain_suffix": db_domains,
+            "ip_cidr": db_ips,
+            "action": "route",
+            "outbound": "tunnel-zitel"
+        })
+
+    # Clean up any old temporary 37.152.187.0/24 IP rules
+    for r in list(rules):
+        if "ip_cidr" in r:
+            ip_list = r.get("ip_cidr", [])
+            if "37.152.187.0/24" in ip_list:
+                if len(ip_list) == 1:
+                    rules.remove(r)
+                else:
+                    ip_list.remove("37.152.187.0/24")
+    
     # 2. Add/Update direct routing rule for rule sets
     ruleset_rule = None
     for r in rules:
@@ -1197,6 +1236,57 @@ def optimize_route_rules(config_data):
     for r in list(rules):
         if r.get("outbound") == "direct" and "ip_cidr" in r and len(r.get("ip_cidr", [])) > 50:
             rules.remove(r)
+
+    # Ensure streaming domains route to balancer-streaming
+    streaming_domains = [
+        "youtube.com", "youtubei.googleapis.com", "googlevideo.com",
+        "ytimg.com", "ggpht.com", "ytimg.l.google.com",
+        "youtube-nocookie.com", "youtu.be",
+        "30nama.com", "30nama.ts", "30nama.work", "30nama.website",
+        "30nama.zone", "30nama.space", "30nama.press"
+    ]
+    has_streaming_rule = False
+    for r in rules:
+        if r.get("action") == "route" and r.get("outbound") in ("balancer-streaming", "tunnel-mobinnet", "tunnel-rightel"):
+            suffixes = r.get("domain_suffix", [])
+            if any(dom in suffixes for dom in ("youtube.com", "30nama.com")):
+                r["outbound"] = "balancer-streaming"
+                for dom in streaming_domains:
+                    if dom not in suffixes:
+                        suffixes.append(dom)
+                has_streaming_rule = True
+                break
+                
+    if not has_streaming_rule:
+        rules.insert(0, {
+            "domain_suffix": streaming_domains,
+            "action": "route",
+            "outbound": "balancer-streaming"
+        })
+
+    # Ensure Gemini domains route to balancer-gemini
+    gemini_domains = [
+        "gemini.google.com", "ai.google.dev", "aistudio.google.com",
+        "generativelanguage.googleapis.com", "alkalimina-pa.clients6.google.com",
+        "proactivebackend-pa.clients6.google.com", "chat-pa.clients6.google.com",
+        "google-assistant-pa.clients6.google.com"
+    ]
+    has_gemini_rule = False
+    for r in rules:
+        if r.get("action") == "route" and r.get("outbound") == "balancer-gemini":
+            suffixes = r.get("domain_suffix", [])
+            for dom in gemini_domains:
+                if dom not in suffixes:
+                    suffixes.append(dom)
+            has_gemini_rule = True
+            break
+            
+    if not has_gemini_rule:
+        rules.insert(0, {
+            "domain_suffix": gemini_domains,
+            "action": "route",
+            "outbound": "balancer-gemini"
+        })
 
     # 4. Ensure DNS rules
     dns_rules = config_data.setdefault("dns", {}).setdefault("rules", [])
@@ -2122,7 +2212,7 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
             "tunnel-zitel", "tunnel-rightel", "tunnel-mobinnet", 
             "ssh-vps-zitel", "ssh-vps-rightel", "ssh-vps-mobinnet",
             "vless-reality-vps", "vless-reality-zitel", "vless-reality-rightel", "vless-reality-mobinnet",
-            "direct", "block", "balancer", "nooshdaroo"
+            "direct", "block", "balancer", "balancer-streaming", "balancer-gemini", "nooshdaroo"
         ]
         outbounds = config_data.get("outbounds", [])
         new_outbounds = [o for o in outbounds if o.get("tag") in core_tags]
@@ -2160,20 +2250,55 @@ def execute_singbox_emulation_command(action, ssh_cmd_base, proxy_id=None, proxy
         config_data["outbounds"] = new_outbounds
         
         balancer = None
+        balancer_streaming = None
+        balancer_gemini = None
         for o in new_outbounds:
             if o.get("tag") == "balancer":
                 balancer = o
-                break
+            elif o.get("tag") == "balancer-streaming":
+                balancer_streaming = o
+            elif o.get("tag") == "balancer-gemini":
+                balancer_gemini = o
+
+        all_existing_tags = {o.get("tag") for o in new_outbounds if o.get("tag") not in ("balancer", "balancer-streaming", "balancer-gemini")}
+        desired_core = [
+            "ss-zitel", "ss-rightel", "ss-mobinnet", 
+            "tunnel-zitel", "tunnel-rightel", "tunnel-mobinnet",
+            "ssh-vps-zitel", "ssh-vps-rightel", "ssh-vps-mobinnet",
+            "vless-reality-vps", "vless-reality-zitel", "vless-reality-rightel", "vless-reality-mobinnet"
+        ]
+        balancer_detours = [t for t in desired_core if t in all_existing_tags] + [node["tag"] for node in all_nodes]
+
         if balancer:
-            # Only include core tags in the balancer if they actually exist in outbounds to avoid dependency errors.
-            all_existing_tags = {o.get("tag") for o in new_outbounds if o.get("tag") != "balancer"}
-            desired_core = [
-                "ss-zitel", "ss-rightel", "ss-mobinnet", 
-                "tunnel-zitel", "tunnel-rightel", "tunnel-mobinnet",
-                "ssh-vps-zitel", "ssh-vps-rightel", "ssh-vps-mobinnet",
-                "vless-reality-vps", "vless-reality-zitel", "vless-reality-rightel", "vless-reality-mobinnet"
-            ]
-            balancer["outbounds"] = [t for t in desired_core if t in all_existing_tags] + [node["tag"] for node in all_nodes]
+            balancer["outbounds"] = balancer_detours
+
+        if not balancer_streaming:
+            balancer_streaming = {
+                "type": "urltest",
+                "tag": "balancer-streaming",
+                "outbounds": balancer_detours,
+                "url": "https://www.youtube.com/generate_204",
+                "interval": "30s",
+                "tolerance": 50
+            }
+            new_outbounds.append(balancer_streaming)
+        else:
+            balancer_streaming["outbounds"] = balancer_detours
+            balancer_streaming["url"] = "https://www.youtube.com/generate_204"
+
+        if not balancer_gemini:
+            balancer_gemini = {
+                "type": "urltest",
+                "tag": "balancer-gemini",
+                "outbounds": balancer_detours,
+                "url": "https://www.google.com/generate_204",
+                "interval": "30s",
+                "tolerance": 50
+            }
+            new_outbounds.append(balancer_gemini)
+        else:
+            balancer_gemini["outbounds"] = balancer_detours
+            balancer_gemini["url"] = "https://www.google.com/generate_204"
             
         optimize_singbox_config(config_data)
         config_str = json.dumps(config_data, indent=2)
